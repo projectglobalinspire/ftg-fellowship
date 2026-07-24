@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KPI Leaderboard – FTG x GI Fellowship</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+  <script defer src="app.js"></script>
+</head>
+<body class="min-h-screen bg-[#f8fafc] flex">
+  <aside data-design-id="sidebar-lb-a1b2c3" class="w-[240px] min-h-[900px] bg-[#2c3e50] flex flex-col fixed left-0 top-0">
+    <div class="px-5 py-5 border-b border-white/10"><div class="flex items-center gap-3"><img src="assets/ftg-logo.png" class="h-9 w-auto"><span class="text-white/40 text-lg">×</span><img src="assets/gi-logo.png" class="h-8 w-auto"></div><p class="text-white/40 text-[10px] uppercase tracking-widest mt-2">Future Builders Fellowship</p></div>
+    <div class="mx-4 mt-4 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3"><div class="w-9 h-9 rounded-full bg-[#f97316] flex items-center justify-center text-white font-bold text-sm">AR</div><div><p class="text-white text-sm font-semibold">Arya Ramadhan</p><p class="text-white/50 text-xs">Career Path</p></div></div>
+    <nav data-design-id="nav-lb-sidebar-d4e5f6" class="flex-1 px-3 pt-5 space-y-0.5">
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-house w-4"></i> Dashboard</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-brain w-4"></i> Design Thinking</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-chalkboard-user w-4"></i> Workshop Library</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-file-arrow-up w-4"></i> Submit Tugas</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-chart-line w-4"></i> Progress Saya</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:bg-white/10 text-sm"><i class="fa-solid fa-comments w-4"></i> Feedback Mentor</a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#1a5f4f] text-white text-sm font-medium"><i class="fa-solid fa-trophy w-4"></i> Leaderboard</a>
+    </nav>
+  </aside>
+  <main data-design-id="main-lb-g7h8i9" class="ml-[240px] flex-1">
+    <header data-design-id="header-lb-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between">
+      <div><h1 class="text-[#2c3e50] text-xl font-bold">🏆 KPI Leaderboard</h1><p class="text-slate-500 text-sm">30 peserta · Diperbarui setiap minggu · Bulan 1, Minggu 2</p></div>
+      <div class="flex gap-2">
+        <button data-design-id="btn-filter-all-lb-m4n5o6" type="button" class="px-3 py-1.5 rounded-full bg-[#2c3e50] text-white text-xs font-semibold">Semua</button>
+        <button data-design-id="btn-filter-career-lb-p7q8r9" type="button" class="px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 text-xs">Career</button>
+        <button data-design-id="btn-filter-ent-lb-s1t2u3" type="button" class="px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 text-xs">Entrepreneur</button>
+      </div>
+    </header>
+    <div class="px-8 py-6">
+
+      <!-- KPI explanation -->
+      <section data-design-id="kpi-explainer-v4w5x6" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
+        <h2 class="text-[#2c3e50] text-sm font-bold mb-3">Bagaimana KPI Dihitung?</h2>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="bg-[#1a5f4f]/10 rounded-xl p-3">
+            <div class="w-8 h-8 rounded-full bg-[#1a5f4f] flex items-center justify-center mb-2"><i class="fa-solid fa-circle-check text-white text-sm"></i></div>
+            <p class="text-[#1a5f4f] text-xs font-bold">Completion Rate</p>
+            <p class="text-slate-500 text-[10px] mt-0.5">% tugas & lessons diselesaikan</p>
+            <p class="text-[#1a5f4f] font-bold text-sm mt-1">30%</p>
+          </div>
+          <div class="bg-[#8b5cf6]/10 rounded-xl p-3">
+            <div class="w-8 h-8 rounded-full bg-[#8b5cf6] flex items-center justify-center mb-2"><i class="fa-solid fa-star text-white text-sm"></i></div>
+            <p class="text-[#8b5cf6] text-xs font-bold">Quality Score</p>
+            <p class="text-slate-500 text-[10px] mt-0.5">Rata-rata nilai dari mentor</p>
+            <p class="text-[#8b5cf6] font-bold text-sm mt-1">40%</p>
+          </div>
+          <div class="bg-[#f97316]/10 rounded-xl p-3">
+            <div class="w-8 h-8 rounded-full bg-[#f97316] flex items-center justify-center mb-2"><i class="fa-solid fa-bolt text-white text-sm"></i></div>
+            <p class="text-[#f97316] text-xs font-bold">Engagement Score</p>
+            <p class="text-slate-500 text-[10px] mt-0.5">Streak, early submission, partisipasi</p>
+            <p class="text-[#f97316] font-bold text-sm mt-1">20%</p>
+          </div>
+          <div class="bg-[#22c55e]/10 rounded-xl p-3">
+            <div class="w-8 h-8 rounded-full bg-[#22c55e] flex items-center justify-center mb-2"><i class="fa-solid fa-lightbulb text-white text-sm"></i></div>
+            <p class="text-[#22c55e] text-xs font-bold">Innovation Score</p>
+            <p class="text-slate-500 text-[10px] mt-0.5">Kreativitas & orisinalitas solusi</p>
+            <p class="text-[#22c55e] font-bold text-sm mt-1">10%</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- My position banner -->
+      <section data-design-id="my-position-y7z8a9" class="bg-[#2c3e50] rounded-2xl p-5 mb-5 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 rounded-full bg-[#f97316] flex items-center justify-center text-white font-bold text-xl">#8</div>
+          <div>
+            <p class="text-white/60 text-xs">Posisi kamu saat ini</p>
+            <p class="text-white text-lg font-bold">Arya Ramadhan — Ranking #8</p>
+            <p class="text-white/60 text-xs">dari 30 peserta · Top 27%</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-4 text-center">
+          <div><p class="text-white text-xl font-bold">75</p><p class="text-white/50 text-xs">Completion</p></div>
+          <div><p class="text-[#8b5cf6] text-xl font-bold">87</p><p class="text-white/50 text-xs">Quality</p></div>
+          <div><p class="text-[#f97316] text-xl font-bold">82</p><p class="text-white/50 text-xs">Engagement</p></div>
+          <div><p class="text-[#22c55e] text-xl font-bold">78</p><p class="text-white/50 text-xs">Innovation</p></div>
+        </div>
+        <div class="text-right">
+          <p class="text-white/60 text-xs mb-1">Total KPI Score</p>
+          <p class="text-white text-3xl font-bold">83.4</p>
+          <p class="text-[#f97316] text-xs">↑ +2.1 dari minggu lalu</p>
+        </div>
+      </section>
+
+      <!-- Leaderboard table -->
+      <section data-design-id="leaderboard-table-b1c2d3" class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div class="px-6 py-3 bg-slate-50 border-b border-slate-100 grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+          <div class="col-span-1">#</div>
+          <div class="col-span-3">Peserta</div>
+          <div class="col-span-1 text-center">Path</div>
+          <div class="col-span-1 text-center">Completion</div>
+          <div class="col-span-1 text-center">Quality</div>
+          <div class="col-span-1 text-center">Engagement</div>
+          <div class="col-span-1 text-center">Innovation</div>
+          <div class="col-span-2 text-center">Total Score</div>
+          <div class="col-span-1 text-center">Trend</div>
+        </div>
+        <!-- Top 3 -->
+        <article data-design-id="lb-row-1-c4d5e6" class="px-6 py-3 grid grid-cols-12 gap-2 items-center bg-[#f97316]/5 border-b border-slate-100">
+          <div class="col-span-1"><div class="w-7 h-7 rounded-full bg-[#f97316] flex items-center justify-center text-white font-bold text-sm">🥇</div></div>
+          <div class="col-span-3 flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-[#8b5cf6] flex items-center justify-center text-white text-xs font-bold">SA</div><div><p class="text-[#2c3e50] text-xs font-bold">Siti Aisyah</p><p class="text-slate-400 text-[10px]">Mentor: Pak Faris</p></div></div>
+          <div class="col-span-1 text-center"><span class="bg-[#f97316]/10 text-[#f97316] text-[10px] font-bold px-1.5 py-0.5 rounded-full">Entrep.</span></div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#1a5f4f]">95</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#8b5cf6]">94</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#f97316]">91</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#22c55e]">88</div>
+          <div class="col-span-2 text-center"><span class="text-[#f97316] text-base font-bold">93.1</span></div>
+          <div class="col-span-1 text-center text-[#22c55e] text-xs">↑ +3.2</div>
+        </article>
+        <article data-design-id="lb-row-2-f7g8h9" class="px-6 py-3 grid grid-cols-12 gap-2 items-center border-b border-slate-100">
+          <div class="col-span-1"><div class="w-7 h-7 rounded-full bg-slate-300 flex items-center justify-center text-white font-bold text-sm">🥈</div></div>
+          <div class="col-span-3 flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-[#1a5f4f] flex items-center justify-center text-white text-xs font-bold">RP</div><div><p class="text-[#2c3e50] text-xs font-bold">Riana Pratiwi</p><p class="text-slate-400 text-[10px]">Mentor: Bu Dewi</p></div></div>
+          <div class="col-span-1 text-center"><span class="bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-bold px-1.5 py-0.5 rounded-full">Career</span></div>
+          <div class="col-span-1 text-center text-xs font-semibold">88</div><div class="col-span-1 text-center text-xs font-semibold">91</div><div class="col-span-1 text-center text-xs font-semibold">89</div><div class="col-span-1 text-center text-xs font-semibold">85</div>
+          <div class="col-span-2 text-center"><span class="text-[#2c3e50] text-base font-bold">89.4</span></div>
+          <div class="col-span-1 text-center text-[#22c55e] text-xs">↑ +1.8</div>
+        </article>
+        <article data-design-id="lb-row-3-i1j2k3" class="px-6 py-3 grid grid-cols-12 gap-2 items-center border-b border-slate-100">
+          <div class="col-span-1"><div class="w-7 h-7 rounded-full bg-[#f59e0b] flex items-center justify-center text-white font-bold text-sm">🥉</div></div>
+          <div class="col-span-3 flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-[#f97316] flex items-center justify-center text-white text-xs font-bold">FA</div><div><p class="text-[#2c3e50] text-xs font-bold">Farhan Aditya</p><p class="text-slate-400 text-[10px]">Mentor: Pak Rizal</p></div></div>
+          <div class="col-span-1 text-center"><span class="bg-[#f97316]/10 text-[#f97316] text-[10px] font-bold px-1.5 py-0.5 rounded-full">Entrep.</span></div>
+          <div class="col-span-1 text-center text-xs font-semibold">86</div><div class="col-span-1 text-center text-xs font-semibold">88</div><div class="col-span-1 text-center text-xs font-semibold">87</div><div class="col-span-1 text-center text-xs font-semibold">84</div>
+          <div class="col-span-2 text-center"><span class="text-[#2c3e50] text-base font-bold">87.1</span></div>
+          <div class="col-span-1 text-center text-[#22c55e] text-xs">↑ +0.5</div>
+        </article>
+        <!-- rows 4-7 condensed -->
+        <div class="px-6 py-2.5 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs"><div class="col-span-1 text-slate-400 font-bold">4</div><div class="col-span-3 text-[#2c3e50] font-medium">Dewi Kartika</div><div class="col-span-1 text-center"><span class="text-[#8b5cf6] text-[10px]">Career</span></div><div class="col-span-1 text-center">85</div><div class="col-span-1 text-center">84</div><div class="col-span-1 text-center">83</div><div class="col-span-1 text-center">80</div><div class="col-span-2 text-center font-bold">83.8</div><div class="col-span-1 text-center text-[#22c55e]">↑</div></div>
+        <div class="px-6 py-2.5 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs"><div class="col-span-1 text-slate-400 font-bold">5</div><div class="col-span-3 text-[#2c3e50] font-medium">Hendra Putra</div><div class="col-span-1 text-center"><span class="text-[#f97316] text-[10px]">Entrep.</span></div><div class="col-span-1 text-center">82</div><div class="col-span-1 text-center">86</div><div class="col-span-1 text-center">81</div><div class="col-span-1 text-center">82</div><div class="col-span-2 text-center font-bold">83.4</div><div class="col-span-1 text-center text-slate-400">−</div></div>
+        <div class="px-6 py-2.5 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs"><div class="col-span-1 text-slate-400 font-bold">6</div><div class="col-span-3 text-[#2c3e50] font-medium">Ninda Safitri</div><div class="col-span-1 text-center"><span class="text-[#8b5cf6] text-[10px]">Career</span></div><div class="col-span-1 text-center">80</div><div class="col-span-1 text-center">85</div><div class="col-span-1 text-center">84</div><div class="col-span-1 text-center">79</div><div class="col-span-2 text-center font-bold">83.2</div><div class="col-span-1 text-center text-[#ef4444]">↓</div></div>
+        <div class="px-6 py-2.5 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs"><div class="col-span-1 text-slate-400 font-bold">7</div><div class="col-span-3 text-[#2c3e50] font-medium">Yoga Pratama</div><div class="col-span-1 text-center"><span class="text-[#f97316] text-[10px]">Entrep.</span></div><div class="col-span-1 text-center">79</div><div class="col-span-1 text-center">83</div><div class="col-span-1 text-center">85</div><div class="col-span-1 text-center">77</div><div class="col-span-2 text-center font-bold">83.0</div><div class="col-span-1 text-center text-[#22c55e]">↑</div></div>
+        <!-- Arya - highlighted -->
+        <article data-design-id="lb-row-arya-l4m5n6" class="px-6 py-3 grid grid-cols-12 gap-2 items-center bg-[#1a5f4f]/5 border-2 border-[#1a5f4f]/30 rounded-none">
+          <div class="col-span-1"><div class="w-7 h-7 rounded-full bg-[#1a5f4f]/20 flex items-center justify-center text-[#1a5f4f] font-bold text-sm">8</div></div>
+          <div class="col-span-3 flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-[#f97316] flex items-center justify-center text-white text-xs font-bold">AR</div><div><p class="text-[#2c3e50] text-xs font-bold">Arya Ramadhan <span class="text-[#1a5f4f] text-[10px]">(← Kamu)</span></p><p class="text-slate-400 text-[10px]">Mentor: Pak Faris</p></div></div>
+          <div class="col-span-1 text-center"><span class="bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-bold px-1.5 py-0.5 rounded-full">Career</span></div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#1a5f4f]">75</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#8b5cf6]">87</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#f97316]">82</div>
+          <div class="col-span-1 text-center text-xs font-bold text-[#22c55e]">78</div>
+          <div class="col-span-2 text-center"><span class="text-[#1a5f4f] text-base font-bold">83.4</span></div>
+          <div class="col-span-1 text-center text-[#22c55e] text-xs">↑ +2.1</div>
+        </article>
+        <div class="px-6 py-2 text-center text-slate-400 text-xs border-t border-slate-100">... 22 peserta lainnya ...</div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
