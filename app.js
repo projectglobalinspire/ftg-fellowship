@@ -174,6 +174,37 @@
     return S.reviewW2 ? Math.round((87 + S.reviewW2.score) / 2) : 87;
   }
 
+  /* ---------- Confetti 🎉 ---------- */
+  function confetti() {
+    var c = document.createElement('canvas');
+    c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10001;';
+    c.width = innerWidth; c.height = innerHeight;
+    document.body.appendChild(c);
+    var ctx = c.getContext('2d');
+    var colors = ['#f97316', '#8b5cf6', '#22c55e', '#1a5f4f', '#facc15', '#ef4444'];
+    var parts = [];
+    for (var i = 0; i < 160; i++) {
+      parts.push({
+        x: Math.random() * c.width, y: -20 - Math.random() * c.height * 0.6,
+        w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+        vy: 2.2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3,
+        rot: Math.random() * Math.PI, vr: -0.12 + Math.random() * 0.24,
+        col: colors[i % colors.length]
+      });
+    }
+    var t0 = Date.now();
+    (function frame() {
+      ctx.clearRect(0, 0, c.width, c.height);
+      parts.forEach(function (p) {
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.col; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      });
+      if (Date.now() - t0 < 3000) requestAnimationFrame(frame); else c.remove();
+    })();
+  }
+
   function hookScroll(a, prefix) {
     a.addEventListener('click', function (e) {
       e.preventDefault();
@@ -554,6 +585,7 @@
       function doSubmit() {
         S.submittedW2 = { at: new Date().toISOString(), words: wc };
         saveState(); markSubmitted();
+        confetti();
         modal(
           '<div style="text-align:center">' +
           '<div style="font-size:52px;margin-bottom:8px">🎉</div>' +
@@ -616,6 +648,7 @@
           S.reviews[key] = { score: +range.value, text: text, at: new Date().toISOString() };
           if (key === 'review-arya-w2') S.reviewW2 = S.reviews[key];
           saveState(); close();
+          confetti();
           toast('Penilaian ' + meta.name + ' tersimpan — ' + range.value + '/100', '⭐');
           if (onDone) onDone();
         });
@@ -1010,6 +1043,50 @@
         if (sp.textContent.trim() === '2 / 3') sp.textContent = '3 / 3';
       });
     }
+    insertKpiTrend();
+  }
+
+  /* Grafik tren KPI mingguan (SVG, tanpa library) */
+  function insertKpiTrend() {
+    var after = byId('journey-map');
+    if (!after) return;
+    var w2 = S.reviewW2 ? (0.3 * 85 + 0.4 * qualityAfterReview() + 0.2 * 85 + 0.1 * 78) : (S.submittedW2 ? 84.2 : 83.4);
+    w2 = Math.round(w2 * 10) / 10;
+    var pts = [['W1', 81.5], ['W2', w2]];
+    var target = 90, lo = 74, hi = 94;
+    var W = 640, H = 190, padL = 46, padR = 20, padT = 18, padB = 34;
+    var xs = ['W1', 'W2', 'W3', 'W4'];
+    function X(i) { return padL + i * ((W - padL - padR) / 3); }
+    function Y(v) { return padT + (hi - v) / (hi - lo) * (H - padT - padB); }
+    var line = pts.map(function (p, i) { return X(i) + ',' + Y(p[1]); }).join(' ');
+    var dots = pts.map(function (p, i) {
+      return '<circle cx="' + X(i) + '" cy="' + Y(p[1]) + '" r="5" fill="#1a5f4f"/>' +
+        '<text x="' + X(i) + '" y="' + (Y(p[1]) - 12) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#1a5f4f">' + p[1] + '</text>';
+    }).join('');
+    var labels = xs.map(function (l, i) {
+      return '<text x="' + X(i) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="11" fill="#94a3b8">' + l + '</text>';
+    }).join('');
+    var grid = [78, 82, 86, 90].map(function (v) {
+      return '<line x1="' + padL + '" y1="' + Y(v) + '" x2="' + (W - padR) + '" y2="' + Y(v) + '" stroke="#f1f5f9"/>' +
+        '<text x="' + (padL - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end" font-size="10" fill="#cbd5e1">' + v + '</text>';
+    }).join('');
+    var proj = '<line x1="' + X(1) + '" y1="' + Y(w2) + '" x2="' + X(3) + '" y2="' + Y(90.5) + '" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="5 5" opacity=".55"/>' +
+      '<text x="' + X(3) + '" y="' + (Y(90.5) - 10) + '" text-anchor="middle" font-size="10" fill="#8b5cf6">proyeksi</text>';
+    var tgt = '<line x1="' + padL + '" y1="' + Y(target) + '" x2="' + (W - padR) + '" y2="' + Y(target) + '" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 4"/>' +
+      '<text x="' + (W - padR) + '" y="' + (Y(target) - 6) + '" text-anchor="end" font-size="10" font-weight="700" fill="#f97316">🎯 target 90</text>';
+    var delta = (w2 - 81.5).toFixed(1);
+    var sec = document.createElement('section');
+    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6';
+    sec.innerHTML =
+      '<div class="flex items-center justify-between mb-2">' +
+      '<h2 class="text-[#2c3e50] text-sm font-bold">📈 Tren KPI Mingguan</h2>' +
+      '<span class="text-[#22c55e] text-xs font-semibold bg-[#22c55e]/10 px-2.5 py-1 rounded-full">↑ +' + delta + ' poin sejak W1</span></div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">' +
+      grid + tgt + proj +
+      '<polyline points="' + line + '" fill="none" stroke="#1a5f4f" stroke-width="3" stroke-linecap="round"/>' +
+      dots + labels + '</svg>' +
+      '<p class="text-slate-400 text-xs mt-1">Skor KPI total per minggu · garis ungu = proyeksi jika konsisten · Diperbarui otomatis setiap penilaian mentor</p>';
+    after.parentElement.insertBefore(sec, after.nextSibling);
   }
 
   /* ================================================================
@@ -1024,9 +1101,112 @@
     $all('p, span').forEach(function (p) {
       if (/75 hari lagi menuju Demo Day/.test(p.textContent)) p.textContent = p.textContent.replace('75', days);
     });
+    // tombol pratinjau sertifikat
+    var prep = byId('prepare-closing');
+    if (prep) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'mt-3 w-full bg-white text-[#f97316] text-xs font-bold py-2.5 rounded-xl';
+      btn.innerHTML = '🎓 Pratinjau Sertifikat Kelulusan';
+      btn.addEventListener('click', certModal);
+      prep.appendChild(btn);
+    }
+  }
+
+  /* ---------- Sertifikat digital (canvas) ---------- */
+  function certModal() {
+    var m = modal(
+      '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">🎓 Sertifikat Kelulusan</h3>' +
+      '<p style="font-size:12px;color:#64748b;margin-bottom:12px">Diberikan otomatis setelah menyelesaikan program 3 bulan</p>' +
+      '<canvas id="certCv" width="1200" height="850" style="width:100%;height:auto;border:1px solid #e2e8f0;border-radius:12px"></canvas>' +
+      '<button id="certDl" style="margin-top:12px;width:100%;background:#1a5f4f;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer"><i class="fa-solid fa-download"></i> Unduh PNG</button>',
+      function (box, close) {
+        var cv = $('#certCv', box);
+        drawCertificate(cv);
+        $('#certDl', box).addEventListener('click', function () {
+          var a = document.createElement('a');
+          a.download = 'Sertifikat-FTGxGI-Arya-Ramadhan.png';
+          a.href = cv.toDataURL('image/png');
+          a.click();
+          toast('Sertifikat diunduh', '🎓');
+        });
+      }
+    );
+    // modal sertifikat butuh lebih lebar
+    m.box.style.maxWidth = '640px';
+  }
+
+  function drawCertificate(cv) {
+    var ctx = cv.getContext('2d');
+    var W = cv.width, H = cv.height;
+    // latar
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    // bingkai luar navy + aksen oranye
+    ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 14; ctx.strokeRect(28, 28, W - 56, H - 56);
+    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.5; ctx.strokeRect(50, 50, W - 100, H - 100);
+    // hiasan sudut
+    ctx.fillStyle = '#1a5f4f';
+    [[28, 28], [W - 28, 28], [28, H - 28], [W - 28, H - 28]].forEach(function (p) {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 10, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.textAlign = 'center';
+    // header
+    ctx.fillStyle = '#94a3b8'; ctx.font = '600 20px Inter, Arial';
+    ctx.fillText('FAITHTOGROW  ×  GLOBAL INSPIRE', W / 2, 150);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '800 54px Inter, Arial';
+    ctx.fillText('SERTIFIKAT KELULUSAN', W / 2, 215);
+    ctx.fillStyle = '#f97316'; ctx.font = '700 24px Inter, Arial';
+    ctx.fillText('Future Builders Fellowship 2026', W / 2, 258);
+    // garis pemisah
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 220, 290); ctx.lineTo(W / 2 + 220, 290); ctx.stroke();
+    // nama
+    ctx.fillStyle = '#64748b'; ctx.font = '400 22px Inter, Arial';
+    ctx.fillText('Diberikan kepada', W / 2, 350);
+    ctx.fillStyle = '#1a5f4f'; ctx.font = '800 68px Inter, Arial';
+    ctx.fillText('Arya Ramadhan', W / 2, 435);
+    ctx.strokeStyle = '#1a5f4f'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 280, 458); ctx.lineTo(W / 2 + 280, 458); ctx.stroke();
+    // deskripsi
+    ctx.fillStyle = '#475569'; ctx.font = '400 21px Inter, Arial';
+    ctx.fillText('atas partisipasi dan kelulusannya dalam program pendampingan 3 bulan', W / 2, 510);
+    ctx.fillText('GI Design Thinking · Workshop Career Path · Mentoring Terstruktur', W / 2, 542);
+    // badge KPI
+    var kpi = S.reviewW2 ? (0.3 * 85 + 0.4 * qualityAfterReview() + 0.2 * 85 + 0.1 * 78).toFixed(1) : '83.4';
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath(); ctx.arc(W / 2, 625, 52, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.font = '800 30px Inter, Arial';
+    ctx.fillText(kpi, W / 2, 632);
+    ctx.font = '700 13px Inter, Arial';
+    ctx.fillText('KPI SCORE', W / 2, 655);
+    // tanggal & tanda tangan
+    ctx.fillStyle = '#64748b'; ctx.font = '400 19px Inter, Arial';
+    ctx.fillText('Bandung, 31 Agustus 2026', W / 2, 720);
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(180, 770); ctx.lineTo(430, 770); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W - 430, 770); ctx.lineTo(W - 180, 770); ctx.stroke();
+    ctx.fillStyle = '#2c3e50'; ctx.font = '700 17px Inter, Arial';
+    ctx.fillText('Direktur FaithToGrow', 305, 795);
+    ctx.fillText('Direktur Global Inspire', W - 305, 795);
+    // logo di atas
+    var logoY = 72;
+    var img1 = new Image(), img2 = new Image();
+    img1.onload = function () {
+      var h = 46, w = img1.width * (h / img1.height);
+      ctx.drawImage(img1, W / 2 - w - 16, logoY, w, h);
+    };
+    img2.onload = function () {
+      var h = 46, w = img2.width * (h / img2.height);
+      ctx.drawImage(img2, W / 2 + 16, logoY, w, h);
+    };
+    img1.src = 'assets/ftg-logo.png';
+    img2.src = 'assets/gi-logo.png';
   }
 
   /* ---------- Boot ---------- */
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* offline support opsional */ });
+  }
   document.addEventListener('DOMContentLoaded', function () {
     try { wireNav(); } catch (e) { console.warn(e); }
     try { initMobileNav(); } catch (e) { console.warn(e); }

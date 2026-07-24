@@ -11,6 +11,11 @@ Prototype platform pendampingan 3 bulan **FaithToGrow × Global Inspire** untuk 
 - **Feedback loop** — nilai & feedback dari mentor otomatis muncul di halaman Feedback Mentor, dashboard, dan progress tracker mentee.
 - **KPI Leaderboard & Workshop Library** — filter Career / Entrepreneur berfungsi.
 - **Countdown live** — hitung mundur Demo Day (31 Agustus 2026) dihitung dari tanggal hari ini.
+- **PWA installable** — bisa "Add to Home Screen" di Android/iPhone, terbuka full-screen seperti aplikasi asli, plus offline support (service worker).
+- **Confetti 🎉** — saat mentee mengumpulkan tugas dan saat mentor menyimpan penilaian.
+- **Grafik tren KPI** — line chart SVG di Progress Tracker, ikut naik setelah tugas dinilai.
+- **Sertifikat digital** — pratinjau & unduh PNG sertifikat kelulusan di halaman Closing Ceremony.
+- **Responsive semua perangkat** — Android, iPhone, iPad (menu hamburger di layar kecil), dan preview link cantik saat dishare ke WhatsApp/Telegram (Open Graph).
 
 ## Konten demo yang sudah terisi
 
