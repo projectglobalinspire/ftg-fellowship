@@ -142,6 +142,38 @@
       nav.appendChild(out);
     }
   }
+  /* ---------- Menu mobile (hamburger drawer) ---------- */
+  function initMobileNav() {
+    var aside = $('aside[data-design-id]');
+    if (!aside) return;
+    var burger = document.createElement('button');
+    burger.type = 'button';
+    burger.className = 'ftg-burger';
+    burger.setAttribute('aria-label', 'Buka menu');
+    burger.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    var overlay = document.createElement('div');
+    overlay.className = 'ftg-overlay';
+    document.body.appendChild(burger);
+    document.body.appendChild(overlay);
+    function closeMenu() {
+      aside.classList.remove('ftg-open');
+      overlay.classList.remove('ftg-show');
+      burger.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    }
+    burger.addEventListener('click', function () {
+      var open = aside.classList.toggle('ftg-open');
+      overlay.classList.toggle('ftg-show', open);
+      burger.innerHTML = open ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-bars"></i>';
+    });
+    overlay.addEventListener('click', closeMenu);
+    $all('a', aside).forEach(function (a) { a.addEventListener('click', closeMenu); });
+  }
+
+  /* Skor kualitas gabungan setelah W2 dinilai (rata-rata W1 87 + skor W2) */
+  function qualityAfterReview() {
+    return S.reviewW2 ? Math.round((87 + S.reviewW2.score) / 2) : 87;
+  }
+
   function hookScroll(a, prefix) {
     a.addEventListener('click', function (e) {
       e.preventDefault();
@@ -257,10 +289,15 @@
       }
     }
 
-    // update pesan mentor terbaru jika sudah ada review W2
+    // update pesan mentor terbaru + quality score jika sudah ada review W2
     if (S.reviewW2) {
       var quote = $('[data-design-id^="mentor-card"] .italic');
       if (quote) quote.textContent = '"' + S.reviewW2.text + '"';
+      var q = qualityAfterReview();
+      $all('p').forEach(function (p) {
+        if (p.textContent.trim() === '87' && p.className.indexOf('text-2xl') > -1) p.textContent = q;
+      });
+      $all('span').forEach(function (sp) { if (sp.textContent.trim() === 'Top 8') sp.textContent = 'Top 4'; });
     }
   }
 
@@ -320,12 +357,13 @@
     if (w1b) w1b.addEventListener('click', function () { lessonModal('w1'); });
     var w2b = byId('btn-week2-tab');
     if (w2b) w2b.addEventListener('click', function () { lessonModal('w2'); });
-    [['btn-week3-tab', 'Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai', '🔒'],
-     ['btn-week4-tab', 'Minggu 4 (PROTOTYPE + TEST) masih terkunci', '🔒']]
-      .forEach(function (cfg) {
-        var b = byId(cfg[0]);
-        if (b) b.addEventListener('click', function () { toast(cfg[1], cfg[2]); });
-      });
+    var w3b = byId('btn-week3-tab');
+    if (w3b) w3b.addEventListener('click', function () {
+      if (S.reviewW2) toast('Tugas W2 sudah dinilai ' + S.reviewW2.score + '/100 — IDEATE terbuka Senin depan! 🎉', '🔓');
+      else toast('Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai', '🔒');
+    });
+    var w4b = byId('btn-week4-tab');
+    if (w4b) w4b.addEventListener('click', function () { toast('Minggu 4 (PROTOTYPE + TEST) masih terkunci', '🔒'); });
     // back chevron
     var back = $('header a');
     if (back && back.getAttribute('href') === '#') back.href = 'mentee-dashboard.html';
@@ -809,6 +847,44 @@
       });
       footer.textContent = 'Menampilkan 30 dari 30 peserta · Diperbarui otomatis setiap Senin 00:00 WIB';
     }
+
+    // Setelah tugas W2 dinilai mentor: skor Arya naik dan peringkatnya
+    // naik dari #8 ke #4 secara nyata di tabel.
+    if (S.reviewW2) {
+      var q = qualityAfterReview();
+      var total = (0.3 * 85 + 0.4 * q + 0.2 * 85 + 0.1 * 78).toFixed(1);
+      var diff = '+' + (total - 83.4).toFixed(1);
+      var banner = byId('my-position');
+      if (banner) {
+        banner.innerHTML = banner.innerHTML
+          .replace(/>#8</g, '>#4<')
+          .replace('Ranking #8', 'Ranking #4')
+          .replace('Top 27%', 'Top 13%')
+          .replace('>75<', '>85<')
+          .replace('>87<', '>' + q + '<')
+          .replace('>82<', '>85<')
+          .replace('>83.4<', '>' + total + '<')
+          .replace('↑ +2.1 dari minggu lalu', '↑ ' + diff + ' — tugas W2 dinilai ' + S.reviewW2.score + '/100 🎉');
+      }
+      var aryaRow = byId('lb-row-arya');
+      if (aryaRow) {
+        var map = { '8': '4', '75': '85', '87': String(q), '82': '85', '83.4': total, '↑ +2.1': '↑ ' + diff };
+        $all('div, span', aryaRow).forEach(function (el) {
+          if (el.children.length) return;
+          var t = el.textContent.trim();
+          if (map[t] !== undefined) el.textContent = map[t];
+        });
+        // geser baris Arya ke atas baris peringkat 4 lama, lalu turunkan rank 4-7 jadi 5-8
+        var condensed = $all('div.px-6.py-2\\.5', table).filter(function (d) {
+          return /Dewi Kartika|Hendra Putra|Ninda Safitri|Yoga Pratama/.test(d.textContent);
+        });
+        condensed.forEach(function (d) {
+          var num = $('div', d);
+          if (num && /^[4-7]$/.test(num.textContent.trim())) num.textContent = (+num.textContent.trim() + 1);
+        });
+        if (condensed[0]) table.insertBefore(aryaRow, condensed[0]);
+      }
+    }
     var rows = $all('article, div.px-6.py-2\\.5', table);
     function pathOf(row) {
       var t = row.textContent;
@@ -915,6 +991,24 @@
     if (S.submittedW2) {
       $all('p').forEach(function (p) { if (p.textContent.trim() === '38%') p.textContent = '55%'; });
       $all('[style*="width:38%"]').forEach(function (b) { b.style.width = '55%'; });
+      // lingkaran progress keseluruhan 20% -> 25%
+      $all('span').forEach(function (sp) { if (sp.textContent.trim() === '20%') sp.textContent = '25%'; });
+      var circ = $('svg circle[stroke="#1a5f4f"]');
+      if (circ) circ.setAttribute('stroke-dasharray', '25 75');
+      var m1lbl = $all('span').filter(function (sp) { return sp.textContent.trim() === '38%'; })[0];
+      if (m1lbl) m1lbl.textContent = '55%';
+    }
+    // posisi & skor ikut naik setelah W2 dinilai
+    if (S.reviewW2) {
+      var q2 = qualityAfterReview();
+      $all('p').forEach(function (p) {
+        if (p.textContent.trim() === '#8') p.textContent = '#4';
+        if (/Top 30%/.test(p.textContent)) p.textContent = '🔥 Top 13% — Luar biasa!';
+      });
+      $all('span').forEach(function (sp) {
+        if (sp.textContent.trim() === '87' && sp.className.indexOf('font-bold') > -1) sp.textContent = q2;
+        if (sp.textContent.trim() === '2 / 3') sp.textContent = '3 / 3';
+      });
     }
   }
 
@@ -935,6 +1029,7 @@
   /* ---------- Boot ---------- */
   document.addEventListener('DOMContentLoaded', function () {
     try { wireNav(); } catch (e) { console.warn(e); }
+    try { initMobileNav(); } catch (e) { console.warn(e); }
     try { wireBell(); } catch (e) { console.warn(e); }
     try {
       if (PAGE.indexOf('mentee-dashboard') === 0) initMenteeDashboard();

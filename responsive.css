@@ -1,0 +1,116 @@
+/* ================================================================
+   Responsive layer — Android / iPhone / iPad / desktop
+   Dimuat setelah Tailwind CDN; override pakai !important.
+   ================================================================ */
+* { -webkit-tap-highlight-color: transparent; }
+
+.ftg-burger { display: none; }
+.ftg-overlay { display: none; }
+
+/* ---------- Tablet & HP (sidebar jadi drawer) ---------- */
+@media (max-width: 1023px) {
+  aside[data-design-id] {
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0 !important;
+    overflow-y: auto;
+    z-index: 80;
+  }
+  aside[data-design-id].ftg-open {
+    transform: none;
+    box-shadow: 0 0 60px rgba(0, 0, 0, .45);
+  }
+  main[data-design-id] {
+    margin-left: 0 !important;
+    min-width: 0 !important;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .ftg-burger {
+    display: flex;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 90;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #2c3e50;
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    font-size: 16px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
+    cursor: pointer;
+  }
+  .ftg-overlay.ftg-show {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, .5);
+    z-index: 75;
+  }
+
+  main[data-design-id] header {
+    padding: 14px 16px 14px 66px !important;
+  }
+  main[data-design-id] .px-8 {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Anak grid boleh menyusut mengikuti lebar layar */
+  .grid > * { min-width: 0; }
+
+  /* Grid menyesuaikan: 3 kolom -> 1, 4 kolom -> 2x2, canvas 5 kolom -> tumpuk */
+  .grid.grid-cols-3 { grid-template-columns: 1fr !important; }
+  .grid.grid-cols-3 > .col-span-2 { grid-column: auto !important; }
+  .grid.grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .grid.grid-cols-4 > .col-span-2 { grid-column: span 2 / span 2 !important; }
+  .grid.grid-cols-5 { grid-template-columns: 1fr !important; }
+  .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+  /* kuadran Values Matrix tetap 2x2 */
+  [data-design-id^="values-matrix"] .grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  /* Canvas: garis pemisah vertikal jadi horizontal saat ditumpuk */
+  [data-design-id^="canvas-section"] .divide-x > * + * {
+    border-left: 0 !important;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  /* Leaderboard: tabel bisa digeser ke samping */
+  [data-design-id^="leaderboard-table"] {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  [data-design-id^="leaderboard-table"] > * { min-width: 860px !important; }
+
+  /* Peta perjalanan 3 bulan ditumpuk */
+  [data-design-id^="journey-map"] .flex.items-start { flex-direction: column; gap: 16px; }
+  [data-design-id^="journey-map"] .flex.items-start > div { width: 100%; }
+  [data-design-id^="journey-map"] .w-6 { display: none; }
+
+  /* Baris header / hero membungkus rapi, tidak terpotong */
+  main[data-design-id] .justify-between { flex-wrap: wrap; row-gap: 12px; }
+  [data-design-id^="schedule-banner"] { flex-wrap: wrap; }
+
+  /* Sidebar border pemisah antar drawer */
+  main[data-design-id] { min-height: 100vh; }
+}
+
+/* ---------- HP kecil ---------- */
+@media (max-width: 640px) {
+  /* font-size 16px mencegah auto-zoom Safari iOS saat mengetik */
+  input, textarea, select { font-size: 16px !important; }
+  main[data-design-id] h1 { font-size: 17px !important; }
+  main[data-design-id] header { padding-left: 62px !important; }
+  .grid.grid-cols-4 { gap: 10px !important; }
+}
