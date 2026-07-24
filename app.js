@@ -19,11 +19,35 @@
     replies: []          // balasan mentee di halaman feedback
   };
 
+  /* Konten demo — terisi otomatis saat pertama kali dibuka (atau setelah
+     localStorage.clear()) supaya platform terlihat sudah hidup dipakai. */
+  var SEED = {
+    niyyah: 'Saya ingin membantu pemuda Bandung menemukan karir yang bermakna, agar ilmu yang mereka miliki menjadi manfaat bagi keluarga dan komunitasnya.',
+    define: [
+      'Lulusan baru di Bandung kesulitan menerjemahkan skill menjadi karir karena tidak tahu cara mempresentasikan kekuatan dirinya.',
+      '3 dari 5 narasumber punya portofolio bagus tapi tidak percaya diri menceritakannya — masalahnya visibility, bukan kemampuan.',
+      'Fresh graduate usia 21-25 tahun yang baru lulus tanpa jaringan profesional dan bimbingan karir.'
+    ],
+    matrix: [
+      'Program mentoring karir 12 minggu berbasis komunitas — selaras niyyah, dibutuhkan banyak orang',
+      'Kelas menulis CV & LinkedIn gratis tiap pekan di masjid kampus',
+      'Jasa pembuatan CV instan berbayar — laku tapi tidak membangun kemampuan orangnya',
+      'Event seminar besar tanpa tindak lanjut yang jelas'
+    ],
+    reflection: 'Minggu ini saya belajar bahwa mendefinisikan masalah ternyata jauh lebih sulit daripada menemukan masalah. Saat memulai fase DEFINE, saya mengira cukup menuliskan bahwa pemuda Bandung kesulitan mencari kerja. Namun setelah membaca kembali hasil wawancara di fase EMPATHIZE, saya sadar bahwa masalah sebenarnya bukan lapangan kerja yang kurang, melainkan banyak lulusan baru yang tidak tahu cara menerjemahkan kemampuan mereka menjadi sesuatu yang bernilai di mata perusahaan. Tiga dari lima narasumber saya punya portofolio bagus, tetapi tidak percaya diri saat menceritakannya. Dari situ saya menyusun problem statement: lulusan baru usia 21 sampai 25 tahun di Bandung membutuhkan cara yang terstruktur untuk mengenali dan mempresentasikan kekuatan diri, karena tanpa itu mereka kalah bersaing bukan karena kurang mampu, tetapi karena tidak terlihat. Insight yang paling mengejutkan adalah faktor kepercayaan diri ternyata lebih menentukan daripada faktor keterampilan teknis. Values-Alignment Matrix juga membantu saya menyaring ide. Program mentoring karir berbasis komunitas masuk kuadran sweet spot karena selaras dengan niyyah saya dan kebutuhannya nyata, sementara ide yang sekadar ramai tetapi tidak sesuai nilai saya letakkan di kuadran avoid. Minggu depan saya ingin menguji problem statement ini dengan mewawancarai dua narasumber tambahan, supaya fase IDEATE nanti berangkat dari masalah yang benar-benar tervalidasi, bukan asumsi saya sendiri. Semoga langkah kecil ini menjadi awal kontribusi nyata untuk kota saya.',
+    links: ['https://docs.google.com/document/d/gi-canvas-arya-w2'],
+    files: ['Values-Matrix-Arya.pdf']
+  };
+
   function loadState() {
     try {
       var raw = localStorage.getItem('ftgState');
-      var s = raw ? JSON.parse(raw) : {};
-      return Object.assign({}, DEFAULT_STATE, s);
+      if (!raw) {
+        var seeded = Object.assign({}, DEFAULT_STATE, SEED);
+        localStorage.setItem('ftgState', JSON.stringify(seeded));
+        return seeded;
+      }
+      return Object.assign({}, DEFAULT_STATE, JSON.parse(raw));
     } catch (e) { return Object.assign({}, DEFAULT_STATE); }
   }
   function saveState() { localStorage.setItem('ftgState', JSON.stringify(S)); }
@@ -291,22 +315,23 @@
     // Lampirkan file
     var up = byId('btn-upload-file');
     if (up) wireFilePicker(up);
-    // Tab minggu
-    [['btn-week1-tab', 'Minggu 1 sudah selesai — skor kamu 87/100 ⭐', '✅'],
-     ['btn-week3-tab', 'Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai', '🔒'],
+    // Tab minggu — W1/W2 membuka materi pembelajaran, W3/W4 terkunci
+    var w1b = byId('btn-week1-tab');
+    if (w1b) w1b.addEventListener('click', function () { lessonModal('w1'); });
+    var w2b = byId('btn-week2-tab');
+    if (w2b) w2b.addEventListener('click', function () { lessonModal('w2'); });
+    [['btn-week3-tab', 'Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai', '🔒'],
      ['btn-week4-tab', 'Minggu 4 (PROTOTYPE + TEST) masih terkunci', '🔒']]
       .forEach(function (cfg) {
         var b = byId(cfg[0]);
         if (b) b.addEventListener('click', function () { toast(cfg[1], cfg[2]); });
       });
-    var w2b = byId('btn-week2-tab');
-    if (w2b) w2b.addEventListener('click', function () { toast('Kamu sedang di Minggu 2 — DEFINE', '📍'); });
     // back chevron
     var back = $('header a');
     if (back && back.getAttribute('href') === '#') back.href = 'mentee-dashboard.html';
   }
 
-  function wireFilePicker(btn) {
+  function wireFilePicker(btn, onAdd) {
     var inp = document.createElement('input');
     inp.type = 'file';
     inp.style.display = 'none';
@@ -319,8 +344,51 @@
         if (S.files.indexOf(name) === -1) S.files.push(name);
         saveState();
         toast('File "' + name + '" dilampirkan', '📎');
+        if (onAdd) onAdd();
       }
     });
+  }
+
+  /* ---------- Materi pembelajaran (LMS) ---------- */
+  var LESSONS = {
+    w1: {
+      title: '📖 Materi Minggu 1 — EMPATHIZE',
+      badge: '<span style="background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">✓ SELESAI · SKOR 87/100</span>',
+      body:
+        '<p style="font-size:13px;color:#475569;margin-bottom:10px"><b>Empati adalah fondasi.</b> Sebelum membuat solusi, kita harus memahami manusia yang akan kita bantu — bukan dari asumsi, tapi dari mendengar langsung.</p>' +
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px">' +
+        '<p style="font-size:12px;font-weight:700;color:#1a5f4f;margin-bottom:6px">Yang sudah kamu selesaikan:</p>' +
+        '<p style="font-size:12px;color:#475569;margin-bottom:4px">✅ Video: Apa itu Design Thinking? (45 menit)</p>' +
+        '<p style="font-size:12px;color:#475569;margin-bottom:4px">✅ Wawancara empati dengan 5 narasumber</p>' +
+        '<p style="font-size:12px;color:#475569">✅ Kolom EMPATHIZE di GI Canvas + Niyyah Setting</p></div>' +
+        '<p style="font-size:12px;color:#8b5cf6;font-style:italic">"EMPATHIZE-mu sangat insightful! Coba perdalam pain point user di W2." — Pak Faris</p>'
+    },
+    w2: {
+      title: '📖 Materi Minggu 2 — DEFINE',
+      badge: '<span style="background:#f97316;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">📍 SEDANG BERLANGSUNG</span>',
+      body:
+        '<p style="font-size:13px;color:#475569;margin-bottom:10px"><b>DEFINE = mengubah temuan menjadi masalah yang tajam.</b> Fase ini menyaring semua hasil wawancara EMPATHIZE menjadi satu <i>problem statement</i> yang jelas dan bisa ditindaklanjuti.</p>' +
+        '<div style="background:#f97316;border-radius:12px;padding:14px;margin-bottom:10px">' +
+        '<p style="font-size:11px;font-weight:700;color:#fff;opacity:.8;margin-bottom:4px">RUMUS POINT-OF-VIEW (POV)</p>' +
+        '<p style="font-size:13px;font-weight:700;color:#fff">[Siapa] membutuhkan [kebutuhan] karena [insight yang mengejutkan]</p></div>' +
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px">' +
+        '<p style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Langkah minggu ini:</p>' +
+        '<p style="font-size:12px;color:#475569;margin-bottom:4px">1️⃣ Baca ulang kolom EMPATHIZE kamu — cari pola yang berulang</p>' +
+        '<p style="font-size:12px;color:#475569;margin-bottom:4px">2️⃣ Tulis problem statement dengan rumus POV di kolom DEFINE</p>' +
+        '<p style="font-size:12px;color:#475569;margin-bottom:4px">3️⃣ Uji dengan "5 Whys" — tanya "kenapa?" 5 kali sampai ke akar</p>' +
+        '<p style="font-size:12px;color:#475569">4️⃣ Petakan ide di Values-Alignment Matrix, lalu kumpulkan tugas</p></div>' +
+        '<p style="font-size:12px;color:#64748b">💡 <b>Prophetic lens:</b> masalah yang layak diselesaikan adalah yang manfaatnya kembali ke komunitas — bukan sekadar menarik secara bisnis.</p>'
+    }
+  };
+  function lessonModal(key) {
+    var L = LESSONS[key];
+    if (!L) return;
+    modal(
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><h3 style="font-weight:800;color:#2c3e50;font-size:16px">' + L.title + '</h3>' + L.badge + '</div>' +
+      L.body +
+      '<button id="lsClose" style="margin-top:14px;width:100%;background:#1a5f4f;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Mengerti — Lanjut Kerjakan</button>',
+      function (box, close) { $('#lsClose', box).addEventListener('click', close); }
+    );
   }
 
   /* ================================================================
@@ -399,9 +467,25 @@
       });
     }
 
-    // upload
+    // upload + chip file terlampir
     var browse = byId('btn-browse-files');
-    if (browse) wireFilePicker(browse);
+    if (browse) {
+      var drop = browse.closest('.border-dashed');
+      var fileWrap = document.createElement('div');
+      fileWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;';
+      if (drop) drop.parentElement.appendChild(fileWrap);
+      var renderFiles = function () {
+        fileWrap.innerHTML = S.files.map(function (f, i) {
+          return '<span style="background:#8b5cf6;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">📎 ' + esc(f) +
+            '<b data-fdel="' + i + '" style="cursor:pointer;opacity:.7">×</b></span>';
+        }).join('');
+        $all('[data-fdel]', fileWrap).forEach(function (x) {
+          x.addEventListener('click', function () { S.files.splice(+x.getAttribute('data-fdel'), 1); saveState(); renderFiles(); });
+        });
+      };
+      renderFiles();
+      wireFilePicker(browse, renderFiles);
+    }
 
     // simpan draft
     var draft = byId('btn-save-draft');
@@ -675,9 +759,56 @@
   /* ================================================================
      PAGE: KPI LEADERBOARD
      ================================================================ */
+  var LB_EXTRA = [
+    ['Putri Maharani', 'Career', 'Bu Dewi', 80, 84, 81, 79, 81.9, '↑'],
+    ['Andi Saputra', 'Entrep.', 'Pak Rizal', 81, 82, 79, 80, 81.1, '−'],
+    ['Laila Rahmawati', 'Career', 'Bu Sinta', 78, 83, 80, 77, 80.3, '↑'],
+    ['Fikri Hidayat', 'Entrep.', 'Pak Hadi', 79, 80, 81, 76, 79.5, '↓'],
+    ['Nabila Zahra', 'Career', 'Bu Rina', 77, 81, 78, 78, 78.9, '↑'],
+    ['Reza Firmansyah', 'Entrep.', 'Pak Faris', 76, 79, 80, 75, 78.0, '−'],
+    ['Intan Permata', 'Career', 'Bu Dewi', 75, 79, 77, 76, 77.2, '↑'],
+    ['Taufik Ramdani', 'Entrep.', 'Pak Rizal', 76, 77, 76, 74, 76.4, '↓'],
+    ['Salsabila Putri', 'Career', 'Bu Sinta', 74, 78, 75, 73, 75.7, '↑'],
+    ['Galih Prakoso', 'Entrep.', 'Pak Hadi', 73, 76, 76, 74, 75.0, '−'],
+    ['Mega Lestari', 'Career', 'Bu Rina', 72, 76, 74, 72, 74.2, '↑'],
+    ['Ilham Maulana', 'Entrep.', 'Pak Faris', 73, 74, 73, 71, 73.3, '↓'],
+    ['Citra Ayu', 'Career', 'Bu Dewi', 71, 74, 72, 72, 72.6, '−'],
+    ['Fajar Nugraha', 'Entrep.', 'Pak Rizal', 70, 73, 73, 70, 71.9, '↑'],
+    ['Zahra Aulia', 'Career', 'Bu Sinta', 69, 73, 71, 69, 71.0, '↓'],
+    ['Doni Kurniawan', 'Entrep.', 'Pak Hadi', 70, 71, 70, 68, 70.2, '−'],
+    ['Rani Puspita', 'Career', 'Bu Rina', 68, 71, 69, 68, 69.4, '↑'],
+    ['Aldi Wijaya', 'Entrep.', 'Pak Faris', 67, 70, 69, 67, 68.6, '↓'],
+    ['Maya Anggraini', 'Career', 'Bu Dewi', 66, 69, 68, 66, 67.6, '−'],
+    ['Rizal Fauzan', 'Entrep.', 'Pak Rizal', 66, 68, 66, 65, 66.7, '↑'],
+    ['Sari Indah', 'Career', 'Bu Sinta', 64, 67, 66, 64, 65.6, '↓'],
+    ['Bima Prasetya', 'Entrep.', 'Pak Hadi', 63, 66, 65, 63, 64.7, '−']
+  ];
+
   function initLeaderboard() {
     var table = byId('leaderboard-table');
     if (!table) return;
+    // ganti footer "... 22 peserta lainnya ..." dengan 22 baris peserta sungguhan
+    var footer = $all('div', table).filter(function (d) { return /22 peserta lainnya/.test(d.textContent); })[0];
+    if (footer) {
+      LB_EXTRA.forEach(function (p, idx) {
+        var row = document.createElement('div');
+        row.className = 'px-6 py-2.5 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs';
+        var pathColor = p[1] === 'Career' ? '#8b5cf6' : '#f97316';
+        var trendColor = p[8] === '↑' ? '#22c55e' : (p[8] === '↓' ? '#ef4444' : '#94a3b8');
+        row.innerHTML =
+          '<div class="col-span-1 text-slate-400 font-bold">' + (idx + 9) + '</div>' +
+          '<div class="col-span-3"><span class="text-[#2c3e50] font-medium">' + p[0] + '</span> <span class="text-slate-400 text-[10px] block">Mentor: ' + p[2] + '</span></div>' +
+          '<div class="col-span-1 text-center"><span style="color:' + pathColor + '" class="text-[10px]">' + p[1] + '</span></div>' +
+          '<div class="col-span-1 text-center">' + p[3] + '</div>' +
+          '<div class="col-span-1 text-center">' + p[4] + '</div>' +
+          '<div class="col-span-1 text-center">' + p[5] + '</div>' +
+          '<div class="col-span-1 text-center">' + p[6] + '</div>' +
+          '<div class="col-span-2 text-center font-bold">' + p[7].toFixed(1) + '</div>' +
+          '<div class="col-span-1 text-center" style="color:' + trendColor + '">' + p[8] + '</div>';
+        table.insertBefore(row, footer);
+      });
+      footer.textContent = 'Menampilkan 30 dari 30 peserta · Diperbarui otomatis setiap Senin 00:00 WIB';
+    }
     var rows = $all('article, div.px-6.py-2\\.5', table);
     function pathOf(row) {
       var t = row.textContent;
