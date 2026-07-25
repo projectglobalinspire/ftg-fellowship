@@ -19,7 +19,7 @@
     z-index: 80;
   }
   aside[data-design-id].ftg-open {
-    transform: none;
+    transform: none !important;
     box-shadow: 0 0 60px rgba(0, 0, 0, .45);
   }
   main[data-design-id] {
@@ -104,6 +104,22 @@
 
   /* Sidebar border pemisah antar drawer */
   main[data-design-id] { min-height: 100vh; }
+
+  /* Pil fase canvas (EMPATHIZE..TEST) membungkus, tidak meluber */
+  [data-design-id^="canvas-progress"] .flex.gap-3 { flex-wrap: wrap; }
+  [data-design-id^="canvas-progress"] .flex.gap-3 > div { flex: 1 1 120px !important; }
+}
+
+/* ---------- iPad landscape / laptop kecil (sidebar tampil) ---------- */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  /* Canvas 5 kolom terlalu sempit -> 3 kolom membungkus */
+  [data-design-id^="canvas-section"] .grid.grid-cols-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  [data-design-id^="canvas-section"] .divide-x > * { border-left: 0 !important; }
+  [data-design-id^="canvas-section"] .grid.grid-cols-5 > *:nth-child(n+4) {
+    border-top: 1px solid #f1f5f9;
+  }
 }
 
 /* ---------- HP kecil ---------- */
@@ -113,4 +129,42 @@
   main[data-design-id] h1 { font-size: 17px !important; }
   main[data-design-id] header { padding-left: 62px !important; }
   .grid.grid-cols-4 { gap: 10px !important; }
+
+  /* Kartu workshop terlalu sempit kalau 2 kolom -> 1 kolom penuh */
+  main[data-design-id^="main-wl"] .grid.grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Progress tracker: kolom "Stats" & "Posisi" ditumpuk, garis kiri jadi garis atas */
+  [data-design-id^="overall-progress"] .grid.grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+  [data-design-id^="overall-progress"] .grid.grid-cols-4 > .col-span-2 {
+    grid-column: auto !important;
+  }
+  [data-design-id^="overall-progress"] .border-l {
+    border-left: 0 !important;
+    padding-left: 0 !important;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 16px;
+  }
+
+  /* Badge kecil-kecil: tetap 4 kolom agar tidak melebar aneh */
+  [data-design-id^="badges-earned"] .grid.grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  /* Tombol Simpan Draft + Kumpulkan ditumpuk agar lega disentuh */
+  [data-design-id^="submission-form"] > .flex.gap-3 { flex-direction: column; }
+  [data-design-id^="submission-form"] > .flex.gap-3 > button { width: 100%; justify-content: center; }
+
+  /* Baris waktu rundown acara lebih rapat */
+  [data-design-id^="ceremony-agenda"] .w-16,
+  [data-design-id^="closing-agenda"] .w-16 { width: 44px !important; }
+
+  /* Header hero acara: padding lebih kecil */
+  [data-design-id^="opening-hero"], [data-design-id^="closing-hero"] {
+    padding: 56px 16px 28px !important;
+  }
 }

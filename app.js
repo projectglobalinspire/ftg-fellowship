@@ -74,7 +74,7 @@
       document.body.appendChild(toastWrap);
     }
     var el = document.createElement('div');
-    el.style.cssText = 'background:#2c3e50;color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;max-width:340px;opacity:0;transform:translateY(10px);transition:all .25s ease;';
+    el.style.cssText = 'background:#2c3e50;color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;max-width:min(340px,calc(100vw - 32px));opacity:0;transform:translateY(10px);transition:all .25s ease;';
     el.innerHTML = '<span style="font-size:16px">' + (icon || '✅') + '</span><span>' + esc(msg) + '</span>';
     toastWrap.appendChild(el);
     requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
