@@ -43,6 +43,21 @@
   /* item nav & baris daftar */
   aside nav a { transition: background-color .2s ease, color .2s ease, padding-left .2s ease; }
   aside nav a:hover { padding-left: 16px; }
+
+  /* dropdown notifikasi muncul membesar dari lonceng */
+  .ftg-dd { animation: ftgPop .22s cubic-bezier(.22, 1, .36, 1) both; transform-origin: top right; }
+}
+
+/* loading bar tipis saat sinkronisasi server */
+.ftg-loadbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9997;
+  background: linear-gradient(90deg, transparent, #f97316, #8b5cf6, transparent);
+  background-size: 50% 100%; background-repeat: no-repeat;
+  animation: ftgLoad 1s ease-in-out infinite;
+}
+@keyframes ftgLoad {
+  0% { background-position: -50% 0; }
+  100% { background-position: 150% 0; }
 }
 
 .ftg-burger { display: none; }
@@ -101,12 +116,19 @@
 
   /* Badge status koneksi tidak boleh menimpa drawer/isi drawer */
   .ftg-conn { z-index: 70 !important; }
-  .ftg-overlay.ftg-show {
+  .ftg-overlay {
     display: block;
     position: fixed;
     inset: 0;
     background: rgba(15, 23, 42, .5);
     z-index: 75;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .ftg-overlay.ftg-show {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   main[data-design-id] .px-8 {

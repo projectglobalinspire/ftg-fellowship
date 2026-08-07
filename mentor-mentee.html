@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mentee Saya – FTG x GI Fellowship</title>
+  <meta name="theme-color" content="#2c3e50">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+  <link rel="stylesheet" href="responsive.css">
+  <script src="ftg-config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script defer src="app.js"></script>
+</head>
+<body class="min-h-screen bg-[#f8fafc] flex">
+
+  <aside data-design-id="sidebar-mentormentee-a1b2c3" class="w-[240px] min-h-[900px] bg-[#2c3e50] flex flex-col fixed left-0 top-0">
+    <div class="px-5 py-5 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <img src="assets/ftg-logo.png" alt="FTG" class="h-9 w-auto">
+        <span class="text-white/40 text-lg font-thin">×</span>
+        <img src="assets/gi-logo.png" alt="GI" class="h-8 w-auto">
+      </div>
+      <p class="text-white/40 text-[10px] font-medium tracking-widest uppercase mt-2">Future Builders Fellowship</p>
+    </div>
+    <div class="mx-4 mt-4 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-[#1a5f4f] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">BF</div>
+      <div class="min-w-0">
+        <p class="text-white text-sm font-semibold truncate">Bapak Faris</p>
+        <p class="text-white/50 text-xs truncate">Senior Mentor</p>
+      </div>
+    </div>
+    <nav data-design-id="nav-mentormentee-sidebar-d4e5f6" class="flex-1 px-3 pt-5 space-y-0.5">
+      <a href="mentor-dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-house w-4 text-center"></i> Dashboard</a>
+      <a href="mentor-mentee.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#1a5f4f] text-white text-sm font-medium"><i class="fa-solid fa-users w-4 text-center"></i> Mentee Saya
+        <span class="ml-auto bg-[#f97316] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">5</span></a>
+      <a href="mentor-review.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-file-lines w-4 text-center"></i> Review Tugas
+        <span class="ml-auto bg-[#ef4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">3</span></a>
+      <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-comments w-4 text-center"></i> Berikan Feedback</a>
+      <a href="mentor-dashboard.html#group-progress" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-chart-bar w-4 text-center"></i> Progress Grup</a>
+      <a href="kpi-leaderboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-trophy w-4 text-center"></i> Leaderboard</a>
+    </nav>
+  </aside>
+
+  <main data-design-id="main-mentormentee-g7h8i9" class="ml-[240px] flex-1 min-h-[900px]">
+    <header data-design-id="header-mentormentee-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4">
+      <h1 class="text-[#2c3e50] text-xl font-bold">👥 Mentee Saya</h1>
+      <p class="text-slate-500 text-sm">Pantau progres, chat, dan status kelima mentee bimbinganmu</p>
+    </header>
+
+    <div class="px-8 py-6">
+      <section data-design-id="mentee-list-section-s1t2u3" class="bg-white rounded-2xl border border-slate-100 shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 class="text-[#2c3e50] text-base font-bold">👥 Mentee Kamu (5 orang)</h2>
+          <div class="flex gap-2">
+            <button data-design-id="btn-filter-mentee-v4w5x6" type="button" class="text-slate-500 text-xs border border-slate-200 px-3 py-1.5 rounded-lg">Filter</button>
+            <a href="#" class="text-[#1a5f4f] text-xs font-semibold bg-[#1a5f4f]/10 px-3 py-1.5 rounded-lg">Kirim Pesan Grup</a>
+          </div>
+        </div>
+        <div class="divide-y divide-slate-100">
+
+          <article data-design-id="mentee-row-1-y7z8a9" class="px-6 py-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-[#f97316] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">AR</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-[#2c3e50] text-sm font-semibold">Arya Ramadhan</p>
+                <span class="bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-semibold px-2 py-0.5 rounded-full">Career</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1">
+                <div class="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[120px]"><div class="h-1.5 bg-[#22c55e] rounded-full" style="width:38%"></div></div>
+                <span class="text-slate-500 text-xs">38%</span>
+                <span class="text-slate-400 text-xs">· Tugas W2 belum dikumpul</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[#f97316] text-xs font-semibold bg-[#f97316]/10 px-2 py-1 rounded-lg">Review Needed</span>
+              <button data-design-id="btn-view-mentee-1-b1c2d3" type="button" class="text-slate-400 hover:text-[#2c3e50]"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </article>
+
+          <article data-design-id="mentee-row-2-c4d5e6" class="px-6 py-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-[#8b5cf6] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">SA</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-[#2c3e50] text-sm font-semibold">Siti Aisyah</p>
+                <span class="bg-[#f97316]/10 text-[#f97316] text-[10px] font-semibold px-2 py-0.5 rounded-full">Entrepreneur</span>
+                <span class="bg-[#22c55e]/10 text-[#22c55e] text-[10px] font-bold px-2 py-0.5 rounded-full">🔥 Top Performer</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1">
+                <div class="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[120px]"><div class="h-1.5 bg-[#22c55e] rounded-full" style="width:62%"></div></div>
+                <span class="text-slate-500 text-xs">62%</span>
+                <span class="text-slate-400 text-xs">· Semua on track</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[#22c55e] text-xs font-semibold bg-[#22c55e]/10 px-2 py-1 rounded-lg">On Track</span>
+              <button data-design-id="btn-view-mentee-2-f7g8h9" type="button" class="text-slate-400 hover:text-[#2c3e50]"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </article>
+
+          <article data-design-id="mentee-row-3-i1j2k3" class="px-6 py-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-[#2c3e50] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">MR</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-[#2c3e50] text-sm font-semibold">Muhammad Rizky</p>
+                <span class="bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-semibold px-2 py-0.5 rounded-full">Career</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1">
+                <div class="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[120px]"><div class="h-1.5 bg-[#f59e0b] rounded-full" style="width:25%"></div></div>
+                <span class="text-slate-500 text-xs">25%</span>
+                <span class="text-[#ef4444] text-xs">· Perlu perhatian</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[#ef4444] text-xs font-semibold bg-[#ef4444]/10 px-2 py-1 rounded-lg">Needs Help</span>
+              <button data-design-id="btn-view-mentee-3-l4m5n6" type="button" class="text-slate-400 hover:text-[#2c3e50]"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </article>
+
+          <article data-design-id="mentee-row-4-o7p8q9" class="px-6 py-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-[#1a5f4f] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">DF</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-[#2c3e50] text-sm font-semibold">Dina Fitriani</p>
+                <span class="bg-[#f97316]/10 text-[#f97316] text-[10px] font-semibold px-2 py-0.5 rounded-full">Entrepreneur</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1">
+                <div class="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[120px]"><div class="h-1.5 bg-[#22c55e] rounded-full" style="width:50%"></div></div>
+                <span class="text-slate-500 text-xs">50%</span>
+                <span class="text-slate-400 text-xs">· 1 tugas pending</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[#f97316] text-xs font-semibold bg-[#f97316]/10 px-2 py-1 rounded-lg">Review Needed</span>
+              <button data-design-id="btn-view-mentee-4-r1s2t3" type="button" class="text-slate-400 hover:text-[#2c3e50]"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </article>
+
+          <article data-design-id="mentee-row-5-u4v5w6" class="px-6 py-4 flex items-center gap-4">
+            <div class="w-10 h-10 rounded-full bg-[#8b5cf6]/70 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">BN</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <p class="text-[#2c3e50] text-sm font-semibold">Bagas Nugroho</p>
+                <span class="bg-[#8b5cf6]/10 text-[#8b5cf6] text-[10px] font-semibold px-2 py-0.5 rounded-full">Career</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1">
+                <div class="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[120px]"><div class="h-1.5 bg-[#22c55e] rounded-full" style="width:44%"></div></div>
+                <span class="text-slate-500 text-xs">44%</span>
+                <span class="text-slate-400 text-xs">· Tugas W1 submitted</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[#22c55e] text-xs font-semibold bg-[#22c55e]/10 px-2 py-1 rounded-lg">On Track</span>
+              <button data-design-id="btn-view-mentee-5-x7y8z9" type="button" class="text-slate-400 hover:text-[#2c3e50]"><i class="fa-solid fa-chevron-right"></i></button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
