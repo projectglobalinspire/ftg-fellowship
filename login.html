@@ -47,11 +47,10 @@
       </div>
       <p class="text-slate-500 text-sm mb-5" id="roleDesc">Masuk untuk melanjutkan perjalanan fellowship-mu.</p>
 
-      <!-- Role toggle -->
-      <div class="flex bg-slate-100 rounded-xl p-1 gap-1 mb-5">
+      <!-- Role toggle (Panitia masuk lewat tautan khusus, tidak ditampilkan) -->
+      <div class="flex bg-slate-100 rounded-xl p-1 gap-1 mb-5" id="roleTabs">
         <button type="button" id="tabMentee" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white shadow text-[#2c3e50]">🎓 Mentee</button>
         <button type="button" id="tabMentor" class="flex-1 py-2 rounded-lg text-xs font-semibold text-slate-500">🧑‍🏫 Mentor</button>
-        <button type="button" id="tabAdmin" class="flex-1 py-2 rounded-lg text-xs font-semibold text-slate-500">🎛 Panitia</button>
       </div>
 
       <form id="loginForm" autocomplete="on">
@@ -84,7 +83,7 @@
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
-      var role = params.get('role') || 'mentee';
+      var role = params.get('role') || location.hash.replace('#', '') || 'mentee';
       /* Fallback offline — kredensial tidak disimpan sebagai teks polos */
       var USERS_FALLBACK = {
         'arya@ftg.id':    { pw: 'YXJ5YTIwMjY=',     name: 'Arya Ramadhan',  role: 'mentee', initials: 'AR', path: 'Career Path',       menteeId: 1 },
@@ -118,7 +117,7 @@
       var desc = document.getElementById('roleDesc');
       var tabMentee = document.getElementById('tabMentee');
       var tabMentor = document.getElementById('tabMentor');
-      var tabAdmin = document.getElementById('tabAdmin');
+      var roleTabs = document.getElementById('roleTabs');
       var errMsg = document.getElementById('errMsg');
 
       var ROLE_UI = {
@@ -132,7 +131,9 @@
         badge.textContent = ui.label;
         badge.className = 'text-xs font-bold px-3 py-1 rounded-full ' + ui.cls;
         desc.textContent = ui.desc;
-        [['mentee', tabMentee], ['mentor', tabMentor], ['admin', tabAdmin]].forEach(function (p) {
+        // mode panitia: lewat tautan khusus — sembunyikan pilihan peran
+        roleTabs.style.display = role === 'admin' ? 'none' : '';
+        [['mentee', tabMentee], ['mentor', tabMentor]].forEach(function (p) {
           p[1].className = 'flex-1 py-2 rounded-lg text-xs ' + (p[0] === role ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
         });
         email.value = '';
@@ -140,7 +141,6 @@
       }
       tabMentee.addEventListener('click', function () { setRole('mentee'); });
       tabMentor.addEventListener('click', function () { setRole('mentor'); });
-      tabAdmin.addEventListener('click', function () { setRole('admin'); });
       setRole(role);
 
       document.getElementById('togglePw').addEventListener('click', function () {

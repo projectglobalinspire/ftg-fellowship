@@ -824,7 +824,9 @@
     if (!IS_APP_PAGE || PAGE.indexOf('opening') === 0 || PAGE.indexOf('closing') === 0) return true;
     var ses = mySession();
     if (!ses || !ses.role) {
-      location.replace('login.html' + (PAGE.indexOf('mentor-dashboard') === 0 ? '?role=mentor' : '?role=mentee'));
+      var q = PAGE.indexOf('admin-') === 0 ? '#admin'
+        : (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) ? '#mentor' : '#mentee');
+      location.replace('login.html' + q);
       return false;
     }
     function home(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
