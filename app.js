@@ -591,6 +591,24 @@
         .concat(Object.keys(ex).map(function (em) { return Object.assign({ email: em }, ex[em]); }));
       var cnt = $('#accountCount');
       if (cnt) cnt.textContent = all.length + ' akun terdaftar';
+      // panel ringkasan peran + aksi terakhir (halaman Kelola Akun)
+      var rs = $('#roleSummary');
+      if (rs) {
+        var counts = { mentee: 0, mentor: 0, admin: 0 };
+        all.forEach(function (a) { if (counts[a.role] !== undefined) counts[a.role]++; });
+        rs.innerHTML =
+          '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#f97316;display:inline-block"></span>Mentee</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.mentee + '</span></div>' +
+          '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#1a5f4f;display:inline-block"></span>Mentor</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.mentor + '</span></div>' +
+          '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#8b5cf6;display:inline-block"></span>Panitia</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.admin + '</span></div>' +
+          '<div class="flex items-center justify-between border-t border-slate-100 pt-2"><span class="text-slate-600 text-xs font-semibold">Total</span><span class="text-[#8b5cf6] text-sm font-bold">' + all.length + '</span></div>';
+      }
+      var alog = $('#accountLog');
+      if (alog) {
+        var logs = (G.adminLog || []).filter(function (l) { return /Akun/.test(l.text); }).slice(0, 4);
+        alog.innerHTML = logs.length ? logs.map(function (l) {
+          return '<p class="text-xs text-slate-600 py-1 border-b border-slate-50">' + esc(l.text) + ' <span class="text-slate-400 text-[10px]">· ' + timeAgo(l.at) + '</span></p>';
+        }).join('') : '<p class="text-slate-400 text-xs">Belum ada perubahan akun.</p>';
+      }
       wrap.innerHTML = all.map(function (a) {
         return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50">' +
           '<div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0" style="background:' + (a.role === 'mentor' ? '#1a5f4f' : a.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(a.initials || '?') + '</div>' +
@@ -679,6 +697,72 @@
     G.adminLog = G.adminLog || [];
     G.adminLog.unshift({ text: text, at: new Date().toISOString() });
     if (G.adminLog.length > 30) G.adminLog.length = 30;
+  }
+
+  /* ---------- Kartu penyeimbang kolom (anti ruang kosong) ---------- */
+  function miniEventList(evs) {
+    return evs.map(function (ev) {
+      return '<div class="flex items-start gap-2.5 py-2 border-b border-slate-50">' +
+        '<span style="font-size:13px;flex-shrink:0">' + ev.icon + '</span>' +
+        '<div class="min-w-0"><p class="text-[#2c3e50] text-xs font-medium leading-snug">' + esc(ev.text) + '</p>' +
+        '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + '</p></div></div>';
+    }).join('');
+  }
+  /* mentee-dashboard: feed "Aktivitas Kamu" di bawah kolom kiri */
+  function insertMenteeActivity() {
+    var anchor = byId('canvas-progress') || byId('weekly-tasks');
+    if (!anchor) return;
+    var evs = myEvents().slice(0, 2);
+    if (!evs.length) return;
+    var sec = document.createElement('section');
+    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5';
+    sec.innerHTML = '<div class="flex items-center justify-between mb-1">' +
+      '<h3 class="text-[#2c3e50] text-sm font-bold">🔔 Aktivitas Kamu</h3>' +
+      '<span class="text-slate-400 text-xs">terbaru</span></div>' +
+      '<div class="grid grid-cols-2 gap-x-6">' + miniEventList(evs) + '</div>';
+    anchor.parentElement.appendChild(sec);
+  }
+  /* assignment: kartu kriteria penilaian + aktivitas di kolom kanan */
+  function insertAssignmentSide() {
+    var anchor = byId('kpi-impact');
+    if (!anchor) return;
+    var col = anchor.parentElement;
+    var krit = document.createElement('section');
+    krit.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5';
+    krit.innerHTML = '<h3 class="text-[#2c3e50] text-sm font-bold mb-3">🎯 Kriteria Penilaian</h3>' +
+      '<div class="space-y-2">' +
+      '<div class="flex justify-between text-xs"><span class="text-slate-600">Kedalaman analisis</span><span class="font-bold text-[#1a5f4f]">40%</span></div>' +
+      '<div class="flex justify-between text-xs"><span class="text-slate-600">Keselarasan nilai (niyyah)</span><span class="font-bold text-[#8b5cf6]">25%</span></div>' +
+      '<div class="flex justify-between text-xs"><span class="text-slate-600">Kualitas refleksi</span><span class="font-bold text-[#f97316]">20%</span></div>' +
+      '<div class="flex justify-between text-xs"><span class="text-slate-600">Ketepatan waktu</span><span class="font-bold text-[#22c55e]">15%</span></div></div>' +
+      '<p class="text-slate-400 text-[10px] mt-3">Skor akhir diberikan mentor · masuk ke Quality Score KPI kamu</p>';
+    col.appendChild(krit);
+  }
+  /* mentor-feedback: riwayat nilai + tips membalas di kolom kanan */
+  function insertFeedbackSide() {
+    var anchor = byId('score-breakdown');
+    if (!anchor) return;
+    var col = anchor.parentElement;
+    var w2 = S.reviewW2
+      ? '<span class="text-[#22c55e] text-xs font-bold">' + S.reviewW2.score + '/100 ✓</span>'
+      : (S.submittedW2 ? '<span class="text-[#8b5cf6] text-xs font-bold">Menunggu review</span>'
+        : '<span class="text-slate-400 text-xs">Belum dikumpul</span>');
+    var avg = S.reviewW2 ? Math.round((87 + S.reviewW2.score) / 2) : 87;
+    var hist = document.createElement('section');
+    hist.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5';
+    hist.innerHTML = '<h3 class="text-[#2c3e50] text-sm font-bold mb-3">📈 Riwayat Nilai</h3>' +
+      '<div class="space-y-2.5">' +
+      '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs">W1 — EMPATHIZE</span><span class="text-[#1a5f4f] text-xs font-bold">87/100 ✓</span></div>' +
+      '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs">W2 — DEFINE</span>' + w2 + '</div>' +
+      '<div class="flex items-center justify-between border-t border-slate-100 pt-2"><span class="text-slate-600 text-xs font-semibold">Rata-rata</span><span class="text-[#8b5cf6] text-sm font-bold">' + avg + '</span></div></div>';
+    col.appendChild(hist);
+    var tips = document.createElement('section');
+    tips.className = 'bg-[#1a5f4f] rounded-2xl p-5';
+    tips.innerHTML = '<h3 class="text-white text-sm font-bold mb-2">💡 Manfaatkan Feedback</h3>' +
+      '<ul class="space-y-2">' +
+      '<li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Balas komentar mentor — dialog membuat nilaimu naik lebih cepat</p></li>' +
+      '<li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Terapkan sarannya di tugas minggu berikutnya</p></li></ul>';
+    col.appendChild(tips);
   }
 
   /* ---------- Feed aktivitas terbaru (dashboard mentor) ----------
@@ -2632,8 +2716,10 @@
     } catch (e) { console.error('FTG init error:', e); }
     try { personalize(); } catch (e) { console.warn(e); }
     try { updateStreakUI(); } catch (e) { console.warn(e); }
-    try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
-    try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); } } catch (e) { console.warn(e); }
+    try { if (/^(mentor-dashboard|mentor-mentee)/.test(PAGE)) insertActivityFeed(); } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); insertMenteeActivity(); } } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('assignment-submission') === 0) insertAssignmentSide(); } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('mentor-feedback') === 0) insertFeedbackSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
   }
 
