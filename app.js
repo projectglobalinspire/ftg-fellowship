@@ -681,21 +681,30 @@
     if (G.adminLog.length > 30) G.adminLog.length = 30;
   }
 
-  /* ---------- Feed aktivitas terbaru (dashboard mentor) ---------- */
+  /* ---------- Feed aktivitas terbaru (dashboard mentor) ----------
+     Ditaruh di KOLOM KIRI bawah daftar mentee (2 kolom item) supaya
+     tinggi kolom kiri-kanan seimbang — tidak ada ruang kosong. */
   function insertActivityFeed() {
-    var anchor = byId('group-progress');
-    if (!anchor || !S.events.length) return;
+    var evs = allEvents(null).slice(0, 8);
+    if (!evs.length) return;
+    var itemsHtml = evs.map(function (ev) {
+      return '<div class="flex items-start gap-2.5 py-2 border-b border-slate-50 min-w-0">' +
+        '<span style="font-size:14px;flex-shrink:0">' + ev.icon + '</span>' +
+        '<div class="min-w-0"><p class="text-[#2c3e50] text-xs font-medium leading-snug">' + esc(ev.text) + '</p>' +
+        '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + ' · ' + (MENTEES[ev.menteeId] ? MENTEES[ev.menteeId].name.split(' ')[0] : '') + '</p></div></div>';
+    }).join('');
     var sec = document.createElement('section');
-    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5';
-    sec.innerHTML = '<h3 class="text-[#2c3e50] text-sm font-bold mb-3">🕒 Aktivitas Terbaru</h3>' +
-      '<div class="space-y-2">' +
-      S.events.slice(0, 6).map(function (ev) {
-        return '<div class="flex items-start gap-2.5 pb-2 border-b border-slate-50">' +
-          '<span style="font-size:14px;flex-shrink:0">' + ev.icon + '</span>' +
-          '<div class="min-w-0"><p class="text-[#2c3e50] text-xs font-medium leading-snug">' + esc(ev.text) + '</p>' +
-          '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + ' · untuk ' + (ev.forRole === 'mentor' ? 'kamu' : ev.forRole) + '</p></div></div>';
-      }).join('') + '</div>';
-    anchor.parentElement.insertBefore(sec, anchor.nextSibling);
+    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mt-5';
+    sec.innerHTML = '<div class="flex items-center justify-between mb-2">' +
+      '<h3 class="text-[#2c3e50] text-sm font-bold">🕒 Aktivitas Terbaru</h3>' +
+      '<span class="text-slate-400 text-xs">' + evs.length + ' kejadian</span></div>' +
+      '<div class="grid grid-cols-2 gap-x-6">' + itemsHtml + '</div>';
+    var list = byId('mentee-list-section');
+    if (list && list.parentElement) list.parentElement.appendChild(sec);
+    else {
+      var anchor = byId('group-progress');
+      if (anchor) anchor.parentElement.insertBefore(sec, anchor.nextSibling);
+    }
   }
 
   function startRealtime() {
@@ -939,9 +948,9 @@
       else if (txt === 'Mulai') a.href = 'design-thinking-module.html';
     });
 
-    // Tombol "Keluar" di sidebar
+    // Tombol "Keluar" di sidebar (sekali saja — personalize() mungkin sudah menambahkannya)
     var nav = $('aside nav');
-    if (nav) {
+    if (nav && !$all('a', nav).some(function (a) { return /Keluar/.test(a.textContent); })) {
       var out = document.createElement('a');
       out.href = 'index.html';
       out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
@@ -1891,6 +1900,20 @@
       var b = byId('btn-view-mentee-' + i);
       if (b) b.addEventListener('click', function () { messageModal(MENTEES[i].name, i); });
     })(ri);
+
+    // ringkasan review (halaman Review Tugas)
+    (function reviewSummary() {
+      var pend = $('#revPending'), done = $('#revDone'), avg = $('#revAvg');
+      if (!pend) return;
+      var doneN = 0, scores = [];
+      for (var i = 1; i <= 5; i++) {
+        var st = mstate(i);
+        Object.keys(st.reviews || {}).forEach(function (k) { doneN++; scores.push(st.reviews[k].score); });
+      }
+      pend.textContent = pendingCount();
+      done.textContent = doneN;
+      avg.textContent = scores.length ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length) + ' / 100' : 'Belum ada';
+    })();
 
     // statistik grup dihitung dari data mentee sungguhan
     (function liveGroupStats() {

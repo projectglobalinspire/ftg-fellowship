@@ -55,8 +55,8 @@
     </header>
 
     <div class="px-8 py-6">
-      <div class="max-w-2xl">
-        <section data-design-id="pending-reviews-a2b3c4" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+      <div class="grid grid-cols-3 gap-6">
+        <section data-design-id="pending-reviews-a2b3c4" class="col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div class="flex items-center justify-between mb-3">
             <h3 class="text-[#2c3e50] text-sm font-bold">⏳ Antrian Review</h3>
             <span class="bg-[#ef4444] text-white text-xs font-bold px-2 py-0.5 rounded-full">3</span>
@@ -88,6 +88,46 @@
             </div>
           </div>
         </section>
+
+        <!-- Ringkasan review + panduan -->
+        <div class="space-y-5">
+          <section data-design-id="review-summary-x1y2z3" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <h3 class="text-[#2c3e50] text-sm font-bold mb-3">📊 Ringkasan Review</h3>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+              <div class="bg-[#ef4444]/5 rounded-xl p-3 text-center">
+                <p class="text-[#ef4444] text-2xl font-bold" id="revPending">—</p>
+                <p class="text-slate-500 text-[10px]">Menunggu Review</p>
+              </div>
+              <div class="bg-[#22c55e]/5 rounded-xl p-3 text-center">
+                <p class="text-[#22c55e] text-2xl font-bold" id="revDone">—</p>
+                <p class="text-slate-500 text-[10px]">Sudah Dinilai</p>
+              </div>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 flex items-center justify-between">
+              <span class="text-slate-500 text-xs">Rata-rata skor diberikan</span>
+              <span class="text-[#1a5f4f] text-sm font-bold" id="revAvg">—</span>
+            </div>
+          </section>
+
+          <section class="bg-[#1a5f4f] rounded-2xl p-5">
+            <h3 class="text-white text-sm font-bold mb-3">💡 Panduan Menilai</h3>
+            <ul class="space-y-2">
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Baca refleksi mentee sampai selesai sebelum memberi skor</p></li>
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Sebutkan minimal 1 hal baik + 1 hal yang bisa diperbaiki</p></li>
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Feedback langsung terkirim & mentee mendapat notifikasi</p></li>
+            </ul>
+          </section>
+
+          <section class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <h3 class="text-[#2c3e50] text-sm font-bold mb-2">🎯 Bobot Penilaian</h3>
+            <div class="space-y-2">
+              <div class="flex justify-between text-xs"><span class="text-slate-600">Kedalaman analisis</span><span class="font-bold text-[#1a5f4f]">40%</span></div>
+              <div class="flex justify-between text-xs"><span class="text-slate-600">Keselarasan nilai (niyyah)</span><span class="font-bold text-[#8b5cf6]">25%</span></div>
+              <div class="flex justify-between text-xs"><span class="text-slate-600">Kualitas refleksi</span><span class="font-bold text-[#f97316]">20%</span></div>
+              <div class="flex justify-between text-xs"><span class="text-slate-600">Ketepatan waktu</span><span class="font-bold text-[#22c55e]">15%</span></div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   </main>
