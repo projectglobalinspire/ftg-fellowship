@@ -46,6 +46,18 @@
 
   /* dropdown notifikasi muncul membesar dari lonceng */
   .ftg-dd { animation: ftgPop .22s cubic-bezier(.22, 1, .36, 1) both; transform-origin: top right; }
+
+  /* badge lonceng berdenyut halus saat ada notifikasi belum dibaca */
+  @keyframes ftgPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.18); }
+  }
+  main header .relative > span.absolute { animation: ftgPulse 2.2s ease-in-out infinite; }
+
+  /* bubble chat masuk meluncur halus */
+  #chatBox > div { animation: ftgRise .22s ease both; }
+
+  html { scroll-behavior: smooth; }
 }
 
 /* loading bar tipis saat sinkronisasi server */

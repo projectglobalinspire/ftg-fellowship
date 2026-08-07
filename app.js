@@ -887,10 +887,18 @@
     box.style.cssText = 'background:#fff;border-radius:20px;max-width:480px;width:100%;padding:26px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto;';
     box.innerHTML = html;
     ov.appendChild(box);
-    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    function shut() {
+      ov.style.transition = 'opacity .18s ease';
+      box.style.transition = 'transform .18s ease, opacity .18s ease';
+      ov.style.opacity = '0';
+      box.style.transform = 'scale(.95) translateY(6px)';
+      box.style.opacity = '0';
+      setTimeout(function () { ov.remove(); }, 190);
+    }
+    ov.addEventListener('click', function (e) { if (e.target === ov) shut(); });
     document.body.appendChild(ov);
-    if (onMount) onMount(box, function () { ov.remove(); });
-    return { close: function () { ov.remove(); }, box: box };
+    if (onMount) onMount(box, shut);
+    return { close: shut, box: box };
   }
 
   /* ---------- Sidebar navigation wiring ---------- */
@@ -2606,6 +2614,57 @@
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
   }
 
+  /* ---------- Tanggal hidup: workshop & deadline mengikuti hari ini ---------- */
+  function nextWeekday(dow) { // 5 = Jumat, 6 = Sabtu
+    var d = new Date();
+    var diff = (dow - d.getDay() + 7) % 7;
+    if (diff === 0) diff = 7;
+    return new Date(d.getTime() + diff * 86400000);
+  }
+  function daysTo(d) { return Math.max(1, Math.ceil((d - new Date()) / 86400000)); }
+  function fmtID(d, short) {
+    return d.toLocaleDateString('id-ID', short
+      ? { weekday: 'long', day: 'numeric', month: 'short' }
+      : { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function liveDates() {
+    var sabtu = nextWeekday(6), jumat = nextWeekday(5);
+    var repl = {
+      'Sabtu, 5 Juli 2026': fmtID(sabtu),
+      '5 Juli 2026': fmtID(sabtu),
+      'Sabtu, 5 Juli': fmtID(sabtu, true),
+      '18 hari lagi': daysTo(sabtu) + ' hari lagi',
+      "Jum'at, 20 Juni 2026": fmtID(jumat),
+      "Jum'at, 20 Jun": fmtID(jumat, true),
+      '3 hari lagi': daysTo(jumat) + ' hari lagi',
+      'Deadline: Jum’at': 'Deadline: ' + fmtID(jumat, true)
+    };
+    $all('main span, main p, main h3').forEach(function (el) {
+      if (el.children.length > 1) return;
+      var t = el.textContent;
+      Object.keys(repl).forEach(function (k) {
+        if (t.indexOf(k) > -1) { el.textContent = t.replace(k, repl[k]); t = el.textContent; }
+      });
+    });
+  }
+
+  /* ---------- Angka statistik menghitung naik saat muncul ---------- */
+  function countUpStats() {
+    if (!window.matchMedia || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+    $all('main p.text-2xl, main p.text-3xl').forEach(function (p) {
+      var m = /^(\d{1,3})(%?)$/.exec(p.textContent.trim());
+      if (!m) return;
+      var target = +m[1], suf = m[2];
+      if (!target) return;
+      var steps = 14, i = 0;
+      var iv = setInterval(function () {
+        i++;
+        p.textContent = Math.round(target * (i / steps)) + suf;
+        if (i >= steps) { p.textContent = target + suf; clearInterval(iv); }
+      }, 38);
+    });
+  }
+
   /* bar progres mengalir dari 0 ke nilainya saat halaman terbuka */
   function animateBars() {
     if (!window.matchMedia || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
@@ -2647,8 +2706,10 @@
       if (loadbar) setTimeout(function () { loadbar.remove(); }, 250);
       bindS();
       renderPage();
+      try { liveDates(); } catch (e) { console.warn(e); }
       try { showConnBadge(); } catch (e) { console.warn(e); }
       try { animateBars(); } catch (e) { console.warn(e); }
+      try { countUpStats(); } catch (e) { console.warn(e); }
       try { startRealtime(); } catch (e) { console.warn(e); }
       try { startPresence(); } catch (e) { console.warn(e); }
     }
