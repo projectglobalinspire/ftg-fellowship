@@ -75,11 +75,6 @@
         </button>
       </form>
 
-      <!-- Demo credential hint -->
-      <div class="mt-5 bg-slate-50 border border-slate-200 rounded-xl p-3">
-        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Akun uji coba</p>
-        <div class="space-y-1" id="hintBox"></div>
-      </div>
     </div>
 
     <p class="text-center mt-5"><a href="index.html" class="text-white/40 text-xs hover:text-white"><i class="fa-solid fa-chevron-left mr-1 text-[10px]"></i>Kembali ke beranda</a></p>
@@ -114,7 +109,6 @@
       var desc = document.getElementById('roleDesc');
       var tabMentee = document.getElementById('tabMentee');
       var tabMentor = document.getElementById('tabMentor');
-      var hintBox = document.getElementById('hintBox');
       var errMsg = document.getElementById('errMsg');
 
       function setRole(r) {
@@ -125,11 +119,8 @@
         desc.textContent = mentee ? 'Masuk untuk melanjutkan perjalanan fellowship-mu.' : 'Masuk untuk memantau & menilai mentee kamu.';
         tabMentee.className = 'flex-1 py-2 rounded-lg text-sm ' + (mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
         tabMentor.className = 'flex-1 py-2 rounded-lg text-sm ' + (!mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
-        email.value = mentee ? 'arya@ftg.id' : 'faris@ftg.id';
+        email.value = '';
         password.value = '';
-        hintBox.innerHTML = mentee
-          ? '<p class="text-slate-600 text-xs"><b>arya@ftg.id</b> · password: <code class="bg-white border border-slate-200 rounded px-1.5 py-0.5">arya2026</code></p>'
-          : '<p class="text-slate-600 text-xs"><b>faris@ftg.id</b> · password: <code class="bg-white border border-slate-200 rounded px-1.5 py-0.5">faris2026</code></p>';
       }
       tabMentee.addEventListener('click', function () { setRole('mentee'); });
       tabMentor.addEventListener('click', function () { setRole('mentor'); });

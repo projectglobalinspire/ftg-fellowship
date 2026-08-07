@@ -127,11 +127,86 @@
   }
 
   function onForeignUpdate(d) {
+    var prevMsgCount = (S.messages || []).length;
     applyRemote(d);
     lastAppliedAt = d.updatedAt;
     var who = d.updatedBy === 'mentor' ? 'Mentor' : 'Mentee';
+    // kalau jendela chat sedang terbuka, perbarui isinya langsung tanpa reload
+    var chatBox = $('#chatBox');
+    if (chatBox) {
+      chatBox.innerHTML = chatBubbles();
+      chatBox.scrollTop = chatBox.scrollHeight;
+      if ((S.messages || []).length > prevMsgCount) { toast('Pesan baru diterima', '💬'); return; }
+    }
     toast('Update baru dari ' + who + ' — memuat ulang...', '📨');
     setTimeout(function () { location.reload(); }, 1200);
+  }
+
+  /* ---------- Presence: status online sungguhan ---------- */
+  var presCh = null;
+  function startPresence() {
+    if (!sb || !IS_APP_PAGE) return;
+    var role = myRole();
+    if (!role) return;
+    try {
+      presCh = sb.channel('ftg-presence', { config: { presence: { key: role } } });
+      presCh.on('presence', { event: 'sync' }, function () {
+        var st = presCh.presenceState();
+        updatePresenceUI(!!(st.mentor && st.mentor.length), !!(st.mentee && st.mentee.length));
+      });
+      presCh.subscribe(function (status) {
+        if (status === 'SUBSCRIBED') presCh.track({ at: Date.now() });
+      });
+    } catch (e) { /* presence opsional */ }
+  }
+  function updatePresenceUI(mentorOn, menteeOn) {
+    // sisi mentee: indikator "Online sekarang" milik mentor
+    $all('span, p').forEach(function (el) {
+      var t = el.textContent.trim();
+      if (t === 'Online sekarang' || t === 'Online' || t === 'Offline') {
+        var dot = el.previousElementSibling;
+        if (mentorOn) {
+          el.textContent = 'Online sekarang';
+          el.className = el.className.replace(/text-slate-\d+/g, 'text-[#22c55e]');
+          if (dot) dot.style.background = '#22c55e';
+        } else {
+          el.textContent = 'Offline';
+          el.className = el.className.replace(/text-\[#22c55e\]/g, 'text-slate-400');
+          if (dot) dot.style.background = '#94a3b8';
+        }
+      }
+    });
+    // sisi mentor: badge online di baris Arya
+    var row1 = byId('mentee-row-1');
+    if (row1) {
+      var old = $('.ftg-online-badge', row1);
+      if (old) old.remove();
+      var nameP = $all('p', row1).filter(function (p) { return /Arya Ramadhan/.test(p.textContent); })[0];
+      if (nameP && menteeOn) {
+        var b = document.createElement('span');
+        b.className = 'ftg-online-badge';
+        b.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:rgba(34,197,94,.12);color:#22c55e;font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:middle;';
+        b.innerHTML = '<span style="width:5px;height:5px;border-radius:99px;background:#22c55e;display:inline-block"></span>ONLINE';
+        nameP.appendChild(b);
+      }
+    }
+  }
+
+  /* ---------- Feed aktivitas terbaru (dashboard mentor) ---------- */
+  function insertActivityFeed() {
+    var anchor = byId('group-progress');
+    if (!anchor || !S.events.length) return;
+    var sec = document.createElement('section');
+    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5';
+    sec.innerHTML = '<h3 class="text-[#2c3e50] text-sm font-bold mb-3">🕒 Aktivitas Terbaru</h3>' +
+      '<div class="space-y-2">' +
+      S.events.slice(0, 6).map(function (ev) {
+        return '<div class="flex items-start gap-2.5 pb-2 border-b border-slate-50">' +
+          '<span style="font-size:14px;flex-shrink:0">' + ev.icon + '</span>' +
+          '<div class="min-w-0"><p class="text-[#2c3e50] text-xs font-medium leading-snug">' + esc(ev.text) + '</p>' +
+          '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + ' · untuk ' + (ev.forRole === 'mentor' ? 'kamu' : ev.forRole) + '</p></div></div>';
+      }).join('') + '</div>';
+    anchor.parentElement.insertBefore(sec, anchor.nextSibling);
   }
 
   function startRealtime() {
@@ -1423,6 +1498,8 @@
         else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
       } catch (e) { console.error('FTG init error:', e); }
       try { startRealtime(); } catch (e) { console.warn(e); }
+      try { startPresence(); } catch (e) { console.warn(e); }
+      try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
       try { showConnBadge(); } catch (e) { console.warn(e); }
     });
   });
