@@ -17,6 +17,23 @@ Prototype platform pendampingan 3 bulan **FaithToGrow × Global Inspire** untuk 
 - **Sertifikat digital** — pratinjau & unduh PNG sertifikat kelulusan di halaman Closing Ceremony.
 - **Responsive semua perangkat** — Android, iPhone, iPad (menu hamburger di layar kecil), dan preview link cantik saat dishare ke WhatsApp/Telegram (Open Graph).
 
+## Akun login
+
+| Peran | Email | Password |
+|---|---|---|
+| Mentee 1 | arya@ftg.id | arya2026 |
+| Mentee 2 | siti@ftg.id | siti2026 |
+| Mentee 3 | rizky@ftg.id | rizky2026 |
+| Mentee 4 | dina@ftg.id | dina2026 |
+| Mentee 5 | bagas@ftg.id | bagas2026 |
+| Mentor | faris@ftg.id | faris2026 |
+| Panitia | panitia@ftg.id | panitia2026 |
+
+> Akun mentee 2–5 & panitia perlu didaftarkan ke Supabase sekali dengan menjalankan `setup-v2.sql`
+> di SQL Editor. Tanpa itu, login tetap berfungsi lewat fallback lokal.
+
+Materi presentasi: `assets/qr-poster.png` (poster QR siap tempel di slide).
+
 ## Konten demo yang sudah terisi
 
 Saat pertama dibuka, platform otomatis terisi data realistis milik Arya: niyyah, canvas DEFINE lengkap, Values Matrix 4 kuadran, refleksi 209 kata, lampiran link Google Docs + file PDF, materi pembelajaran W1 & W2 (klik tab minggu), dan leaderboard penuh **30 peserta** dengan mentor masing-masing.

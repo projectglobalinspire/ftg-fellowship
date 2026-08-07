@@ -49,8 +49,9 @@
 
       <!-- Role toggle -->
       <div class="flex bg-slate-100 rounded-xl p-1 gap-1 mb-5">
-        <button type="button" id="tabMentee" class="flex-1 py-2 rounded-lg text-sm font-bold bg-white shadow text-[#2c3e50]">🎓 Mentee</button>
-        <button type="button" id="tabMentor" class="flex-1 py-2 rounded-lg text-sm font-semibold text-slate-500">🧑‍🏫 Mentor</button>
+        <button type="button" id="tabMentee" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white shadow text-[#2c3e50]">🎓 Mentee</button>
+        <button type="button" id="tabMentor" class="flex-1 py-2 rounded-lg text-xs font-semibold text-slate-500">🧑‍🏫 Mentor</button>
+        <button type="button" id="tabAdmin" class="flex-1 py-2 rounded-lg text-xs font-semibold text-slate-500">🎛 Panitia</button>
       </div>
 
       <form id="loginForm" autocomplete="on">
@@ -83,12 +84,18 @@
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
-      var role = params.get('role') === 'mentor' ? 'mentor' : 'mentee';
+      var role = params.get('role') || 'mentee';
       /* Fallback offline — kredensial tidak disimpan sebagai teks polos */
       var USERS_FALLBACK = {
-        'arya@ftg.id':  { pw: 'YXJ5YTIwMjY=',  name: 'Arya Ramadhan', role: 'mentee', initials: 'AR', path: 'Career Path' },
-        'faris@ftg.id': { pw: 'ZmFyaXMyMDI2', name: 'Bapak Faris',   role: 'mentor', initials: 'BF', path: 'Senior Mentor' }
+        'arya@ftg.id':    { pw: 'YXJ5YTIwMjY=',     name: 'Arya Ramadhan',  role: 'mentee', initials: 'AR', path: 'Career Path',       menteeId: 1 },
+        'siti@ftg.id':    { pw: 'c2l0aTIwMjY=',     name: 'Siti Aisyah',    role: 'mentee', initials: 'SA', path: 'Entrepreneur Path', menteeId: 2 },
+        'rizky@ftg.id':   { pw: 'cml6a3kyMDI2',     name: 'Muhammad Rizky', role: 'mentee', initials: 'MR', path: 'Career Path',       menteeId: 3 },
+        'dina@ftg.id':    { pw: 'ZGluYTIwMjY=',     name: 'Dina Fitriani',  role: 'mentee', initials: 'DF', path: 'Entrepreneur Path', menteeId: 4 },
+        'bagas@ftg.id':   { pw: 'YmFnYXMyMDI2',     name: 'Bagas Nugroho',  role: 'mentee', initials: 'BN', path: 'Career Path',       menteeId: 5 },
+        'faris@ftg.id':   { pw: 'ZmFyaXMyMDI2',     name: 'Bapak Faris',    role: 'mentor', initials: 'BF', path: 'Senior Mentor' },
+        'panitia@ftg.id': { pw: 'cGFuaXRpYTIwMjY=', name: 'Panitia FTG',    role: 'admin',  initials: 'PF', path: 'Committee' }
       };
+      var MENTEE_IDS = { 'arya@ftg.id': 1, 'siti@ftg.id': 2, 'rizky@ftg.id': 3, 'dina@ftg.id': 4, 'bagas@ftg.id': 5 };
       var sb = null;
       try {
         if (window.supabase && window.FTG_CONF && window.FTG_CONF.anonKey) {
@@ -97,10 +104,12 @@
       } catch (e) {}
       document.getElementById('connBadge').textContent = sb ? '● Terhubung ke server' : '○ Mode offline (fallback lokal)';
 
+      function homeFor(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
+
       // sudah login? langsung masuk
       try {
         var ses = JSON.parse(localStorage.getItem('ftgSession') || 'null');
-        if (ses && ses.role) location.replace(ses.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html');
+        if (ses && ses.role) location.replace(homeFor(ses.role));
       } catch (e) {}
 
       var email = document.getElementById('email');
@@ -109,21 +118,29 @@
       var desc = document.getElementById('roleDesc');
       var tabMentee = document.getElementById('tabMentee');
       var tabMentor = document.getElementById('tabMentor');
+      var tabAdmin = document.getElementById('tabAdmin');
       var errMsg = document.getElementById('errMsg');
 
+      var ROLE_UI = {
+        mentee: { label: 'MENTEE', cls: 'bg-[#f97316]/10 text-[#f97316]', desc: 'Masuk untuk melanjutkan perjalanan fellowship-mu.' },
+        mentor: { label: 'MENTOR', cls: 'bg-[#1a5f4f]/10 text-[#1a5f4f]', desc: 'Masuk untuk memantau & menilai mentee kamu.' },
+        admin:  { label: 'PANITIA', cls: 'bg-[#8b5cf6]/10 text-[#8b5cf6]', desc: 'Masuk untuk memantau jalannya program secara keseluruhan.' }
+      };
       function setRole(r) {
-        role = r;
-        var mentee = r === 'mentee';
-        badge.textContent = mentee ? 'MENTEE' : 'MENTOR';
-        badge.className = 'text-xs font-bold px-3 py-1 rounded-full ' + (mentee ? 'bg-[#f97316]/10 text-[#f97316]' : 'bg-[#1a5f4f]/10 text-[#1a5f4f]');
-        desc.textContent = mentee ? 'Masuk untuk melanjutkan perjalanan fellowship-mu.' : 'Masuk untuk memantau & menilai mentee kamu.';
-        tabMentee.className = 'flex-1 py-2 rounded-lg text-sm ' + (mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
-        tabMentor.className = 'flex-1 py-2 rounded-lg text-sm ' + (!mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
+        role = ROLE_UI[r] ? r : 'mentee';
+        var ui = ROLE_UI[role];
+        badge.textContent = ui.label;
+        badge.className = 'text-xs font-bold px-3 py-1 rounded-full ' + ui.cls;
+        desc.textContent = ui.desc;
+        [['mentee', tabMentee], ['mentor', tabMentor], ['admin', tabAdmin]].forEach(function (p) {
+          p[1].className = 'flex-1 py-2 rounded-lg text-xs ' + (p[0] === role ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
+        });
         email.value = '';
         password.value = '';
       }
       tabMentee.addEventListener('click', function () { setRole('mentee'); });
       tabMentor.addEventListener('click', function () { setRole('mentor'); });
+      tabAdmin.addEventListener('click', function () { setRole('admin'); });
       setRole(role);
 
       document.getElementById('togglePw').addEventListener('click', function () {
@@ -147,9 +164,11 @@
       }
       function success(user) {
         localStorage.setItem('ftgSession', JSON.stringify({
-          email: user.email, name: user.name, role: user.role, initials: user.initials, path: user.path, at: new Date().toISOString()
+          email: user.email, name: user.name, role: user.role, initials: user.initials, path: user.path,
+          menteeId: user.menteeId || user.mentee_id || MENTEE_IDS[user.email] || null,
+          at: new Date().toISOString()
         }));
-        location.href = user.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html';
+        location.href = homeFor(user.role);
       }
 
       document.getElementById('loginForm').addEventListener('submit', function (e) {
@@ -170,7 +189,7 @@
             .then(function (res) {
               if (res.error) { fallbackAuth(); return; }
               if (res.data) success(res.data);
-              else fail('Email atau password salah. Coba lagi ya.');
+              else fallbackAuth(); // akun mungkin belum tersinkron ke server
             })
             .catch(fallbackAuth);
         } else fallbackAuth();
