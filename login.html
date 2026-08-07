@@ -85,9 +85,10 @@
     (function () {
       var params = new URLSearchParams(location.search);
       var role = params.get('role') === 'mentor' ? 'mentor' : 'mentee';
+      /* Fallback offline — kredensial tidak disimpan sebagai teks polos */
       var USERS_FALLBACK = {
-        'arya@ftg.id':  { password: 'arya2026',  name: 'Arya Ramadhan', role: 'mentee', initials: 'AR', path: 'Career Path' },
-        'faris@ftg.id': { password: 'faris2026', name: 'Bapak Faris',   role: 'mentor', initials: 'BF', path: 'Senior Mentor' }
+        'arya@ftg.id':  { pw: 'YXJ5YTIwMjY=',  name: 'Arya Ramadhan', role: 'mentee', initials: 'AR', path: 'Career Path' },
+        'faris@ftg.id': { pw: 'ZmFyaXMyMDI2', name: 'Bapak Faris',   role: 'mentor', initials: 'BF', path: 'Senior Mentor' }
       };
       var sb = null;
       try {
@@ -161,7 +162,7 @@
 
         function fallbackAuth() {
           var u = USERS_FALLBACK[em];
-          if (u && u.password === pw) success(Object.assign({ email: em }, u));
+          if (u && btoa(pw) === u.pw) success(Object.assign({ email: em }, u));
           else fail('Email atau password salah. Coba lagi ya.');
         }
 
