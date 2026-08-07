@@ -19,6 +19,8 @@
   </style>
   <meta name="theme-color" content="#2c3e50">
   <link rel="stylesheet" href="responsive.css">
+  <script src="ftg-config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="app.js"></script>
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -70,7 +72,7 @@
     <div class="grid md:grid-cols-2 gap-5 fade-up-2">
 
       <!-- Mentee -->
-      <a href="mentee-dashboard.html" onclick="localStorage.setItem('ftgRole','mentee')" class="card-hover block bg-white rounded-3xl p-7 text-left">
+      <a href="login.html?role=mentee" class="card-hover block bg-white rounded-3xl p-7 text-left">
         <div class="flex items-center justify-between mb-4">
           <div class="w-14 h-14 rounded-2xl bg-[#f97316] flex items-center justify-center text-white font-extrabold text-xl">AR</div>
           <span class="bg-[#f97316]/10 text-[#f97316] text-xs font-bold px-3 py-1 rounded-full">MENTEE</span>
@@ -86,7 +88,7 @@
       </a>
 
       <!-- Mentor -->
-      <a href="mentor-dashboard.html" onclick="localStorage.setItem('ftgRole','mentor')" class="card-hover block bg-[#1a5f4f] rounded-3xl p-7 text-left">
+      <a href="login.html?role=mentor" class="card-hover block bg-[#1a5f4f] rounded-3xl p-7 text-left">
         <div class="flex items-center justify-between mb-4">
           <div class="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-[#1a5f4f] font-extrabold text-xl">BF</div>
           <span class="bg-white/15 text-white text-xs font-bold px-3 py-1 rounded-full">MENTOR</span>

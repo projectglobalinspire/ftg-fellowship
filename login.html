@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Masuk – FTG x GI Fellowship</title>
+  <meta name="theme-color" content="#2c3e50">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="ftg-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-up { animation: fadeUp .5s ease both; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+    .shake { animation: shake .4s ease; }
+    input:focus { border-color: #f97316 !important; }
+  </style>
+</head>
+<body class="min-h-screen bg-[#2c3e50] flex items-center justify-center px-4 py-10">
+  <div class="absolute inset-0 opacity-10 pointer-events-none overflow-hidden">
+    <div class="w-[420px] h-[420px] rounded-full bg-[#f97316] absolute -right-32 -top-32"></div>
+    <div class="w-[360px] h-[360px] rounded-full bg-[#8b5cf6] absolute -left-28 bottom-0"></div>
+  </div>
+
+  <div class="relative w-full max-w-md fade-up">
+    <!-- Logo -->
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center gap-3 bg-white/95 rounded-2xl px-5 py-3 mb-3">
+        <img src="assets/ftg-logo.png" alt="FTG" class="h-9 w-auto">
+        <span class="text-slate-300 text-lg font-thin">×</span>
+        <img src="assets/gi-logo.png" alt="GI" class="h-8 w-auto">
+      </div>
+      <p class="text-white/40 text-[10px] font-bold tracking-[0.3em] uppercase">Future Builders Fellowship 2026</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-3xl p-7 shadow-2xl" id="loginCard">
+      <div class="flex items-center justify-between mb-1">
+        <h1 class="text-[#2c3e50] text-xl font-extrabold">Masuk ke Platform</h1>
+        <span id="roleBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-[#f97316]/10 text-[#f97316]">MENTEE</span>
+      </div>
+      <p class="text-slate-500 text-sm mb-5" id="roleDesc">Masuk untuk melanjutkan perjalanan fellowship-mu.</p>
+
+      <!-- Role toggle -->
+      <div class="flex bg-slate-100 rounded-xl p-1 gap-1 mb-5">
+        <button type="button" id="tabMentee" class="flex-1 py-2 rounded-lg text-sm font-bold bg-white shadow text-[#2c3e50]">🎓 Mentee</button>
+        <button type="button" id="tabMentor" class="flex-1 py-2 rounded-lg text-sm font-semibold text-slate-500">🧑‍🏫 Mentor</button>
+      </div>
+
+      <form id="loginForm" autocomplete="on">
+        <label class="text-slate-600 text-xs font-semibold block mb-1.5">Email</label>
+        <div class="relative mb-4">
+          <i class="fa-solid fa-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
+          <input id="email" type="email" required placeholder="nama@ftg.id"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-4 py-3 text-sm text-[#2c3e50] outline-none">
+        </div>
+        <label class="text-slate-600 text-xs font-semibold block mb-1.5">Password</label>
+        <div class="relative mb-2">
+          <i class="fa-solid fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
+          <input id="password" type="password" required placeholder="••••••••"
+            class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-11 py-3 text-sm text-[#2c3e50] outline-none">
+          <button type="button" id="togglePw" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"><i class="fa-regular fa-eye"></i></button>
+        </div>
+        <p id="errMsg" class="text-[#ef4444] text-xs font-semibold mb-3 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i><span></span></p>
+
+        <button type="submit" id="btnLogin"
+          class="w-full bg-[#1a5f4f] hover:bg-[#155242] text-white text-sm font-bold py-3.5 rounded-xl mt-2 flex items-center justify-center gap-2">
+          <span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+
+      <!-- Demo credential hint -->
+      <div class="mt-5 bg-slate-50 border border-slate-200 rounded-xl p-3">
+        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Akun uji coba</p>
+        <div class="space-y-1" id="hintBox"></div>
+      </div>
+    </div>
+
+    <p class="text-center mt-5"><a href="index.html" class="text-white/40 text-xs hover:text-white"><i class="fa-solid fa-chevron-left mr-1 text-[10px]"></i>Kembali ke beranda</a></p>
+    <p id="connBadge" class="text-center mt-3 text-[10px] text-white/30"></p>
+  </div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(location.search);
+      var role = params.get('role') === 'mentor' ? 'mentor' : 'mentee';
+      var USERS_FALLBACK = {
+        'arya@ftg.id':  { password: 'arya2026',  name: 'Arya Ramadhan', role: 'mentee', initials: 'AR', path: 'Career Path' },
+        'faris@ftg.id': { password: 'faris2026', name: 'Bapak Faris',   role: 'mentor', initials: 'BF', path: 'Senior Mentor' }
+      };
+      var sb = null;
+      try {
+        if (window.supabase && window.FTG_CONF && window.FTG_CONF.anonKey) {
+          sb = window.supabase.createClient(window.FTG_CONF.url, window.FTG_CONF.anonKey);
+        }
+      } catch (e) {}
+      document.getElementById('connBadge').textContent = sb ? '● Terhubung ke server' : '○ Mode offline (fallback lokal)';
+
+      // sudah login? langsung masuk
+      try {
+        var ses = JSON.parse(localStorage.getItem('ftgSession') || 'null');
+        if (ses && ses.role) location.replace(ses.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html');
+      } catch (e) {}
+
+      var email = document.getElementById('email');
+      var password = document.getElementById('password');
+      var badge = document.getElementById('roleBadge');
+      var desc = document.getElementById('roleDesc');
+      var tabMentee = document.getElementById('tabMentee');
+      var tabMentor = document.getElementById('tabMentor');
+      var hintBox = document.getElementById('hintBox');
+      var errMsg = document.getElementById('errMsg');
+
+      function setRole(r) {
+        role = r;
+        var mentee = r === 'mentee';
+        badge.textContent = mentee ? 'MENTEE' : 'MENTOR';
+        badge.className = 'text-xs font-bold px-3 py-1 rounded-full ' + (mentee ? 'bg-[#f97316]/10 text-[#f97316]' : 'bg-[#1a5f4f]/10 text-[#1a5f4f]');
+        desc.textContent = mentee ? 'Masuk untuk melanjutkan perjalanan fellowship-mu.' : 'Masuk untuk memantau & menilai mentee kamu.';
+        tabMentee.className = 'flex-1 py-2 rounded-lg text-sm ' + (mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
+        tabMentor.className = 'flex-1 py-2 rounded-lg text-sm ' + (!mentee ? 'font-bold bg-white shadow text-[#2c3e50]' : 'font-semibold text-slate-500');
+        email.value = mentee ? 'arya@ftg.id' : 'faris@ftg.id';
+        password.value = '';
+        hintBox.innerHTML = mentee
+          ? '<p class="text-slate-600 text-xs"><b>arya@ftg.id</b> · password: <code class="bg-white border border-slate-200 rounded px-1.5 py-0.5">arya2026</code></p>'
+          : '<p class="text-slate-600 text-xs"><b>faris@ftg.id</b> · password: <code class="bg-white border border-slate-200 rounded px-1.5 py-0.5">faris2026</code></p>';
+      }
+      tabMentee.addEventListener('click', function () { setRole('mentee'); });
+      tabMentor.addEventListener('click', function () { setRole('mentor'); });
+      setRole(role);
+
+      document.getElementById('togglePw').addEventListener('click', function () {
+        var t = password.type === 'password';
+        password.type = t ? 'text' : 'password';
+        this.innerHTML = t ? '<i class="fa-regular fa-eye-slash"></i>' : '<i class="fa-regular fa-eye"></i>';
+      });
+
+      function fail(msg) {
+        errMsg.querySelector('span').textContent = msg;
+        errMsg.classList.remove('hidden');
+        var card = document.getElementById('loginCard');
+        card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+        setBusy(false);
+      }
+      function setBusy(b) {
+        var btn = document.getElementById('btnLogin');
+        btn.disabled = b;
+        btn.innerHTML = b ? '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Memeriksa...</span>'
+                          : '<span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>';
+      }
+      function success(user) {
+        localStorage.setItem('ftgSession', JSON.stringify({
+          email: user.email, name: user.name, role: user.role, initials: user.initials, path: user.path, at: new Date().toISOString()
+        }));
+        location.href = user.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html';
+      }
+
+      document.getElementById('loginForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        errMsg.classList.add('hidden');
+        setBusy(true);
+        var em = email.value.trim().toLowerCase();
+        var pw = password.value;
+
+        function fallbackAuth() {
+          var u = USERS_FALLBACK[em];
+          if (u && u.password === pw) success(Object.assign({ email: em }, u));
+          else fail('Email atau password salah. Coba lagi ya.');
+        }
+
+        if (sb) {
+          sb.from('ftg_users').select('*').eq('email', em).eq('password', pw).maybeSingle()
+            .then(function (res) {
+              if (res.error) { fallbackAuth(); return; }
+              if (res.data) success(res.data);
+              else fail('Email atau password salah. Coba lagi ya.');
+            })
+            .catch(fallbackAuth);
+        } else fallbackAuth();
+      });
+    })();
+  </script>
+</body>
+</html>

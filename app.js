@@ -16,7 +16,9 @@
     submittedW2: null,   // { at: ISO, words: n }
     reviewW2: null,      // { score: n, text: '', at: ISO }
     reviews: {},         // key -> { score, text, at }
-    replies: []          // balasan mentee di halaman feedback
+    replies: [],         // balasan mentee di halaman feedback
+    messages: [],        // chat mentee <-> mentor: { from, fromName, text, at }
+    events: []           // notifikasi: { icon, text, forRole, at, read }
   };
 
   /* Konten demo — terisi otomatis saat pertama kali dibuka (atau setelah
@@ -36,7 +38,18 @@
     ],
     reflection: 'Minggu ini saya belajar bahwa mendefinisikan masalah ternyata jauh lebih sulit daripada menemukan masalah. Saat memulai fase DEFINE, saya mengira cukup menuliskan bahwa pemuda Bandung kesulitan mencari kerja. Namun setelah membaca kembali hasil wawancara di fase EMPATHIZE, saya sadar bahwa masalah sebenarnya bukan lapangan kerja yang kurang, melainkan banyak lulusan baru yang tidak tahu cara menerjemahkan kemampuan mereka menjadi sesuatu yang bernilai di mata perusahaan. Tiga dari lima narasumber saya punya portofolio bagus, tetapi tidak percaya diri saat menceritakannya. Dari situ saya menyusun problem statement: lulusan baru usia 21 sampai 25 tahun di Bandung membutuhkan cara yang terstruktur untuk mengenali dan mempresentasikan kekuatan diri, karena tanpa itu mereka kalah bersaing bukan karena kurang mampu, tetapi karena tidak terlihat. Insight yang paling mengejutkan adalah faktor kepercayaan diri ternyata lebih menentukan daripada faktor keterampilan teknis. Values-Alignment Matrix juga membantu saya menyaring ide. Program mentoring karir berbasis komunitas masuk kuadran sweet spot karena selaras dengan niyyah saya dan kebutuhannya nyata, sementara ide yang sekadar ramai tetapi tidak sesuai nilai saya letakkan di kuadran avoid. Minggu depan saya ingin menguji problem statement ini dengan mewawancarai dua narasumber tambahan, supaya fase IDEATE nanti berangkat dari masalah yang benar-benar tervalidasi, bukan asumsi saya sendiri. Semoga langkah kecil ini menjadi awal kontribusi nyata untuk kota saya.',
     links: ['https://docs.google.com/document/d/gi-canvas-arya-w2'],
-    files: ['Values-Matrix-Arya.pdf']
+    files: ['Values-Matrix-Arya.pdf'],
+    messages: [
+      { from: 'mentor', fromName: 'Bapak Faris', text: 'Arya, bagian Empathize-mu bagus! Coba tambahkan insight tentang user pain points ya. Semangat! 💪', at: new Date(Date.now() - 36e5).toISOString() },
+      { from: 'mentee', fromName: 'Arya Ramadhan', text: 'Siap Pak! Sedang saya kerjakan bagian DEFINE-nya. 🙏', at: new Date(Date.now() - 30e5).toISOString() }
+    ],
+    events: [
+      { icon: '💬', text: 'Pak Faris mengomentari tugas W1 kamu', forRole: 'mentee', at: new Date(Date.now() - 36e5).toISOString(), read: false },
+      { icon: '🔥', text: 'Streak 5 hari! Pertahankan!', forRole: 'mentee', at: new Date(Date.now() - 7e6).toISOString(), read: false },
+      { icon: '🗓', text: 'Workshop Career Mapping — Sabtu, 5 Juli', forRole: 'mentee', at: new Date(Date.now() - 9e7).toISOString(), read: false },
+      { icon: '⏰', text: '3 tugas mentee menunggu review', forRole: 'mentor', at: new Date(Date.now() - 5e6).toISOString(), read: false },
+      { icon: '📊', text: 'Laporan KPI mingguan siap dilihat', forRole: 'mentor', at: new Date(Date.now() - 9e7).toISOString(), read: false }
+    ]
   };
 
   function loadState() {
@@ -50,10 +63,126 @@
       return Object.assign({}, DEFAULT_STATE, JSON.parse(raw));
     } catch (e) { return Object.assign({}, DEFAULT_STATE); }
   }
-  function saveState() { localStorage.setItem('ftgState', JSON.stringify(S)); }
   var S = loadState();
 
   var PAGE = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  var IS_APP_PAGE = PAGE.indexOf('index') !== 0 && PAGE.indexOf('login') !== 0 && PAGE !== '';
+
+  /* ================================================================
+     Lapisan server (Supabase) — data bersama & real-time antar perangkat
+     ================================================================ */
+  var sb = null, lastAppliedAt = 0, pushTimer = null, pollStarted = false;
+
+  function mySession() {
+    try { return JSON.parse(localStorage.getItem('ftgSession') || 'null'); } catch (e) { return null; }
+  }
+  function myRole() { var s = mySession(); return (s && s.role) || ''; }
+
+  function initSupabase() {
+    try {
+      if (window.supabase && window.FTG_CONF && window.FTG_CONF.anonKey) {
+        sb = window.supabase.createClient(window.FTG_CONF.url, window.FTG_CONF.anonKey);
+      }
+    } catch (e) { sb = null; }
+  }
+
+  function applyRemote(data) {
+    S = Object.assign({}, DEFAULT_STATE, data);
+    localStorage.setItem('ftgState', JSON.stringify(S));
+  }
+
+  function pushRemote() {
+    if (!sb) return;
+    pushTimer = null;
+    S.updatedAt = Date.now();
+    S.updatedBy = myRole() || 'anon';
+    lastAppliedAt = S.updatedAt;
+    localStorage.setItem('ftgState', JSON.stringify(S));
+    sb.from('ftg_state').update({ data: S, updated_at: new Date().toISOString() }).eq('id', 1)
+      .then(function (res) { if (res.error) console.warn('FTG sync:', res.error.message); });
+  }
+
+  function saveState() {
+    localStorage.setItem('ftgState', JSON.stringify(S));
+    if (sb) { clearTimeout(pushTimer); pushTimer = setTimeout(pushRemote, 700); }
+  }
+
+  /* Muat state dari server saat halaman dibuka (fallback: data lokal). */
+  function remoteLoad() {
+    return new Promise(function (resolve) {
+      if (!sb || !IS_APP_PAGE) { resolve(false); return; }
+      var done = false;
+      var t = setTimeout(function () { if (!done) { done = true; resolve(false); } }, 4500);
+      sb.from('ftg_state').select('data').eq('id', 1).maybeSingle()
+        .then(function (res) {
+          if (done) return; done = true; clearTimeout(t);
+          if (res.error || !res.data) { resolve(false); return; }
+          var d = res.data.data;
+          if (d && d.updatedAt) { applyRemote(d); lastAppliedAt = d.updatedAt; }
+          else pushRemote(); // server masih kosong -> isi dengan konten awal
+          resolve(true);
+        })
+        .catch(function () { if (!done) { done = true; clearTimeout(t); resolve(false); } });
+    });
+  }
+
+  function onForeignUpdate(d) {
+    applyRemote(d);
+    lastAppliedAt = d.updatedAt;
+    var who = d.updatedBy === 'mentor' ? 'Mentor' : 'Mentee';
+    toast('Update baru dari ' + who + ' — memuat ulang...', '📨');
+    setTimeout(function () { location.reload(); }, 1200);
+  }
+
+  function startRealtime() {
+    if (!sb || !IS_APP_PAGE) return;
+    try {
+      sb.channel('ftg-state-live')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ftg_state' }, function (payload) {
+          var d = payload['new'] && payload['new'].data;
+          if (!d || !d.updatedAt || d.updatedAt === lastAppliedAt) return;
+          if (d.updatedBy === myRole()) { applyRemote(d); lastAppliedAt = d.updatedAt; return; }
+          onForeignUpdate(d);
+        })
+        .subscribe();
+    } catch (e) { /* polling di bawah tetap jalan */ }
+    startPolling();
+  }
+
+  /* Polling ringan sebagai jaring pengaman kalau websocket terblokir. */
+  function startPolling() {
+    if (pollStarted || !sb) return;
+    pollStarted = true;
+    setInterval(function () {
+      if (pushTimer) return; // sedang mengetik, jangan ganggu
+      sb.from('ftg_state').select('data').eq('id', 1).maybeSingle().then(function (res) {
+        var d = res.data && res.data.data;
+        if (d && d.updatedAt && d.updatedAt !== lastAppliedAt && d.updatedBy !== myRole()) onForeignUpdate(d);
+      });
+    }, 7000);
+  }
+
+  /* Wajib login untuk halaman aplikasi + pemisahan peran. */
+  function guardSession() {
+    if (!IS_APP_PAGE || PAGE.indexOf('opening') === 0 || PAGE.indexOf('closing') === 0) return true;
+    var ses = mySession();
+    if (!ses || !ses.role) {
+      location.replace('login.html' + (PAGE.indexOf('mentor-dashboard') === 0 ? '?role=mentor' : '?role=mentee'));
+      return false;
+    }
+    if (PAGE.indexOf('mentor-dashboard') === 0 && ses.role !== 'mentor') { location.replace('mentee-dashboard.html'); return false; }
+    if (PAGE.indexOf('mentee-dashboard') === 0 && ses.role === 'mentor') { location.replace('mentor-dashboard.html'); return false; }
+    return true;
+  }
+
+  function showConnBadge() {
+    if (!IS_APP_PAGE) return;
+    var b = document.createElement('div');
+    b.style.cssText = 'position:fixed;bottom:10px;left:12px;z-index:8990;font-size:10px;font-weight:700;padding:4px 10px;border-radius:99px;pointer-events:none;' +
+      (sb ? 'background:rgba(34,197,94,.14);color:#22c55e;' : 'background:rgba(148,163,184,.14);color:#94a3b8;');
+    b.textContent = sb ? '● Live — tersinkron server' : '○ Offline — data lokal';
+    document.body.appendChild(b);
+  }
 
   /* ---------- Helpers ---------- */
   function $(sel, root) { return (root || document).querySelector(sel); }
@@ -139,6 +268,7 @@
       out.href = 'index.html';
       out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
       out.innerHTML = '<i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Keluar';
+      out.addEventListener('click', function () { localStorage.removeItem('ftgSession'); });
       nav.appendChild(out);
     }
   }
@@ -213,46 +343,95 @@
     });
   }
 
-  /* ---------- Notification bell ---------- */
+  /* ---------- Notifikasi nyata (dari kejadian di platform) ---------- */
+  function pushEvent(icon, text, forRole) {
+    S.events.unshift({ icon: icon, text: text, forRole: forRole, at: new Date().toISOString(), read: false });
+    if (S.events.length > 25) S.events.length = 25;
+  }
+  function timeAgo(iso) {
+    var s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'Baru saja';
+    if (s < 3600) return Math.floor(s / 60) + ' menit lalu';
+    if (s < 86400) return Math.floor(s / 3600) + ' jam lalu';
+    return Math.floor(s / 86400) + ' hari lalu';
+  }
+  function myEvents() {
+    var role = myRole() || (IS_MENTOR_PAGE ? 'mentor' : 'mentee');
+    return S.events.filter(function (e) { return e.forRole === role || e.forRole === 'all'; });
+  }
   function wireBell() {
     var btn = byId('btn-notif') || byId('btn-mentor-notif');
     if (!btn) return;
-    var notifs = IS_MENTOR_PAGE
-      ? [['📥', 'Tugas baru masuk dari mentee', 'Baru saja'],
-         ['⏰', '2 tugas menunggu review > 24 jam', '2 jam lalu'],
-         ['📊', 'Laporan KPI mingguan siap dilihat', 'Kemarin']]
-      : [['💬', 'Pak Faris mengomentari tugas W1 kamu', '1 jam lalu'],
-         ['🔥', 'Streak 5 hari! Pertahankan!', 'Hari ini'],
-         ['🗓', 'Workshop Career Mapping — 5 Juli', 'Kemarin']];
+    var badge = btn.parentElement.querySelector('span');
+    function refreshBadge() {
+      var n = myEvents().filter(function (e) { return !e.read; }).length;
+      if (badge) { badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+    }
+    refreshBadge();
     var dd;
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       if (dd) { dd.remove(); dd = null; return; }
+      var evs = myEvents();
       dd = document.createElement('div');
       dd.style.cssText = 'position:absolute;top:48px;right:0;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.15);width:300px;z-index:9990;overflow:hidden;';
       dd.innerHTML = '<p style="padding:12px 16px;font-weight:700;font-size:13px;color:#2c3e50;border-bottom:1px solid #f1f5f9">Notifikasi</p>' +
-        notifs.map(function (n) {
-          return '<div style="padding:10px 16px;display:flex;gap:10px;border-bottom:1px solid #f8fafc"><span>' + n[0] + '</span><div><p style="font-size:12px;color:#2c3e50;font-weight:600">' + n[1] + '</p><p style="font-size:10px;color:#94a3b8">' + n[2] + '</p></div></div>';
-        }).join('');
+        (evs.length ? evs.slice(0, 6).map(function (n) {
+          return '<div style="padding:10px 16px;display:flex;gap:10px;border-bottom:1px solid #f8fafc;' + (n.read ? 'opacity:.6' : '') + '"><span>' + n.icon + '</span><div><p style="font-size:12px;color:#2c3e50;font-weight:600">' + esc(n.text) + '</p><p style="font-size:10px;color:#94a3b8">' + timeAgo(n.at) + '</p></div></div>';
+        }).join('') : '<p style="padding:16px;font-size:12px;color:#94a3b8;text-align:center">Belum ada notifikasi baru</p>');
       btn.parentElement.style.position = 'relative';
       btn.parentElement.appendChild(dd);
+      // tandai terbaca
+      var changed = false;
+      S.events.forEach(function (ev) { if (!ev.read && (ev.forRole === myRole() || ev.forRole === 'all')) { ev.read = true; changed = true; } });
+      if (changed) saveState();
+      refreshBadge();
       document.addEventListener('click', function close() { if (dd) { dd.remove(); dd = null; } document.removeEventListener('click', close); });
     });
   }
 
-  /* ---------- Kirim pesan modal (mentee -> mentor) ---------- */
+  /* ---------- Chat sungguhan mentee <-> mentor ---------- */
+  function chatBubbles() {
+    var me = myRole() || (IS_MENTOR_PAGE ? 'mentor' : 'mentee');
+    if (!S.messages.length) return '<p style="text-align:center;font-size:12px;color:#94a3b8;padding:18px 0">Belum ada pesan. Mulai percakapan! 👋</p>';
+    return S.messages.map(function (m) {
+      var mine = m.from === me;
+      return '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + ';margin-bottom:8px">' +
+        '<div style="max-width:80%;padding:8px 12px;border-radius:14px;font-size:12.5px;line-height:1.5;' +
+        (mine ? 'background:#1a5f4f;color:#fff;border-bottom-right-radius:4px' : 'background:#f1f5f9;color:#2c3e50;border-bottom-left-radius:4px') + '">' +
+        '<p style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:2px">' + esc(m.fromName || m.from) + '</p>' +
+        esc(m.text) +
+        '<p style="font-size:9px;opacity:.55;margin-top:3px;text-align:right">' + timeAgo(m.at) + '</p></div></div>';
+    }).join('');
+  }
   function messageModal(to) {
+    var me = myRole() || (IS_MENTOR_PAGE ? 'mentor' : 'mentee');
+    var ses = mySession() || {};
     modal(
-      '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">💬 Kirim Pesan ke ' + esc(to) + '</h3>' +
-      '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Pesan akan dikirim melalui platform (demo)</p>' +
-      '<textarea id="msgTxt" rows="4" placeholder="Tulis pesanmu..." style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea>' +
-      '<button id="msgSend" style="margin-top:12px;width:100%;background:#1a5f4f;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Kirim Pesan</button>',
+      '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:2px">💬 Pesan — ' + esc(to) + '</h3>' +
+      '<p style="font-size:11px;color:#64748b;margin-bottom:10px">' + (sb ? '● Terkirim real-time lewat server' : '○ Mode offline — tersimpan lokal') + '</p>' +
+      '<div id="chatBox" style="max-height:260px;overflow-y:auto;border:1px solid #f1f5f9;border-radius:14px;padding:12px;margin-bottom:10px;background:#fafbfc">' + chatBubbles() + '</div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<textarea id="msgTxt" rows="2" placeholder="Tulis pesanmu..." style="flex:1;border:1px solid #e2e8f0;border-radius:12px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea>' +
+      '<button id="msgSend" style="background:#1a5f4f;color:#fff;font-weight:700;font-size:13px;padding:0 18px;border-radius:12px;border:0;cursor:pointer"><i class="fa-solid fa-paper-plane"></i></button></div>',
       function (box, close) {
-        $('#msgSend', box).addEventListener('click', function () {
-          var t = $('#msgTxt', box).value.trim();
+        var chatBox = $('#chatBox', box);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        var ta = $('#msgTxt', box);
+        function send() {
+          var t = ta.value.trim();
           if (!t) { toast('Tulis pesan dulu ya', '✏️'); return; }
-          close(); toast('Pesan terkirim ke ' + to, '📨');
-        });
+          S.messages.push({ from: me, fromName: ses.name || (me === 'mentor' ? 'Bapak Faris' : 'Arya Ramadhan'), text: t, at: new Date().toISOString() });
+          if (S.messages.length > 60) S.messages.splice(0, S.messages.length - 60);
+          pushEvent('💬', 'Pesan baru dari ' + (ses.name || me), me === 'mentor' ? 'mentee' : 'mentor');
+          saveState();
+          ta.value = '';
+          chatBox.innerHTML = chatBubbles();
+          chatBox.scrollTop = chatBox.scrollHeight;
+          toast('Pesan terkirim', '📨');
+        }
+        $('#msgSend', box).addEventListener('click', send);
+        ta.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); send(); } });
       }
     );
   }
@@ -320,10 +499,14 @@
       }
     }
 
-    // update pesan mentor terbaru + quality score jika sudah ada review W2
+    // pesan terbaru dari mentor: chat terakhir > feedback review > statis
+    var lastMentorMsg = S.messages.filter(function (m) { return m.from === 'mentor'; }).pop();
+    var quote = $('[data-design-id^="mentor-card"] .italic');
+    if (quote && (lastMentorMsg || S.reviewW2)) {
+      quote.textContent = '"' + (lastMentorMsg ? lastMentorMsg.text : S.reviewW2.text) + '"';
+    }
+    // quality score naik jika sudah ada review W2
     if (S.reviewW2) {
-      var quote = $('[data-design-id^="mentor-card"] .italic');
-      if (quote) quote.textContent = '"' + S.reviewW2.text + '"';
       var q = qualityAfterReview();
       $all('p').forEach(function (p) {
         if (p.textContent.trim() === '87' && p.className.indexOf('text-2xl') > -1) p.textContent = q;
@@ -584,6 +767,7 @@
       if (wc === 0) { toast('Tulis refleksimu dulu sebelum mengumpulkan', '✏️'); return; }
       function doSubmit() {
         S.submittedW2 = { at: new Date().toISOString(), words: wc };
+        pushEvent('📥', 'Arya mengumpulkan Tugas Minggu 2 (' + wc + ' kata)', 'mentor');
         saveState(); markSubmitted();
         confetti();
         modal(
@@ -646,7 +830,10 @@
         $('#fbSave', box).addEventListener('click', function () {
           var text = $('#fbTxt', box).value.trim() || 'Kerja bagus! Pertahankan konsistensinya.';
           S.reviews[key] = { score: +range.value, text: text, at: new Date().toISOString() };
-          if (key === 'review-arya-w2') S.reviewW2 = S.reviews[key];
+          if (key === 'review-arya-w2') {
+            S.reviewW2 = S.reviews[key];
+            pushEvent('⭐', 'Tugas W2 kamu dinilai ' + range.value + '/100 oleh Pak Faris', 'mentee');
+          }
           saveState(); close();
           confetti();
           toast('Penilaian ' + meta.name + ' tersimpan — ' + range.value + '/100', '⭐');
@@ -742,9 +929,17 @@
     var sr = byId('btn-sidebar-review');
     if (sr) sr.addEventListener('click', function () { var q = byId('pending-reviews'); if (q) q.scrollIntoView({ behavior: 'smooth' }); });
     var rem = byId('btn-send-reminder');
-    if (rem) rem.addEventListener('click', function () { toast('Pengingat terkirim ke Muhammad Rizky', '📨'); });
+    if (rem) rem.addEventListener('click', function () {
+      pushEvent('⏰', 'Pengingat dari Pak Faris: segera selesaikan tugas mingguanmu!', 'mentee');
+      saveState();
+      toast('Pengingat terkirim ke mentee', '📨');
+    });
     var sch = byId('btn-schedule-session');
-    if (sch) sch.addEventListener('click', function () { toast('Sesi 1-on-1 dijadwalkan — undangan terkirim', '🗓'); });
+    if (sch) sch.addEventListener('click', function () {
+      pushEvent('🗓', 'Pak Faris menjadwalkan sesi 1-on-1 — cek jadwalmu', 'mentee');
+      saveState();
+      toast('Sesi 1-on-1 dijadwalkan — undangan terkirim', '🗓');
+    });
     var ann = byId('btn-group-announce');
     if (ann) ann.addEventListener('click', function () { messageModal('Grup Mentee (5 orang)'); });
     var flt = byId('btn-filter-mentee');
@@ -774,7 +969,9 @@
       reply.addEventListener('click', function () {
         var t = (inp.value || '').trim();
         if (!t) { toast('Tulis balasan dulu ya', '✏️'); return; }
-        S.replies.push(t); saveState();
+        S.replies.push(t);
+        pushEvent('💬', 'Arya membalas feedback tugas W1', 'mentor');
+        saveState();
         appendReply(thread, reply, t);
         inp.value = '';
         toast('Balasan terkirim ke Pak Faris', '📨');
@@ -1208,19 +1405,25 @@
     navigator.serviceWorker.register('sw.js').catch(function () { /* offline support opsional */ });
   }
   document.addEventListener('DOMContentLoaded', function () {
-    try { wireNav(); } catch (e) { console.warn(e); }
-    try { initMobileNav(); } catch (e) { console.warn(e); }
-    try { wireBell(); } catch (e) { console.warn(e); }
-    try {
-      if (PAGE.indexOf('mentee-dashboard') === 0) initMenteeDashboard();
-      else if (PAGE.indexOf('design-thinking') === 0) initDesignThinking();
-      else if (PAGE.indexOf('assignment-submission') === 0) initAssignment();
-      else if (PAGE.indexOf('mentor-dashboard') === 0) initMentorDashboard();
-      else if (PAGE.indexOf('mentor-feedback') === 0) initMentorFeedback();
-      else if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboard();
-      else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
-      else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
-      else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
-    } catch (e) { console.error('FTG init error:', e); }
+    if (!guardSession()) return;
+    initSupabase();
+    remoteLoad().then(function () {
+      try { wireNav(); } catch (e) { console.warn(e); }
+      try { initMobileNav(); } catch (e) { console.warn(e); }
+      try { wireBell(); } catch (e) { console.warn(e); }
+      try {
+        if (PAGE.indexOf('mentee-dashboard') === 0) initMenteeDashboard();
+        else if (PAGE.indexOf('design-thinking') === 0) initDesignThinking();
+        else if (PAGE.indexOf('assignment-submission') === 0) initAssignment();
+        else if (PAGE.indexOf('mentor-dashboard') === 0) initMentorDashboard();
+        else if (PAGE.indexOf('mentor-feedback') === 0) initMentorFeedback();
+        else if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboard();
+        else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
+        else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
+        else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
+      } catch (e) { console.error('FTG init error:', e); }
+      try { startRealtime(); } catch (e) { console.warn(e); }
+      try { showConnBadge(); } catch (e) { console.warn(e); }
+    });
   });
 })();
