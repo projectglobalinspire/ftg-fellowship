@@ -19,7 +19,8 @@
     replies: [],         // balasan mentee di halaman feedback
     messages: [],        // chat mentee <-> mentor: { from, fromName, text, at }
     events: [],          // notifikasi: { icon, text, forRole, at, read }
-    session1on1: null    // jadwal sesi: { date, time, note, by, at }
+    session1on1: null,   // jadwal sesi: { date, time, note, by, at }
+    loginDays: []        // tanggal login (YYYY-MM-DD) utk streak sungguhan
   };
 
   /* Konten demo — terisi otomatis saat pertama kali dibuka (atau setelah
@@ -40,6 +41,11 @@
     reflection: 'Minggu ini saya belajar bahwa mendefinisikan masalah ternyata jauh lebih sulit daripada menemukan masalah. Saat memulai fase DEFINE, saya mengira cukup menuliskan bahwa pemuda Bandung kesulitan mencari kerja. Namun setelah membaca kembali hasil wawancara di fase EMPATHIZE, saya sadar bahwa masalah sebenarnya bukan lapangan kerja yang kurang, melainkan banyak lulusan baru yang tidak tahu cara menerjemahkan kemampuan mereka menjadi sesuatu yang bernilai di mata perusahaan. Tiga dari lima narasumber saya punya portofolio bagus, tetapi tidak percaya diri saat menceritakannya. Dari situ saya menyusun problem statement: lulusan baru usia 21 sampai 25 tahun di Bandung membutuhkan cara yang terstruktur untuk mengenali dan mempresentasikan kekuatan diri, karena tanpa itu mereka kalah bersaing bukan karena kurang mampu, tetapi karena tidak terlihat. Insight yang paling mengejutkan adalah faktor kepercayaan diri ternyata lebih menentukan daripada faktor keterampilan teknis. Values-Alignment Matrix juga membantu saya menyaring ide. Program mentoring karir berbasis komunitas masuk kuadran sweet spot karena selaras dengan niyyah saya dan kebutuhannya nyata, sementara ide yang sekadar ramai tetapi tidak sesuai nilai saya letakkan di kuadran avoid. Minggu depan saya ingin menguji problem statement ini dengan mewawancarai dua narasumber tambahan, supaya fase IDEATE nanti berangkat dari masalah yang benar-benar tervalidasi, bukan asumsi saya sendiri. Semoga langkah kecil ini menjadi awal kontribusi nyata untuk kota saya.',
     links: ['https://docs.google.com/document/d/gi-canvas-arya-w2'],
     files: ['Values-Matrix-Arya.pdf'],
+    loginDays: (function () {
+      var out = [];
+      for (var i = 4; i >= 1; i--) out.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+      return out;
+    })(),
     messages: [
       { from: 'mentor', fromName: 'Bapak Faris', text: 'Arya, bagian Empathize-mu bagus! Coba tambahkan insight tentang user pain points ya. Semangat! 💪', at: new Date(Date.now() - 36e5).toISOString() },
       { from: 'mentee', fromName: 'Arya Ramadhan', text: 'Siap Pak! Sedang saya kerjakan bagian DEFINE-nya. 🙏', at: new Date(Date.now() - 30e5).toISOString() }
@@ -114,6 +120,12 @@
     // daftarkan mentee tambahan (dibuat panitia) ke registry MENTEES
     registerExtraUsers(g);
     for (var i = 1; i <= 5; i++) g.mentees[i] = Object.assign({}, DEFAULT_STATE, g.mentees[i] || lightSeed(i));
+    // cerita program: Arya sudah aktif 4 hari terakhir (streak berjalan)
+    if (!g.mentees[1].loginDays || !g.mentees[1].loginDays.length) {
+      var ld = [];
+      for (var d = 4; d >= 1; d--) ld.push(new Date(Date.now() - d * 86400000).toISOString().slice(0, 10));
+      g.mentees[1].loginDays = ld;
+    }
     Object.keys(g.mentees).forEach(function (k) {
       if (+k > 5) g.mentees[k] = Object.assign({}, DEFAULT_STATE, g.mentees[k]);
     });
@@ -322,6 +334,56 @@
       }
     );
   }
+  /* ---------- Streak sungguhan (hari login berturut-turut) ---------- */
+  function computeStreak(days) {
+    if (!days || !days.length) return 0;
+    var set = {};
+    days.forEach(function (d) { set[d] = true; });
+    var streak = 0;
+    var cur = new Date();
+    for (;;) {
+      var key = cur.toISOString().slice(0, 10);
+      if (set[key]) { streak++; cur = new Date(cur.getTime() - 86400000); }
+      else break;
+    }
+    return streak;
+  }
+  function trackLoginDay() {
+    if (myRole() !== 'mentee') return 0;
+    var today = new Date().toISOString().slice(0, 10);
+    S.loginDays = S.loginDays || [];
+    if (S.loginDays.indexOf(today) === -1) {
+      S.loginDays.push(today);
+      if (S.loginDays.length > 40) S.loginDays.splice(0, S.loginDays.length - 40);
+      saveState();
+    }
+    return computeStreak(S.loginDays);
+  }
+  function updateStreakUI() {
+    var streak = trackLoginDay();
+    if (!streak) return;
+    // widget sidebar "N Hari Berturut" + lingkaran ceklis
+    $all('aside span, main span, main p').forEach(function (el) {
+      if (/^\d+ Hari Berturut$/.test(el.textContent.trim())) el.textContent = streak + ' Hari Berturut';
+    });
+    var wrap = $all('aside .flex.gap-1').filter(function (d) { return d.children.length === 7; })[0];
+    if (wrap) {
+      $all('div', wrap).forEach(function (dot, i) {
+        if (i < streak) {
+          dot.className = 'w-5 h-5 rounded-full bg-[#f97316] flex items-center justify-center';
+          dot.innerHTML = '<i class="fa-solid fa-check text-white text-[8px]"></i>';
+        } else {
+          dot.className = 'w-5 h-5 rounded-full bg-white/10 border border-white/20';
+          dot.innerHTML = '';
+        }
+      });
+    }
+    // statistik "Streak hari" di progress tracker
+    $all('span').forEach(function (sp) {
+      if (/^\d+ 🔥$/.test(sp.textContent.trim())) sp.textContent = streak + ' 🔥';
+    });
+  }
+
   /* Kartu jadwal sesi di dashboard mentee */
   function insertSessionCard() {
     if (!S.session1on1) return;
@@ -427,6 +489,44 @@
       // badge online panitia memakai data-design-id mentee-row-N (dipakai updatePresenceUI juga)
     }
 
+    // grafik monitoring: bar progres per mentee + donut status tugas
+    var cb = $('#chartBars');
+    if (cb) {
+      var barsHtml = '';
+      for (var bI = 1; bI <= 5; bI++) {
+        var mb = MENTEES[bI], stb = mstate(bI);
+        var pg = mb.baseProgress + (stb.submittedW2 ? 17 : 0);
+        barsHtml += '<div><div class="flex justify-between mb-1"><span class="text-xs font-semibold text-[#2c3e50]">' + mb.name + '</span>' +
+          '<span class="text-xs font-bold" style="color:' + mb.color + '">' + pg + '%</span></div>' +
+          '<div class="h-2 bg-slate-100 rounded-full"><div class="h-2 rounded-full" style="width:' + pg + '%;background:' + mb.color + '"></div></div></div>';
+      }
+      cb.innerHTML = barsHtml;
+    }
+    var cd = $('#chartDonut');
+    if (cd) {
+      var segs = [
+        [reviewed, '#22c55e', 'Sudah dinilai mentor'],
+        [submitted - reviewed, '#8b5cf6', 'Menunggu review'],
+        [5 - submitted, '#e2e8f0', 'Belum mengumpulkan']
+      ];
+      var off = 25, circles = '';
+      segs.forEach(function (s) {
+        if (!s[0]) return;
+        var len = s[0] / 5 * 100;
+        circles += '<circle cx="18" cy="18" r="15.9155" fill="none" stroke="' + s[1] + '" stroke-width="4.2" stroke-dasharray="' + len + ' ' + (100 - len) + '" stroke-dashoffset="' + off + '" stroke-linecap="round"/>';
+        off -= len;
+      });
+      cd.innerHTML =
+        '<div style="position:relative;width:132px;height:132px;flex-shrink:0">' +
+        '<svg viewBox="0 0 36 36" style="width:132px;height:132px">' + circles + '</svg>' +
+        '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">' +
+        '<span style="font-size:24px;font-weight:800;color:#2c3e50">' + submitted + '/5</span>' +
+        '<span style="font-size:10px;color:#94a3b8">terkumpul</span></div></div>' +
+        '<div class="space-y-2.5">' + segs.map(function (s) {
+          return '<p class="text-xs text-slate-600 flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:' + s[1] + ';display:inline-block;flex-shrink:0"></span>' + s[2] + ': <b class="text-[#2c3e50]">' + s[0] + '</b></p>';
+        }).join('') + '</div>';
+    }
+
     // tombol hapus data demo (khusus panitia)
     var del = $('#btnWipe');
     if (del) del.addEventListener('click', function () {
@@ -489,6 +589,8 @@
       var ex = G.extraUsers || {};
       var all = BUILTIN_ACCOUNTS.map(function (a) { return Object.assign({ builtin: true }, a); })
         .concat(Object.keys(ex).map(function (em) { return Object.assign({ email: em }, ex[em]); }));
+      var cnt = $('#accountCount');
+      if (cnt) cnt.textContent = all.length + ' akun terdaftar';
       wrap.innerHTML = all.map(function (a) {
         return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50">' +
           '<div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0" style="background:' + (a.role === 'mentor' ? '#1a5f4f' : a.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(a.initials || '?') + '</div>' +
@@ -633,7 +735,7 @@
       return false;
     }
     function home(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
-    if (PAGE.indexOf('admin-dashboard') === 0 && ses.role !== 'admin') { location.replace(home(ses.role)); return false; }
+    if (PAGE.indexOf('admin-') === 0 && ses.role !== 'admin') { location.replace(home(ses.role)); return false; }
     if (PAGE.indexOf('mentor-dashboard') === 0 && ses.role !== 'mentor') { location.replace(home(ses.role)); return false; }
     if (PAGE.indexOf('mentee-dashboard') === 0 && ses.role !== 'mentee') { location.replace(home(ses.role)); return false; }
     // panitia hanya memantau: halaman kerja mentee dialihkan ke dashboard panitia
@@ -669,18 +771,20 @@
         var items = ses.role === 'mentor'
           ? [
               ['fa-house', 'Dashboard', 'mentor-dashboard.html', ''],
-              ['fa-users', 'Mentee Saya', 'mentor-dashboard.html', '<span class="ml-auto bg-[#f97316] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">5</span>'],
-              ['fa-file-lines', 'Review Tugas', 'mentor-dashboard.html', pending ? '<span class="ml-auto bg-[#ef4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">' + pending + '</span>' : ''],
-              ['fa-comments', 'Berikan Feedback', 'mentor-dashboard.html', ''],
-              ['fa-chart-bar', 'Progress Grup', 'mentor-dashboard.html', ''],
+              ['fa-users', 'Mentee Saya', 'mentor-dashboard.html#mentee-list', '<span class="ml-auto bg-[#f97316] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">5</span>'],
+              ['fa-file-lines', 'Review Tugas', 'mentor-dashboard.html#pending-reviews', pending ? '<span class="ml-auto bg-[#ef4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">' + pending + '</span>' : ''],
+              ['fa-comments', 'Berikan Feedback', 'mentor-dashboard.html#feedback', ''],
+              ['fa-chart-bar', 'Progress Grup', 'mentor-dashboard.html#group-progress', ''],
               ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
             ]
           : [
               ['fa-gauge-high', 'Monitoring', 'admin-dashboard.html', ''],
+              ['fa-user-gear', 'Kelola Akun', 'admin-akun.html', ''],
               ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
             ];
         var html = items.map(function (it) {
-          var active = it[2] === PAGE || (PAGE.indexOf('kpi-leaderboard') === 0 && it[1] === 'Leaderboard');
+          var base = it[2].split('#')[0];
+          var active = (base === PAGE && it[2].indexOf('#') === -1) || (PAGE.indexOf('kpi-leaderboard') === 0 && it[1] === 'Leaderboard');
           return '<a href="' + it[2] + '" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ' +
             (active ? 'bg-[#1a5f4f] text-white' : 'text-white/60 hover:text-white hover:bg-white/10') + '">' +
             '<i class="fa-solid ' + it[0] + ' w-4 text-center"></i> ' + it[1] + it[3] + '</a>';
@@ -775,8 +879,10 @@
   /* ---------- Modal ---------- */
   function modal(html, onMount) {
     var ov = document.createElement('div');
+    ov.className = 'ftg-modal-ov';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);';
     var box = document.createElement('div');
+    box.className = 'ftg-modal-box';
     box.style.cssText = 'background:#fff;border-radius:20px;max-width:480px;width:100%;padding:26px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto;';
     box.innerHTML = html;
     ov.appendChild(box);
@@ -1644,6 +1750,25 @@
     var sub = $('header p');
     if (sub) sub.textContent = todayStr() + ' · Bulan 1, Minggu 2 · 5 Mentee Aktif';
 
+    // deep-link dari halaman lain: langsung menuju bagian yang diminta
+    if (location.hash) {
+      var hash = location.hash;
+      setTimeout(function () {
+        if (hash === '#feedback') { pickMenteeModal('Berikan Feedback ke'); return; }
+        var map = { '#mentee-list': 'mentee-list', '#pending-reviews': 'pending-reviews', '#group-progress': 'group-progress' };
+        if (!map[hash]) return;
+        var target = byId(map[hash]);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          flash(target);
+        }
+        // sorot item nav yang sesuai
+        var label = { '#mentee-list': 'Mentee Saya', '#pending-reviews': 'Review Tugas', '#group-progress': 'Progress Grup' }[hash];
+        var navA = $all('aside nav a').filter(function (a) { return a.textContent.indexOf(label) > -1; })[0];
+        if (navA) setActiveNav(navA);
+      }, 450);
+    }
+
     var queue = byId('pending-reviews');
 
     // Tandai semua elemen penghitung "3" sekali di awal, supaya bisa
@@ -1749,8 +1874,29 @@
     if (sch) sch.addEventListener('click', scheduleModal);
     var ann = byId('btn-group-announce');
     if (ann) ann.addEventListener('click', groupMessageModal);
+    // filter mentee sungguhan: Semua -> Career -> Entrepreneur
     var flt = byId('btn-filter-mentee');
-    if (flt) flt.addEventListener('click', function () { toast('Filter mentee (demo)', '🔍'); });
+    if (flt) {
+      var fltModes = [['Semua', ''], ['Career', 'Career'], ['Entrepreneur', 'Entrepreneur']];
+      var fltIdx = 0;
+      flt.addEventListener('click', function () {
+        fltIdx = (fltIdx + 1) % fltModes.length;
+        var mode = fltModes[fltIdx];
+        var shown = 0;
+        for (var i = 1; i <= 5; i++) {
+          var row = byId('mentee-row-' + i);
+          if (!row) continue;
+          var match = !mode[1] || (MENTEES[i].path || '').indexOf(mode[1]) > -1;
+          row.style.display = match ? '' : 'none';
+          if (match) shown++;
+        }
+        flt.innerHTML = mode[1]
+          ? '<i class="fa-solid fa-filter mr-1"></i>' + mode[0] + ' (' + shown + ')'
+          : '<i class="fa-solid fa-filter mr-1"></i>Filter';
+        var head = $all('h2, h3').filter(function (h) { return /Mentee Kamu/.test(h.textContent); })[0];
+        if (head) head.textContent = '👥 Mentee Kamu (' + shown + ' orang)';
+      });
+    }
   }
 
   /* ================================================================
@@ -1966,21 +2112,52 @@
 
     // Pre-work workshop pertama
     var pre = byId('btn-prework-c1');
-    if (pre) pre.addEventListener('click', function () {
-      modal(
-        '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">🎯 Pre-Work — Career Mapping & Personal Branding</h3>' +
-        '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Selesaikan sebelum Sabtu, 5 Juli 2026</p>' +
-        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px">' +
-        '<p style="font-size:12px;color:#334155;font-weight:700;margin-bottom:8px">Checklist:</p>' +
-        '<p style="font-size:12px;color:#475569;margin-bottom:6px">1️⃣ Buat / perbarui draft profil LinkedIn</p>' +
-        '<p style="font-size:12px;color:#475569;margin-bottom:6px">2️⃣ Susun CV satu halaman (template disediakan)</p>' +
-        '<p style="font-size:12px;color:#475569">3️⃣ Tulis 3 kekuatan utama versi kamu</p></div>' +
-        '<button id="startPre" style="width:100%;background:#8b5cf6;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Mulai Kerjakan</button>',
-        function (box, close) {
-          $('#startPre', box).addEventListener('click', function () { close(); toast('Pre-Work dimulai — semangat! 🚀', '🎯'); });
-        }
-      );
-    });
+    if (pre) {
+      var PRE_ITEMS = ['Buat / perbarui draft profil LinkedIn', 'Susun CV satu halaman (template disediakan)', 'Tulis 3 kekuatan utama versi kamu'];
+      var refreshPreBtn = function () {
+        var done = (S.prework || []).filter(Boolean).length;
+        if (done > 0) pre.innerHTML = 'Pre-Work ' + done + '/' + PRE_ITEMS.length + (done === PRE_ITEMS.length ? ' ✓' : '');
+      };
+      refreshPreBtn();
+      pre.addEventListener('click', function () {
+        S.prework = S.prework || [false, false, false];
+        var rowsHtml = PRE_ITEMS.map(function (t, i) {
+          var on = S.prework[i];
+          return '<button type="button" data-pre="' + i + '" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid ' + (on ? '#22c55e55' : '#e2e8f0') + ';background:' + (on ? '#f0fdf4' : '#fff') + ';border-radius:12px;margin-bottom:8px;cursor:pointer;text-align:left">' +
+            '<span style="width:20px;height:20px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;' + (on ? 'background:#22c55e' : 'border:2px solid #cbd5e1') + '">' + (on ? '<i class="fa-solid fa-check" style="color:#fff;font-size:9px"></i>' : '') + '</span>' +
+            '<span style="font-size:12.5px;color:' + (on ? '#166534' : '#334155') + ';' + (on ? 'text-decoration:line-through;opacity:.75' : '') + '">' + t + '</span></button>';
+        }).join('');
+        modal(
+          '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">🎯 Pre-Work — Career Mapping & Personal Branding</h3>' +
+          '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Selesaikan sebelum Sabtu, 5 Juli 2026 · centang tersimpan otomatis</p>' +
+          '<div id="preList">' + rowsHtml + '</div>' +
+          '<div id="preDone" style="display:none;background:#f0fdf4;border:1px solid #22c55e44;border-radius:12px;padding:10px;text-align:center;margin-top:4px"><p style="font-size:12px;font-weight:700;color:#166534">🎉 Pre-Work selesai! Kamu siap ikut workshop.</p></div>',
+          function (box, close) {
+            function bind() {
+              $all('[data-pre]', box).forEach(function (b) {
+                b.addEventListener('click', function () {
+                  var i = +b.getAttribute('data-pre');
+                  S.prework[i] = !S.prework[i];
+                  saveState(); refreshPreBtn();
+                  var allDone = S.prework.filter(Boolean).length === PRE_ITEMS.length;
+                  $('#preDone', box).style.display = allDone ? '' : 'none';
+                  if (allDone) confetti();
+                  // render ulang daftar
+                  $('#preList', box).innerHTML = PRE_ITEMS.map(function (t, j) {
+                    var on = S.prework[j];
+                    return '<button type="button" data-pre="' + j + '" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid ' + (on ? '#22c55e55' : '#e2e8f0') + ';background:' + (on ? '#f0fdf4' : '#fff') + ';border-radius:12px;margin-bottom:8px;cursor:pointer;text-align:left">' +
+                      '<span style="width:20px;height:20px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;' + (on ? 'background:#22c55e' : 'border:2px solid #cbd5e1') + '">' + (on ? '<i class="fa-solid fa-check" style="color:#fff;font-size:9px"></i>' : '') + '</span>' +
+                      '<span style="font-size:12.5px;color:' + (on ? '#166534' : '#334155') + ';' + (on ? 'text-decoration:line-through;opacity:.75' : '') + '">' + t + '</span></button>';
+                  }).join('');
+                  bind();
+                });
+              });
+            }
+            bind();
+          }
+        );
+      });
+    }
     // tombol terkunci
     $all('[data-design-id^="btn-locked-"]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -2227,35 +2404,50 @@
       else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
       else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
       else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
-      else if (PAGE.indexOf('admin-dashboard') === 0) initAdminDashboard();
+      else if (PAGE.indexOf('admin-') === 0) initAdminDashboard();
     } catch (e) { console.error('FTG init error:', e); }
     try { personalize(); } catch (e) { console.warn(e); }
+    try { updateStreakUI(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); } } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
+  }
+
+  /* bar progres mengalir dari 0 ke nilainya saat halaman terbuka */
+  function animateBars() {
+    if (!window.matchMedia || !matchMedia('(prefers-reduced-motion: no-preference)').matches) return;
+    $all('main .h-2 > div, main .h-1\\.5 > div, main .progress-bar').forEach(function (bar) {
+      var w = bar.style.width;
+      if (!w || w === '0%') return;
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      setTimeout(function () {
+        bar.style.transition = '';
+        bar.style.width = w;
+      }, 80);
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     if (!guardSession()) return;
     initSupabase();
     bindS();
+    document.body.classList.add('ftg-anim');
 
-    // 1) tampilkan & aktifkan UI SEKARANG (data lokal) — tidak menunggu server
-    renderPage();
-    try { showConnBadge(); } catch (e) { console.warn(e); }
-
-    // 2) ambil data server di latar; kalau berbeda, segarkan sekali
-    var renderedAt = G.updatedAt || 0;
-    remoteLoad().then(function () {
+    /* Hybrid render: beri server maks. 900ms untuk data segar (tanpa kedip
+       reload), lebih dari itu render data lokal — tombol tetap cepat aktif. */
+    var rendered = false;
+    function renderOnce() {
+      if (rendered) return;
+      rendered = true;
+      bindS();
+      renderPage();
+      try { showConnBadge(); } catch (e) { console.warn(e); }
+      try { animateBars(); } catch (e) { console.warn(e); }
       try { startRealtime(); } catch (e) { console.warn(e); }
       try { startPresence(); } catch (e) { console.warn(e); }
-      var fresh = G.updatedAt || 0;
-      if (fresh && fresh !== renderedAt && !sessionStorage.getItem('ftgSynced')) {
-        sessionStorage.setItem('ftgSynced', '1');
-        location.reload();
-      } else {
-        sessionStorage.removeItem('ftgSynced');
-      }
-    });
+    }
+    var t = setTimeout(renderOnce, 900);
+    remoteLoad().then(function () { clearTimeout(t); renderOnce(); });
   });
 })();

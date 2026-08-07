@@ -4,6 +4,47 @@
    ================================================================ */
 * { -webkit-tap-highlight-color: transparent; }
 
+/* ---------- Lapisan animasi & mikro-interaksi ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* konten masuk halus saat halaman dibuka */
+  @keyframes ftgRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  body.ftg-anim main > header { animation: ftgRise .4s ease both; }
+  body.ftg-anim main > div > * { animation: ftgRise .45s ease both; }
+  body.ftg-anim main > div > *:nth-child(2) { animation-delay: .06s; }
+  body.ftg-anim main > div > *:nth-child(3) { animation-delay: .12s; }
+  body.ftg-anim main > div > *:nth-child(4) { animation-delay: .18s; }
+
+  /* kartu terasa hidup saat disentuh kursor (desktop saja) */
+  main section, main article {
+    transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+  }
+  @media (hover: hover) and (min-width: 1024px) {
+    main section.shadow-sm:hover, main article.shadow-sm:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, .09);
+    }
+  }
+
+  /* tombol: respons tekan yang jelas */
+  button, a[class*="rounded"] { transition: transform .15s ease, background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+  button:active, a[class*="rounded"]:active { transform: scale(.96); }
+
+  /* bar progres mengalir, tidak loncat */
+  main .h-2 > div, main .h-1\.5 > div, main .progress-bar {
+    transition: width .9s cubic-bezier(.22, 1, .36, 1);
+  }
+
+  /* modal muncul membesar halus */
+  @keyframes ftgPop { from { opacity: 0; transform: scale(.94) translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes ftgFade { from { opacity: 0; } to { opacity: 1; } }
+  .ftg-modal-ov { animation: ftgFade .2s ease both; }
+  .ftg-modal-box { animation: ftgPop .28s cubic-bezier(.22, 1, .36, 1) both; }
+
+  /* item nav & baris daftar */
+  aside nav a { transition: background-color .2s ease, color .2s ease, padding-left .2s ease; }
+  aside nav a:hover { padding-left: 16px; }
+}
+
 .ftg-burger { display: none; }
 .ftg-overlay { display: none; }
 

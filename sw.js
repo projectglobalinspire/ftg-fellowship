@@ -1,7 +1,8 @@
 /* Service worker — network-first dengan fallback cache (offline support) */
-var CACHE = 'ftg-v3';
+var CACHE = 'ftg-v5';
 var CORE = [
   './', 'index.html', 'login.html', 'ftg-config.js', 'mentee-dashboard.html', 'mentor-dashboard.html',
+  'admin-dashboard.html', 'admin-akun.html',
   'design-thinking-module.html', 'workshop-library.html', 'assignment-submission.html',
   'progress-tracker.html', 'mentor-feedback.html', 'kpi-leaderboard.html',
   'opening-ceremony.html', 'closing-ceremony.html',
