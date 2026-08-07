@@ -1,5 +1,6 @@
-/* Konfigurasi backend Supabase — anonKey bersifat publik (aman di client). */
+/* Konfigurasi backend Supabase — publishable key memang aman di client
+   (akses data dibatasi Row Level Security di sisi server). */
 window.FTG_CONF = {
   url: 'https://sluozhitkhlhzrxwoaho.supabase.co',
-  anonKey: '' /* diisi saat setup Supabase selesai */
+  anonKey: 'sb_publishable_WYMTRQuoPsGFMIKsHLxBCA_HMczXkfr'
 };
