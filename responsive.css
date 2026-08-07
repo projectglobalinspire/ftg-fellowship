@@ -55,12 +55,14 @@
     z-index: 75;
   }
 
-  main[data-design-id] header {
-    padding: 14px 16px 14px 66px !important;
-  }
   main[data-design-id] .px-8 {
     padding-left: 16px !important;
     padding-right: 16px !important;
+  }
+  /* header.px-8 (spesifisitas lebih tinggi dari .px-8) — ruang untuk tombol menu */
+  main[data-design-id] header,
+  main[data-design-id] header.px-8 {
+    padding: 14px 16px 14px 66px !important;
   }
 
   /* Anak grid boleh menyusut mengikuti lebar layar */
@@ -110,6 +112,15 @@
   [data-design-id^="canvas-progress"] .flex.gap-3 > div { flex: 1 1 120px !important; }
 }
 
+/* ---------- Cetak / Unduh Laporan (PDF) ---------- */
+@media print {
+  aside, .ftg-burger, .ftg-overlay, .ftg-conn,
+  main header button, header .relative, header .rounded-full { display: none !important; }
+  main[data-design-id] { margin-left: 0 !important; }
+  body { background: #fff !important; }
+  section { break-inside: avoid; }
+}
+
 /* ---------- iPad landscape / laptop kecil (sidebar tampil) ---------- */
 @media (min-width: 1024px) and (max-width: 1279px) {
   /* Canvas 5 kolom terlalu sempit -> 3 kolom membungkus */
@@ -127,7 +138,8 @@
   /* font-size 16px mencegah auto-zoom Safari iOS saat mengetik */
   input, textarea, select { font-size: 16px !important; }
   main[data-design-id] h1 { font-size: 17px !important; }
-  main[data-design-id] header { padding-left: 62px !important; }
+  main[data-design-id] header,
+  main[data-design-id] header.px-8 { padding-left: 62px !important; }
   .grid.grid-cols-4 { gap: 10px !important; }
 
   /* Kartu workshop terlalu sempit kalau 2 kolom -> 1 kolom penuh */

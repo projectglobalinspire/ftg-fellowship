@@ -18,7 +18,8 @@
     reviews: {},         // key -> { score, text, at }
     replies: [],         // balasan mentee di halaman feedback
     messages: [],        // chat mentee <-> mentor: { from, fromName, text, at }
-    events: []           // notifikasi: { icon, text, forRole, at, read }
+    events: [],          // notifikasi: { icon, text, forRole, at, read }
+    session1on1: null    // jadwal sesi: { date, time, note, by, at }
   };
 
   /* Konten demo — terisi otomatis saat pertama kali dibuka (atau setelah
@@ -192,6 +193,98 @@
     }
   }
 
+  /* ---------- Jadwal sesi 1-on-1 sungguhan ---------- */
+  function scheduleModal() {
+    var today = new Date();
+    var defDate = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10);
+    modal(
+      '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:2px">🗓 Jadwalkan Sesi 1-on-1</h3>' +
+      '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Dengan Arya Ramadhan · undangan otomatis terkirim ke mentee</p>' +
+      '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:6px">Tanggal</label>' +
+      '<input id="ssDate" type="date" value="' + defDate + '" min="' + today.toISOString().slice(0, 10) + '" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;margin-bottom:12px">' +
+      '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:6px">Jam (WIB)</label>' +
+      '<input id="ssTime" type="time" value="16:00" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;margin-bottom:12px">' +
+      '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:6px">Topik (opsional)</label>' +
+      '<input id="ssNote" type="text" placeholder="Contoh: bahas progres DEFINE & persiapan IDEATE" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none">' +
+      '<button id="ssSave" style="margin-top:14px;width:100%;background:#8b5cf6;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Kirim Undangan Sesi</button>',
+      function (box, close) {
+        $('#ssSave', box).addEventListener('click', function () {
+          var dt = $('#ssDate', box).value, tm = $('#ssTime', box).value;
+          if (!dt || !tm) { toast('Pilih tanggal & jam dulu ya', '✏️'); return; }
+          S.session1on1 = { date: dt, time: tm, note: $('#ssNote', box).value.trim(), by: 'Pak Faris', at: new Date().toISOString() };
+          var label = new Date(dt + 'T' + tm).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' }) + ' ' + tm + ' WIB';
+          pushEvent('🗓', 'Pak Faris menjadwalkan sesi 1-on-1: ' + label, 'mentee');
+          saveState(); close();
+          toast('Undangan sesi terkirim — ' + label, '🗓');
+        });
+      }
+    );
+  }
+  /* Kartu jadwal sesi di dashboard mentee */
+  function insertSessionCard() {
+    if (!S.session1on1) return;
+    var anchor = byId('mentor-card');
+    if (!anchor) return;
+    var s = S.session1on1;
+    var label = new Date(s.date + 'T' + s.time).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+    var sec = document.createElement('section');
+    sec.className = 'bg-[#8b5cf6] rounded-2xl p-5';
+    sec.innerHTML =
+      '<p class="text-white/70 text-xs font-semibold mb-1">🗓 SESI 1-ON-1 TERJADWAL</p>' +
+      '<h3 class="text-white text-sm font-bold mb-2">' + label + ' · ' + s.time + ' WIB</h3>' +
+      '<p class="text-white/80 text-xs mb-1">Bersama <b>' + esc(s.by) + '</b>' + (s.note ? ' — ' + esc(s.note) : '') + '</p>' +
+      '<span class="inline-block mt-2 bg-white/20 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">✓ Undangan diterima</span>';
+    anchor.parentElement.insertBefore(sec, anchor.nextSibling);
+  }
+
+  /* ---------- Badge dinamis: Definer terbuka saat tugas W2 dikumpul ---------- */
+  function unlockDefinerBadges() {
+    if (!S.submittedW2) return;
+    // dashboard mentee: slot badge "Terkunci" -> Definer + hitungan 3->4
+    var bsec = byId('badges-section');
+    if (bsec) {
+      var locked = $all('.flex.flex-col.items-center', bsec).filter(function (d) { return /Terkunci/.test(d.textContent); })[0];
+      if (locked) locked.innerHTML =
+        '<div class="w-12 h-12 rounded-xl bg-[#f97316]/10 border-2 border-[#f97316] badge-glow flex items-center justify-center"><i class="fa-solid fa-magnifying-glass text-[#f97316] text-xl"></i></div>' +
+        '<p class="text-[#2c3e50] text-[10px] font-medium text-center">Definer</p>';
+      $all('span', bsec).forEach(function (sp) { if (sp.textContent.trim() === '3 / 12') sp.textContent = '4 / 12'; });
+    }
+    $all('p').forEach(function (p) {
+      if (p.textContent.trim() === '3' && p.className.indexOf('text-2xl') > -1 && p.nextElementSibling && /Badge Diraih/.test(p.nextElementSibling.textContent)) p.textContent = '4';
+    });
+    // progress tracker: badge Definer menyala + judul hitungan
+    var bearned = byId('badges-earned');
+    if (bearned) {
+      var h = $('h3', bearned);
+      if (h) h.textContent = '🏅 Semua Badge (4 dari 12)';
+      var def = $all('.flex.flex-col.items-center', bearned).filter(function (d) { return /Definer/.test(d.textContent); })[0];
+      if (def) {
+        def.classList.remove('opacity-40');
+        def.innerHTML =
+          '<div class="w-12 h-12 rounded-xl bg-[#f97316]/10 border-2 border-[#f97316] flex items-center justify-center"><i class="fa-solid fa-magnifying-glass text-[#f97316] text-xl"></i></div>' +
+          '<p class="text-[10px] font-semibold text-center text-[#2c3e50] mt-1">Definer</p><p class="text-[9px] text-[#22c55e] text-center">Earned!</p>';
+      }
+    }
+  }
+
+  /* ---------- Unduh laporan progres (cetak/PDF) ---------- */
+  function insertPrintButton() {
+    var header = $('main header');
+    if (!header) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bg-[#1a5f4f] text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#155242] flex-shrink-0';
+    btn.innerHTML = '<i class="fa-solid fa-file-arrow-down mr-1.5"></i>Unduh Laporan';
+    btn.addEventListener('click', function () {
+      toast('Menyiapkan laporan — pilih "Save as PDF"', '🖨');
+      setTimeout(function () { window.print(); }, 400);
+    });
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.appendChild(btn);
+  }
+
   /* ---------- Feed aktivitas terbaru (dashboard mentor) ---------- */
   function insertActivityFeed() {
     var anchor = byId('group-progress');
@@ -253,6 +346,7 @@
   function showConnBadge() {
     if (!IS_APP_PAGE) return;
     var b = document.createElement('div');
+    b.className = 'ftg-conn';
     b.style.cssText = 'position:fixed;bottom:10px;left:12px;z-index:8990;font-size:10px;font-weight:700;padding:4px 10px;border-radius:99px;pointer-events:none;' +
       (sb ? 'background:rgba(34,197,94,.14);color:#22c55e;' : 'background:rgba(148,163,184,.14);color:#94a3b8;');
     b.textContent = sb ? '● Live — tersinkron server' : '○ Offline — data lokal';
@@ -1010,11 +1104,7 @@
       toast('Pengingat terkirim ke mentee', '📨');
     });
     var sch = byId('btn-schedule-session');
-    if (sch) sch.addEventListener('click', function () {
-      pushEvent('🗓', 'Pak Faris menjadwalkan sesi 1-on-1 — cek jadwalmu', 'mentee');
-      saveState();
-      toast('Sesi 1-on-1 dijadwalkan — undangan terkirim', '🗓');
-    });
+    if (sch) sch.addEventListener('click', scheduleModal);
     var ann = byId('btn-group-announce');
     if (ann) ann.addEventListener('click', function () { messageModal('Grup Mentee (5 orang)'); });
     var flt = byId('btn-filter-mentee');
@@ -1500,6 +1590,8 @@
       try { startRealtime(); } catch (e) { console.warn(e); }
       try { startPresence(); } catch (e) { console.warn(e); }
       try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
+      try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); } } catch (e) { console.warn(e); }
+      try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
       try { showConnBadge(); } catch (e) { console.warn(e); }
     });
   });
