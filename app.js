@@ -2794,6 +2794,9 @@
     initSupabase();
     bindS();
     document.body.classList.add('ftg-anim');
+    // lepas kelas animasi setelah selesai — animation-fill "both" meninggalkan
+    // stacking context permanen yang membuat dropdown notifikasi tertutup kartu
+    setTimeout(function () { document.body.classList.remove('ftg-anim'); }, 1600);
 
     // identitas sidebar & menu peran diganti SEKETIKA — tidak ada kilasan "Arya"
     try { personalize(); } catch (e) { console.warn(e); }

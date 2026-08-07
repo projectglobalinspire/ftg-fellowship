@@ -60,6 +60,12 @@
   html { scroll-behavior: smooth; }
 }
 
+/* Header selalu di atas konten — dropdown notifikasi tidak tertutup kartu */
+main[data-design-id] header {
+  position: relative;
+  z-index: 40;
+}
+
 /* loading bar tipis saat sinkronisasi server */
 .ftg-loadbar {
   position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9997;
