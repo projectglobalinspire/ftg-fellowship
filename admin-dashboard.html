@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="responsive.css">
   <script src="ftg-config.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script defer src="app.js"></script>
 </head>
 <body class="min-h-screen bg-[#f8fafc] flex">
@@ -48,9 +49,14 @@
 
   <!-- Main -->
   <main data-design-id="main-admin-g7h8i9" class="ml-[240px] flex-1 min-h-[900px]">
-    <header data-design-id="header-admin-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4">
-      <h1 class="text-[#2c3e50] text-xl font-bold">🎛 Dashboard Panitia</h1>
-      <p class="text-slate-500 text-sm">Memuat...</p>
+    <header data-design-id="header-admin-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <h1 class="text-[#2c3e50] text-xl font-bold">🎛 Dashboard Panitia</h1>
+        <p class="text-slate-500 text-sm">Memuat...</p>
+      </div>
+      <button type="button" id="btnWipe" class="bg-[#ef4444] hover:bg-[#dc2626] text-white text-xs font-bold px-4 py-2.5 rounded-xl flex-shrink-0">
+        <i class="fa-solid fa-trash mr-1.5"></i>Hapus Data Demo
+      </button>
     </header>
 
     <div class="px-8 py-6">

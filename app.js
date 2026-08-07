@@ -399,6 +399,35 @@
       // badge online panitia memakai data-design-id mentee-row-N (dipakai updatePresenceUI juga)
     }
 
+    // tombol hapus data demo (khusus panitia)
+    var del = $('#btnWipe');
+    if (del) del.addEventListener('click', function () {
+      modal(
+        '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:6px">🗑 Hapus Semua Data Demo?</h3>' +
+        '<p style="font-size:13px;color:#64748b;margin-bottom:6px">Seluruh tugas, nilai, chat, notifikasi, dan lampiran <b>ke-5 mentee</b> akan dikosongkan dan dikembalikan ke kondisi awal presentasi.</p>' +
+        '<p style="font-size:12px;color:#ef4444;margin-bottom:16px">Tindakan ini berlaku untuk semua perangkat dan tidak bisa dibatalkan.</p>' +
+        '<div style="display:flex;gap:10px"><button id="wCancel" style="flex:1;background:#f1f5f9;color:#475569;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Batal</button>' +
+        '<button id="wGo" style="flex:1;background:#ef4444;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Ya, Hapus Semua</button></div>',
+        function (box, close) {
+          $('#wCancel', box).addEventListener('click', close);
+          $('#wGo', box).addEventListener('click', function () {
+            $('#wGo', box).textContent = 'Menghapus...';
+            G = normalizeG(seedAll());
+            bindS();
+            G.updatedAt = Date.now();
+            G.updatedBy = 'admin';
+            lastAppliedAt = G.updatedAt;
+            persistLocal();
+            function done() { close(); toast('Data demo dihapus — siap presentasi', '🗑'); setTimeout(function () { location.reload(); }, 900); }
+            if (sb) {
+              sb.from('ftg_state').update({ data: G, updated_at: new Date().toISOString() }).eq('id', 1)
+                .then(done).catch(done);
+            } else done();
+          });
+        }
+      );
+    });
+
     // feed aktivitas gabungan
     var feed = $('#adminFeed');
     if (feed) {
@@ -436,7 +465,7 @@
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ftg_state' }, function (payload) {
           var d = payload['new'] && payload['new'].data;
           if (!d || !d.updatedAt || d.updatedAt === lastAppliedAt) return;
-          if (d.updatedBy === myRole()) { applyRemote(d); lastAppliedAt = d.updatedAt; return; }
+          if (d.updatedBy === myTag()) { applyRemote(d); lastAppliedAt = d.updatedAt; return; }
           onForeignUpdate(d);
         })
         .subscribe();
@@ -452,7 +481,7 @@
       if (pushTimer) return; // sedang mengetik, jangan ganggu
       sb.from('ftg_state').select('data').eq('id', 1).maybeSingle().then(function (res) {
         var d = res.data && res.data.data;
-        if (d && d.updatedAt && d.updatedAt !== lastAppliedAt && d.updatedBy !== myRole()) onForeignUpdate(d);
+        if (d && d.updatedAt && d.updatedAt !== lastAppliedAt && d.updatedBy !== myTag()) onForeignUpdate(d);
       });
     }, 7000);
   }
@@ -476,27 +505,74 @@
     return true;
   }
 
-  /* Personalisasi UI sesuai akun yang login (nama, inisial, path) */
+  /* Personalisasi UI sesuai akun yang login (nama, inisial, path, menu) */
+  var SHARED_PAGES = /^(kpi-leaderboard|opening-ceremony|closing-ceremony)/;
   function personalize() {
     var ses = mySession();
     if (!ses || !ses.name) return;
-    // pill sidebar
+    var color = ses.role === 'mentor' ? '#1a5f4f' : (ses.role === 'admin' ? '#8b5cf6' : (MENTEES[myMenteeId()] || {}).color || '#f97316');
+
+    // pill identitas di sidebar
     var pill = $('aside .mx-4.mt-4');
     if (pill) {
-      var nameP = $('p.text-white', pill);
-      var pathP = $('p.text-white\\/50, p.text-xs', pill);
+      var ps = $all('p', pill);
       var ava = $('div.rounded-full', pill);
-      if (nameP) nameP.textContent = ses.name;
-      if (pathP && pathP !== nameP) pathP.textContent = ses.path || '';
-      if (ava) ava.textContent = ses.initials || ses.name.slice(0, 2).toUpperCase();
+      if (ps[0]) ps[0].textContent = ses.name;
+      if (ps[1]) ps[1].textContent = ses.path || (ses.role === 'admin' ? 'Monitoring Program' : '');
+      if (ava) { ava.textContent = ses.initials || ses.name.slice(0, 2).toUpperCase(); ava.style.background = color; }
     }
+
+    // halaman bersama (leaderboard/ceremony) memakai menu milik peran yang login
+    if (SHARED_PAGES.test(PAGE) && ses.role !== 'mentee') {
+      var nav = $('aside nav');
+      if (nav) {
+        var items = ses.role === 'mentor'
+          ? [['fa-house', 'Dashboard', 'mentor-dashboard.html'], ['fa-users', 'Mentee Saya', 'mentor-dashboard.html'], ['fa-file-lines', 'Review Tugas', 'mentor-dashboard.html'], ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html']]
+          : [['fa-gauge-high', 'Monitoring', 'admin-dashboard.html'], ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html']];
+        items = items.concat([['fa-star', 'Opening Ceremony', 'opening-ceremony.html'], ['fa-award', 'Closing Ceremony', 'closing-ceremony.html']]);
+        nav.innerHTML = items.map(function (it) {
+          var active = PAGE.indexOf(it[2].replace('.html', '')) === 0;
+          return '<a href="' + it[2] + '" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ' +
+            (active ? 'bg-[#1a5f4f] text-white' : 'text-white/60 hover:text-white hover:bg-white/10') + '">' +
+            '<i class="fa-solid ' + it[0] + ' w-4 text-center"></i> ' + it[1] + '</a>';
+        }).join('');
+        var out = document.createElement('a');
+        out.href = 'login.html';
+        out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
+        out.innerHTML = '<i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Keluar';
+        out.addEventListener('click', function () { localStorage.removeItem('ftgSession'); });
+        nav.appendChild(out);
+      }
+      // banner "posisi kamu" hanya relevan untuk mentee
+      var pos = byId('my-position');
+      if (pos) {
+        pos.innerHTML = '<div class="flex items-center gap-4"><div class="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold" style="background:' + color + '">' + esc(ses.initials) + '</div>' +
+          '<div><p class="text-white/60 text-xs">Masuk sebagai</p><p class="text-white text-lg font-bold">' + esc(ses.name) + '</p>' +
+          '<p class="text-white/60 text-xs">' + (ses.role === 'mentor' ? 'Memantau 5 mentee bimbingan' : 'Memantau seluruh peserta program') + '</p></div></div>';
+        pos.className = 'bg-[#2c3e50] rounded-2xl p-5 mb-5 flex items-center justify-between flex-wrap gap-4';
+      }
+    }
+
     if (ses.role !== 'mentee') return;
     // sapaan header + avatar header (halaman mentee)
     var h1 = $('main header h1');
     if (h1 && /Selamat datang kembali/.test(h1.textContent)) h1.textContent = 'Selamat datang kembali, ' + ses.name.split(' ')[0] + '! 👋';
     if (h1 && /Progress Journey/.test(h1.textContent)) h1.textContent = '📊 Progress Journey ' + ses.name.split(' ')[0];
-    $all('main header div.rounded-full').forEach(function (d) {
-      if (d.textContent.trim() === 'AR') d.textContent = ses.initials;
+    $all('main header div.rounded-full, aside div.rounded-full').forEach(function (d) {
+      if (d.textContent.trim() === 'AR') { d.textContent = ses.initials; d.style.background = color; }
+    });
+    // leaderboard: baris "(← Kamu)" mengikuti akun yang login
+    var meRow = byId('lb-row-arya');
+    if (meRow) {
+      $all('p', meRow).forEach(function (p) {
+        if (/Arya Ramadhan/.test(p.textContent)) p.innerHTML = esc(ses.name) + ' <span class="text-[#1a5f4f] text-[10px]">(← Kamu)</span>';
+      });
+      var av = $('div.rounded-full', meRow);
+      if (av) { av.textContent = ses.initials; av.style.background = color; }
+    }
+    var posBanner = byId('my-position');
+    if (posBanner) $all('p', posBanner).forEach(function (p) {
+      if (/Arya Ramadhan/.test(p.textContent)) p.textContent = ses.name + ' — Ranking #8';
     });
   }
 
@@ -576,7 +652,11 @@
         if (txt === 'Dashboard') { a.href = 'mentor-dashboard.html'; return; }
         if (txt === 'Leaderboard') { a.href = 'kpi-leaderboard.html'; return; }
         if (/^Mentee Saya/.test(txt)) { hookScroll(a, 'mentee-list'); return; }
-        if (/^Review Tugas/.test(txt) || txt === 'Berikan Feedback') { hookScroll(a, 'pending-reviews'); return; }
+        if (/^Review Tugas/.test(txt)) { hookScroll(a, 'pending-reviews'); return; }
+        if (txt === 'Berikan Feedback') {
+          a.addEventListener('click', function (e) { e.preventDefault(); setActiveNav(a); pickMenteeModal('Berikan Feedback ke'); });
+          return;
+        }
         if (txt === 'Progress Grup') { hookScroll(a, 'group-progress'); return; }
         if (txt === 'Kirim Pesan Grup') { a.addEventListener('click', groupMessageModal); return; }
       }
@@ -665,8 +745,26 @@
     a.addEventListener('click', function (e) {
       e.preventDefault();
       var t = byId(prefix);
-      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!t) return;
+      t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      flash(t);
+      setActiveNav(a);
     });
+  }
+  /* kedip sorot supaya klik terasa jelas */
+  function flash(el) {
+    el.style.transition = 'box-shadow .25s ease, transform .25s ease';
+    el.style.boxShadow = '0 0 0 3px rgba(249,115,22,.55)';
+    el.style.transform = 'scale(1.008)';
+    setTimeout(function () { el.style.boxShadow = ''; el.style.transform = ''; }, 900);
+  }
+  function setActiveNav(a) {
+    var nav = a.closest('nav');
+    if (!nav) return;
+    $all('a', nav).forEach(function (x) {
+      x.className = x.className.replace('bg-[#1a5f4f] text-white', 'text-white/60 hover:text-white hover:bg-white/10');
+    });
+    a.className = a.className.replace('text-white/60 hover:text-white hover:bg-white/10', 'bg-[#1a5f4f] text-white');
   }
 
   /* ---------- Notifikasi nyata (dari kejadian di platform) ---------- */
@@ -794,6 +892,34 @@
       }
     );
   }
+  /* pilih mentee lalu buka chat/feedback dengannya */
+  function pickMenteeModal(title) {
+    var rows = '';
+    for (var i = 1; i <= 5; i++) {
+      var m = MENTEES[i], st = mstate(i);
+      var badge = st.reviewW2 ? '<span style="color:#22c55e;font-size:10px;font-weight:700">✓ Dinilai</span>'
+        : (st.submittedW2 ? '<span style="color:#8b5cf6;font-size:10px;font-weight:700">Perlu review</span>'
+        : '<span style="color:#94a3b8;font-size:10px">Belum kumpul W2</span>');
+      rows += '<button type="button" data-mid="' + i + '" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;cursor:pointer;margin-bottom:8px;text-align:left">' +
+        '<span style="width:32px;height:32px;border-radius:99px;background:' + m.color + ';color:#fff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + m.initials + '</span>' +
+        '<span style="flex:1"><span style="display:block;font-size:13px;font-weight:700;color:#2c3e50">' + m.name + '</span>' +
+        '<span style="display:block;font-size:10px;color:#94a3b8">' + m.path + '</span></span>' + badge + '</button>';
+    }
+    modal(
+      '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">👥 ' + esc(title) + '</h3>' +
+      '<p style="font-size:12px;color:#64748b;margin-bottom:12px">Pilih mentee untuk membuka percakapan</p>' + rows,
+      function (box, close) {
+        $all('[data-mid]', box).forEach(function (b) {
+          b.addEventListener('click', function () {
+            var id = +b.getAttribute('data-mid');
+            close();
+            messageModal(MENTEES[id].name, id);
+          });
+        });
+      }
+    );
+  }
+
   /* pengumuman mentor ke semua mentee sekaligus */
   function groupMessageModal(e) {
     if (e) e.preventDefault();
@@ -961,33 +1087,132 @@
     if (back && back.getAttribute('href') === '#') back.href = 'mentee-dashboard.html';
   }
 
-  /* Upload sungguhan: isi file dibaca & ikut tersimpan ke server (maks 1.5 MB),
-     sehingga mentor bisa mengunduhnya dari perangkat lain. */
+  /* ================================================================
+     Google Drive — berkas tugas disimpan di Drive, database hanya
+     menyimpan tautannya (ringan). Folder dibuat otomatis & rapi:
+       FTG Fellowship 2026 / Mentee / <Nama> / Minggu <N>
+     ================================================================ */
+  var DRIVE = { token: null, expires: 0, tc: null };
+  function driveConfigured() { return !!(window.FTG_CONF && FTG_CONF.driveClientId); }
+  function driveReady() { return DRIVE.token && Date.now() < DRIVE.expires; }
+
+  function driveAuth() {
+    return new Promise(function (resolve, reject) {
+      if (!driveConfigured()) { reject(new Error('Drive belum dikonfigurasi')); return; }
+      if (driveReady()) { resolve(DRIVE.token); return; }
+      if (!window.google || !google.accounts || !google.accounts.oauth2) { reject(new Error('Google SDK belum siap')); return; }
+      if (!DRIVE.tc) {
+        DRIVE.tc = google.accounts.oauth2.initTokenClient({
+          client_id: FTG_CONF.driveClientId,
+          scope: 'https://www.googleapis.com/auth/drive.file',
+          callback: function () {}
+        });
+      }
+      DRIVE.tc.callback = function (resp) {
+        if (resp && resp.access_token) {
+          DRIVE.token = resp.access_token;
+          DRIVE.expires = Date.now() + (resp.expires_in || 3600) * 1000 - 60000;
+          try { localStorage.setItem('ftgDrive', JSON.stringify({ t: DRIVE.token, e: DRIVE.expires })); } catch (e) {}
+          resolve(DRIVE.token);
+        } else reject(new Error('Izin Drive ditolak'));
+      };
+      DRIVE.tc.requestAccessToken({ prompt: DRIVE.token ? '' : 'consent' });
+    });
+  }
+  (function restoreDriveToken() {
+    try {
+      var d = JSON.parse(localStorage.getItem('ftgDrive') || 'null');
+      if (d && d.e > Date.now()) { DRIVE.token = d.t; DRIVE.expires = d.e; }
+    } catch (e) {}
+  })();
+
+  function driveApi(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ Authorization: 'Bearer ' + DRIVE.token }, opts.headers || {});
+    return fetch('https://www.googleapis.com/drive/v3/' + path, opts).then(function (r) {
+      if (!r.ok) throw new Error('Drive API ' + r.status);
+      return r.json();
+    });
+  }
+  /* cari folder bernama X di dalam parent; buat kalau belum ada */
+  function driveFolder(name, parentId) {
+    var q = "mimeType='application/vnd.google-apps.folder' and name='" + name.replace(/'/g, "\\'") + "' and trashed=false" +
+      (parentId ? " and '" + parentId + "' in parents" : '');
+    return driveApi('files?q=' + encodeURIComponent(q) + '&fields=files(id,name)&spaces=drive')
+      .then(function (res) {
+        if (res.files && res.files.length) return res.files[0].id;
+        var meta = { name: name, mimeType: 'application/vnd.google-apps.folder' };
+        if (parentId) meta.parents = [parentId];
+        return driveApi('files?fields=id', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(meta)
+        }).then(function (f) { return f.id; });
+      });
+  }
+  /* jalur folder rapi untuk mentee tertentu */
+  function driveFolderPath(menteeName, weekLabel) {
+    var root = (window.FTG_CONF && FTG_CONF.driveRootFolder) || 'FTG Fellowship 2026';
+    return driveFolder(root, null)
+      .then(function (rid) { return driveFolder('Mentee', rid); })
+      .then(function (mid) { return driveFolder(menteeName, mid); })
+      .then(function (pid) { return driveFolder(weekLabel, pid); });
+  }
+  function driveUpload(file, folderId) {
+    var meta = { name: file.name, parents: [folderId] };
+    var fd = new FormData();
+    fd.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+    fd.append('file', file);
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + DRIVE.token },
+      body: fd
+    }).then(function (r) { if (!r.ok) throw new Error('Upload gagal ' + r.status); return r.json(); });
+  }
+
+  /* Pilih berkas → unggah ke Drive (folder per mentee & per minggu). */
   function wireFilePicker(btn, onAdd) {
     var inp = document.createElement('input');
     inp.type = 'file';
     inp.style.display = 'none';
-    inp.accept = '.pdf,.png,.jpg,.jpeg,.doc,.docx';
+    inp.accept = '.pdf,.png,.jpg,.jpeg,.doc,.docx,.ppt,.pptx';
     document.body.appendChild(inp);
     btn.addEventListener('click', function () { inp.click(); });
     inp.addEventListener('change', function () {
       if (!inp.files.length) return;
       var f = inp.files[0];
-      if (f.size > 1.5 * 1024 * 1024) {
-        toast('File terlalu besar (maks 1.5 MB) — kompres dulu ya', '⚠️');
+      var menteeName = (mySession() || {}).name || MENTEES[MID].name;
+      var week = 'Minggu 2';
+
+      function record(extra) {
+        S.files = (S.files || []).filter(function (x) { return (x.name || x) !== f.name; });
+        S.files.push(Object.assign({
+          name: f.name, size: f.size, at: new Date().toISOString(),
+          folder: 'FTG Fellowship 2026 / Mentee / ' + menteeName + ' / ' + week
+        }, extra || {}));
+        saveState();
+        if (onAdd) onAdd();
+      }
+
+      if (!driveConfigured()) {
+        record({ pending: true });
+        toast('Drive belum tersambung — berkas dicatat, hubungkan Drive untuk mengunggah', '⚠️');
         inp.value = '';
         return;
       }
-      var reader = new FileReader();
-      reader.onload = function () {
-        S.files = (S.files || []).filter(function (x) { return (x.name || x) !== f.name; });
-        S.files.push({ name: f.name, size: f.size, data: reader.result, at: new Date().toISOString() });
-        saveState();
-        toast('File "' + f.name + '" terunggah (' + Math.round(f.size / 1024) + ' KB)', '📎');
-        if (onAdd) onAdd();
-      };
-      reader.readAsDataURL(f);
-      inp.value = '';
+      toast('Mengunggah "' + f.name + '" ke Google Drive...', '☁️');
+      driveAuth()
+        .then(function () { return driveFolderPath(menteeName, week); })
+        .then(function (folderId) { return driveUpload(f, folderId); })
+        .then(function (res) {
+          record({ driveId: res.id, link: res.webViewLink });
+          toast('Tersimpan di Drive → ' + menteeName + ' / ' + week, '✅');
+        })
+        .catch(function (err) {
+          record({ pending: true });
+          toast('Gagal unggah: ' + err.message + ' — berkas tetap tercatat', '⚠️');
+        })
+        .then(function () { inp.value = ''; });
     });
   }
 
@@ -1119,8 +1344,10 @@
       var renderFiles = function () {
         fileWrap.innerHTML = S.files.map(function (f, i) {
           var nm = f.name || f;
-          var dl = f.data ? '<a href="' + f.data + '" download="' + esc(nm) + '" style="color:#fff;text-decoration:none">📎 ' + esc(nm) + ' <span style="opacity:.7">↓</span></a>' : '📎 ' + esc(nm);
-          return '<span style="background:#8b5cf6;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + dl +
+          var body = f.link
+            ? '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:none">📄 ' + esc(nm) + ' <span style="opacity:.75">↗ Drive</span></a>'
+            : '📎 ' + esc(nm) + (f.pending ? ' <span style="opacity:.75">(belum diunggah)</span>' : '');
+          return '<span title="' + esc(f.folder || '') + '" style="background:' + (f.link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
             '<b data-fdel="' + i + '" style="cursor:pointer;opacity:.7">×</b></span>';
         }).join('');
         $all('[data-fdel]', fileWrap).forEach(function (x) {
@@ -1209,12 +1436,14 @@
   }
 
   function attachmentLinks(st) {
-    var files = (st.files || []).filter(function (f) { return f && f.data; });
+    var files = (st.files || []);
     var links = (st.links || []);
     if (!files.length && !links.length) return '';
     return '<div style="margin-bottom:12px">' +
       files.map(function (f) {
-        return '<a href="' + f.data + '" download="' + esc(f.name) + '" style="display:inline-flex;align-items:center;gap:6px;background:#8b5cf6;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📎 ' + esc(f.name) + ' ↓</a>';
+        var nm = f.name || f;
+        if (f.link) return '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" title="' + esc(f.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#1a5f4f;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📄 ' + esc(nm) + ' ↗ Drive</a>';
+        return '<span title="' + esc(f.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + '</span>';
       }).join('') +
       links.map(function (l) {
         return '<a href="' + esc(l) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#334155;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">🔗 ' + esc(l.length > 34 ? l.slice(0, 34) + '…' : l) + '</a>';
@@ -1819,32 +2048,51 @@
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     navigator.serviceWorker.register('sw.js').catch(function () { /* offline support opsional */ });
   }
+  /* Render halaman dari data yang ada sekarang — dipanggil segera, tanpa
+     menunggu server, supaya semua tombol langsung bisa diklik. */
+  function renderPage() {
+    try { wireNav(); } catch (e) { console.warn(e); }
+    try { initMobileNav(); } catch (e) { console.warn(e); }
+    try { wireBell(); } catch (e) { console.warn(e); }
+    try {
+      if (PAGE.indexOf('mentee-dashboard') === 0) initMenteeDashboard();
+      else if (PAGE.indexOf('design-thinking') === 0) initDesignThinking();
+      else if (PAGE.indexOf('assignment-submission') === 0) initAssignment();
+      else if (PAGE.indexOf('mentor-dashboard') === 0) initMentorDashboard();
+      else if (PAGE.indexOf('mentor-feedback') === 0) initMentorFeedback();
+      else if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboard();
+      else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
+      else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
+      else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
+      else if (PAGE.indexOf('admin-dashboard') === 0) initAdminDashboard();
+    } catch (e) { console.error('FTG init error:', e); }
+    try { personalize(); } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); } } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     if (!guardSession()) return;
     initSupabase();
+    bindS();
+
+    // 1) tampilkan & aktifkan UI SEKARANG (data lokal) — tidak menunggu server
+    renderPage();
+    try { showConnBadge(); } catch (e) { console.warn(e); }
+
+    // 2) ambil data server di latar; kalau berbeda, segarkan sekali
+    var renderedAt = G.updatedAt || 0;
     remoteLoad().then(function () {
-      try { wireNav(); } catch (e) { console.warn(e); }
-      try { initMobileNav(); } catch (e) { console.warn(e); }
-      try { wireBell(); } catch (e) { console.warn(e); }
-      try {
-        if (PAGE.indexOf('mentee-dashboard') === 0) initMenteeDashboard();
-        else if (PAGE.indexOf('design-thinking') === 0) initDesignThinking();
-        else if (PAGE.indexOf('assignment-submission') === 0) initAssignment();
-        else if (PAGE.indexOf('mentor-dashboard') === 0) initMentorDashboard();
-        else if (PAGE.indexOf('mentor-feedback') === 0) initMentorFeedback();
-        else if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboard();
-        else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
-        else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
-        else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
-        else if (PAGE.indexOf('admin-dashboard') === 0) initAdminDashboard();
-      } catch (e) { console.error('FTG init error:', e); }
-      try { personalize(); } catch (e) { console.warn(e); }
       try { startRealtime(); } catch (e) { console.warn(e); }
       try { startPresence(); } catch (e) { console.warn(e); }
-      try { if (PAGE.indexOf('mentor-dashboard') === 0) insertActivityFeed(); } catch (e) { console.warn(e); }
-      try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); } } catch (e) { console.warn(e); }
-      try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
-      try { showConnBadge(); } catch (e) { console.warn(e); }
+      var fresh = G.updatedAt || 0;
+      if (fresh && fresh !== renderedAt && !sessionStorage.getItem('ftgSynced')) {
+        sessionStorage.setItem('ftgSynced', '1');
+        location.reload();
+      } else {
+        sessionStorage.removeItem('ftgSynced');
+      }
     });
   });
 })();
