@@ -180,8 +180,18 @@
 
         function fallbackAuth() {
           var u = USERS_FALLBACK[em];
-          if (u && btoa(pw) === u.pw) success(Object.assign({ email: em }, u));
-          else fail('Email atau password salah. Coba lagi ya.');
+          if (u && btoa(pw) === u.pw) { success(Object.assign({ email: em }, u)); return; }
+          // akun buatan panitia (tersimpan di dokumen state server)
+          if (sb) {
+            sb.from('ftg_state').select('data').eq('id', 1).maybeSingle()
+              .then(function (res) {
+                var ex = res.data && res.data.data && res.data.data.extraUsers;
+                var eu = ex && ex[em];
+                if (eu && btoa(pw) === eu.pw) success(Object.assign({ email: em }, eu));
+                else fail('Email atau password salah. Coba lagi ya.');
+              })
+              .catch(function () { fail('Email atau password salah. Coba lagi ya.'); });
+          } else fail('Email atau password salah. Coba lagi ya.');
         }
 
         if (sb) {

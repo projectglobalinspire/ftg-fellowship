@@ -111,8 +111,29 @@
       g = { mentees: seedAll().mentees, updatedAt: g.updatedAt, updatedBy: g.updatedBy };
       if (old) g.mentees[1] = Object.assign({}, DEFAULT_STATE, old);
     }
+    // daftarkan mentee tambahan (dibuat panitia) ke registry MENTEES
+    registerExtraUsers(g);
     for (var i = 1; i <= 5; i++) g.mentees[i] = Object.assign({}, DEFAULT_STATE, g.mentees[i] || lightSeed(i));
+    Object.keys(g.mentees).forEach(function (k) {
+      if (+k > 5) g.mentees[k] = Object.assign({}, DEFAULT_STATE, g.mentees[k]);
+    });
     return g;
+  }
+  var COLORS = ['#f97316', '#8b5cf6', '#1a5f4f', '#2c3e50', '#0ea5e9', '#db2777'];
+  function registerExtraUsers(g) {
+    var ex = g.extraUsers || {};
+    Object.keys(ex).forEach(function (email) {
+      var u = ex[email];
+      if (u.role === 'mentee' && u.menteeId && !MENTEES[u.menteeId]) {
+        MENTEES[u.menteeId] = {
+          name: u.name, initials: u.initials, path: u.path || 'Career Path',
+          email: email, color: COLORS[u.menteeId % COLORS.length], baseProgress: 5
+        };
+      }
+    });
+  }
+  function menteeIds() {
+    return Object.keys(MENTEES).map(Number).sort(function (a, b) { return a - b; });
   }
   function loadG() {
     try {
@@ -125,8 +146,15 @@
   var G = loadG();
   var MID = 1; // di-set ulang saat boot sesuai sesi
   var S = G.mentees[1];
-  function bindS() { MID = myMenteeId(); S = G.mentees[MID]; }
-  function mstate(i) { return G.mentees[i]; }
+  function bindS() {
+    MID = myMenteeId();
+    if (!G.mentees[MID]) G.mentees[MID] = Object.assign({}, DEFAULT_STATE);
+    S = G.mentees[MID];
+  }
+  function mstate(i) {
+    if (!G.mentees[i]) G.mentees[i] = Object.assign({}, DEFAULT_STATE);
+    return G.mentees[i];
+  }
 
   function initSupabase() {
     try {
@@ -428,17 +456,127 @@
       );
     });
 
-    // feed aktivitas gabungan
+    // feed aktivitas gabungan (ringkas)
     var feed = $('#adminFeed');
     if (feed) {
-      var evs = allEvents(null).slice(0, 10);
+      var evs = allEvents(null).slice(0, 8);
       feed.innerHTML = evs.length ? evs.map(function (ev) {
         return '<div class="flex items-start gap-2.5 pb-2.5 border-b border-slate-50">' +
           '<span style="font-size:14px">' + ev.icon + '</span>' +
           '<div class="min-w-0"><p class="text-[#2c3e50] text-xs font-medium leading-snug">' + esc(ev.text) + '</p>' +
-          '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + ' · ' + MENTEES[ev.menteeId].name.split(' ')[0] + '</p></div></div>';
+          '<p class="text-slate-400 text-[10px] mt-0.5">' + timeAgo(ev.at) + ' · ' + (MENTEES[ev.menteeId] ? MENTEES[ev.menteeId].name.split(' ')[0] : '') + '</p></div></div>';
       }).join('') : '<p class="text-slate-400 text-xs">Belum ada aktivitas.</p>';
     }
+
+    /* ---- Kelola akun ---- */
+    var BUILTIN_ACCOUNTS = [
+      { email: 'arya@ftg.id', name: 'Arya Ramadhan', role: 'mentee', initials: 'AR', path: 'Career Path' },
+      { email: 'siti@ftg.id', name: 'Siti Aisyah', role: 'mentee', initials: 'SA', path: 'Entrepreneur Path' },
+      { email: 'rizky@ftg.id', name: 'Muhammad Rizky', role: 'mentee', initials: 'MR', path: 'Career Path' },
+      { email: 'dina@ftg.id', name: 'Dina Fitriani', role: 'mentee', initials: 'DF', path: 'Entrepreneur Path' },
+      { email: 'bagas@ftg.id', name: 'Bagas Nugroho', role: 'mentee', initials: 'BN', path: 'Career Path' },
+      { email: 'faris@ftg.id', name: 'Bapak Faris', role: 'mentor', initials: 'BF', path: 'Senior Mentor' },
+      { email: 'panitia@ftg.id', name: 'Panitia FTG', role: 'admin', initials: 'PF', path: 'Committee' }
+    ];
+    function roleChip(r) {
+      var map = { mentee: ['MENTEE', '#f97316'], mentor: ['MENTOR', '#1a5f4f'], admin: ['PANITIA', '#8b5cf6'] };
+      var m = map[r] || ['?', '#94a3b8'];
+      return '<span style="background:' + m[1] + '1a;color:' + m[1] + ';font-size:9px;font-weight:800;padding:3px 9px;border-radius:99px;letter-spacing:.05em">' + m[0] + '</span>';
+    }
+    function renderAccounts() {
+      var wrap = $('#accountRows');
+      if (!wrap) return;
+      var ex = G.extraUsers || {};
+      var all = BUILTIN_ACCOUNTS.map(function (a) { return Object.assign({ builtin: true }, a); })
+        .concat(Object.keys(ex).map(function (em) { return Object.assign({ email: em }, ex[em]); }));
+      wrap.innerHTML = all.map(function (a) {
+        return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50">' +
+          '<div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-[10px] flex-shrink-0" style="background:' + (a.role === 'mentor' ? '#1a5f4f' : a.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(a.initials || '?') + '</div>' +
+          '<div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(a.name) + '</p>' +
+          '<p class="text-slate-400 text-[10px] truncate">' + esc(a.email) + ' · ' + esc(a.path || '') + '</p></div>' +
+          roleChip(a.role) +
+          (a.builtin ? '<span class="text-slate-300 text-[9px] ml-2">bawaan</span>'
+            : '<button type="button" data-rmacc="' + esc(a.email) + '" class="ml-2 text-[#ef4444] text-[10px] font-bold hover:underline">hapus</button>') +
+          '</div>';
+      }).join('');
+      $all('[data-rmacc]', wrap).forEach(function (b) {
+        b.addEventListener('click', function () {
+          var em = b.getAttribute('data-rmacc');
+          delete G.extraUsers[em];
+          adminLog('Akun ' + em + ' dihapus oleh Panitia');
+          saveState(); renderAccounts(); renderLog();
+          toast('Akun ' + em + ' dihapus', '🗑');
+        });
+      });
+    }
+    function initialsOf(name) {
+      return name.trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('');
+    }
+    function addAccountModal(role) {
+      var isMentee = role === 'mentee';
+      modal(
+        '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:4px">' + (isMentee ? '🎓 Tambah Mentee' : '🧑‍🏫 Tambah Mentor') + '</h3>' +
+        '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Akun langsung aktif & bisa dipakai login di semua perangkat</p>' +
+        '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:5px">Nama lengkap</label>' +
+        '<input id="acName" type="text" placeholder="cth: Rani Puspita" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px">' +
+        '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:5px">Email</label>' +
+        '<input id="acEmail" type="email" placeholder="cth: rani@ftg.id" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px">' +
+        '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:5px">Password</label>' +
+        '<input id="acPw" type="text" placeholder="min. 6 karakter" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:10px">' +
+        (isMentee ?
+          '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:5px">Jalur</label>' +
+          '<select id="acPath" style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;background:#fff;margin-bottom:4px">' +
+          '<option>Career Path</option><option>Entrepreneur Path</option></select>' : '') +
+        '<button id="acSave" style="margin-top:12px;width:100%;background:' + (isMentee ? '#f97316' : '#1a5f4f') + ';color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Simpan Akun</button>',
+        function (box, close) {
+          $('#acSave', box).addEventListener('click', function () {
+            var nm = $('#acName', box).value.trim();
+            var em = $('#acEmail', box).value.trim().toLowerCase();
+            var pw = $('#acPw', box).value;
+            if (!nm || !/^\S+@\S+\.\S+$/.test(em) || pw.length < 6) { toast('Lengkapi nama, email valid, & password min. 6 karakter', '✏️'); return; }
+            G.extraUsers = G.extraUsers || {};
+            if (G.extraUsers[em] || BUILTIN_ACCOUNTS.some(function (a) { return a.email === em; })) { toast('Email sudah terdaftar', '⚠️'); return; }
+            var entry = { pw: btoa(pw), name: nm, role: role, initials: initialsOf(nm), path: isMentee ? $('#acPath', box).value : 'Mentor', at: new Date().toISOString() };
+            if (isMentee) {
+              var nextId = Math.max.apply(null, menteeIds()) + 1;
+              entry.menteeId = nextId;
+            }
+            G.extraUsers[em] = entry;
+            registerExtraUsers(G);
+            adminLog('Akun ' + role + ' baru: ' + nm + ' (' + em + ') ditambahkan oleh Panitia');
+            saveState(); close();
+            renderAccounts(); renderLog();
+            toast(nm + ' ditambahkan — bisa langsung login', '✅');
+          });
+        }
+      );
+    }
+    var bAddMe = $('#btnAddMentee');
+    if (bAddMe) bAddMe.addEventListener('click', function () { addAccountModal('mentee'); });
+    var bAddMo = $('#btnAddMentor');
+    if (bAddMo) bAddMo.addEventListener('click', function () { addAccountModal('mentor'); });
+    renderAccounts();
+
+    /* ---- Log sistem (gabungan event + log admin) ---- */
+    function renderLog() {
+      var el = $('#adminLog');
+      if (!el) return;
+      var rows = (G.adminLog || []).map(function (l) { return { icon: '🛠', text: l.text, at: l.at, who: 'Panitia' }; })
+        .concat(allEvents(null).map(function (ev) { return { icon: ev.icon, text: ev.text, at: ev.at, who: MENTEES[ev.menteeId] ? MENTEES[ev.menteeId].name.split(' ')[0] : '' }; }));
+      rows.sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+      el.innerHTML = rows.length ? rows.slice(0, 30).map(function (r) {
+        return '<div class="flex items-center gap-3 py-2 border-b border-slate-50">' +
+          '<span style="font-size:13px;flex-shrink:0">' + r.icon + '</span>' +
+          '<p class="flex-1 text-[#2c3e50] text-xs min-w-0">' + esc(r.text) + '</p>' +
+          '<span class="text-slate-400 text-[10px] flex-shrink-0">' + (r.who ? r.who + ' · ' : '') + timeAgo(r.at) + '</span></div>';
+      }).join('') : '<p class="text-slate-400 text-xs py-2">Belum ada log.</p>';
+    }
+    renderLog();
+  }
+  function adminLog(text) {
+    G.adminLog = G.adminLog || [];
+    G.adminLog.unshift({ text: text, at: new Date().toISOString() });
+    if (G.adminLog.length > 30) G.adminLog.length = 30;
   }
 
   /* ---------- Feed aktivitas terbaru (dashboard mentor) ---------- */
@@ -526,16 +664,35 @@
     if (SHARED_PAGES.test(PAGE) && ses.role !== 'mentee') {
       var nav = $('aside nav');
       if (nav) {
+        var pending = pendingCount();
+        // [ikon, label, href, badgeHTML] — identik dgn menu dashboard masing-masing peran
         var items = ses.role === 'mentor'
-          ? [['fa-house', 'Dashboard', 'mentor-dashboard.html'], ['fa-users', 'Mentee Saya', 'mentor-dashboard.html'], ['fa-file-lines', 'Review Tugas', 'mentor-dashboard.html'], ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html']]
-          : [['fa-gauge-high', 'Monitoring', 'admin-dashboard.html'], ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html']];
-        items = items.concat([['fa-star', 'Opening Ceremony', 'opening-ceremony.html'], ['fa-award', 'Closing Ceremony', 'closing-ceremony.html']]);
-        nav.innerHTML = items.map(function (it) {
-          var active = PAGE.indexOf(it[2].replace('.html', '')) === 0;
+          ? [
+              ['fa-house', 'Dashboard', 'mentor-dashboard.html', ''],
+              ['fa-users', 'Mentee Saya', 'mentor-dashboard.html', '<span class="ml-auto bg-[#f97316] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">5</span>'],
+              ['fa-file-lines', 'Review Tugas', 'mentor-dashboard.html', pending ? '<span class="ml-auto bg-[#ef4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">' + pending + '</span>' : ''],
+              ['fa-comments', 'Berikan Feedback', 'mentor-dashboard.html', ''],
+              ['fa-chart-bar', 'Progress Grup', 'mentor-dashboard.html', ''],
+              ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
+            ]
+          : [
+              ['fa-gauge-high', 'Monitoring', 'admin-dashboard.html', ''],
+              ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
+            ];
+        var html = items.map(function (it) {
+          var active = it[2] === PAGE || (PAGE.indexOf('kpi-leaderboard') === 0 && it[1] === 'Leaderboard');
           return '<a href="' + it[2] + '" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ' +
             (active ? 'bg-[#1a5f4f] text-white' : 'text-white/60 hover:text-white hover:bg-white/10') + '">' +
-            '<i class="fa-solid ' + it[0] + ' w-4 text-center"></i> ' + it[1] + '</a>';
+            '<i class="fa-solid ' + it[0] + ' w-4 text-center"></i> ' + it[1] + it[3] + '</a>';
         }).join('');
+        html += '<div class="pt-3 pb-1"><p class="text-white/25 text-[10px] font-semibold tracking-widest uppercase px-3">Events</p></div>';
+        html += [['fa-star', 'Opening Ceremony', 'opening-ceremony.html'], ['fa-award', 'Closing Ceremony', 'closing-ceremony.html']].map(function (it) {
+          var active = it[2] === PAGE;
+          return '<a href="' + it[2] + '" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ' +
+            (active ? 'bg-[#f97316]/20 text-[#f97316]' : 'text-white/60 hover:text-white hover:bg-white/10') + '">' +
+            '<i class="fa-solid ' + it[0] + ' w-4 text-center text-[#f97316]"></i> ' + it[1] + '</a>';
+        }).join('');
+        nav.innerHTML = html;
         var out = document.createElement('a');
         out.href = 'login.html';
         out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
@@ -1911,22 +2068,28 @@
       return '<line x1="' + padL + '" y1="' + Y(v) + '" x2="' + (W - padR) + '" y2="' + Y(v) + '" stroke="#f1f5f9"/>' +
         '<text x="' + (padL - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end" font-size="10" fill="#cbd5e1">' + v + '</text>';
     }).join('');
-    var proj = '<line x1="' + X(1) + '" y1="' + Y(w2) + '" x2="' + X(3) + '" y2="' + Y(90.5) + '" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="5 5" opacity=".55"/>' +
-      '<text x="' + X(3) + '" y="' + (Y(90.5) - 10) + '" text-anchor="middle" font-size="10" fill="#8b5cf6">proyeksi</text>';
-    var tgt = '<line x1="' + padL + '" y1="' + Y(target) + '" x2="' + (W - padR) + '" y2="' + Y(target) + '" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 4"/>' +
-      '<text x="' + (W - padR) + '" y="' + (Y(target) - 6) + '" text-anchor="end" font-size="10" font-weight="700" fill="#f97316">🎯 target 90</text>';
+    // proyeksi: garis putus halus, TANPA label menumpuk di pojok
+    var proj = '<line x1="' + X(1) + '" y1="' + Y(w2) + '" x2="' + X(3) + '" y2="' + Y(90.5) + '" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="5 5" opacity=".45"/>';
+    // label target ditaruh di KIRI garis, sejajar, tidak menabrak proyeksi
+    var tgt = '<line x1="' + padL + '" y1="' + Y(target) + '" x2="' + (W - padR) + '" y2="' + Y(target) + '" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 4" opacity=".8"/>' +
+      '<rect x="' + (padL + 4) + '" y="' + (Y(target) - 9) + '" rx="7" width="66" height="15" fill="#fff7ed"/>' +
+      '<text x="' + (padL + 10) + '" y="' + (Y(target) + 2.5) + '" font-size="9.5" font-weight="700" fill="#f97316">TARGET 90</text>';
     var delta = (w2 - 81.5).toFixed(1);
     var sec = document.createElement('section');
     sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6';
     sec.innerHTML =
-      '<div class="flex items-center justify-between mb-2">' +
+      '<div class="flex items-center justify-between mb-3 flex-wrap gap-2">' +
       '<h2 class="text-[#2c3e50] text-sm font-bold">📈 Tren KPI Mingguan</h2>' +
       '<span class="text-[#22c55e] text-xs font-semibold bg-[#22c55e]/10 px-2.5 py-1 rounded-full">↑ +' + delta + ' poin sejak W1</span></div>' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">' +
+      '<div style="max-width:640px;margin:0 auto">' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">' +
       grid + tgt + proj +
       '<polyline points="' + line + '" fill="none" stroke="#1a5f4f" stroke-width="3" stroke-linecap="round"/>' +
-      dots + labels + '</svg>' +
-      '<p class="text-slate-400 text-xs mt-1">Skor KPI total per minggu · garis ungu = proyeksi jika konsisten · Diperbarui otomatis setiap penilaian mentor</p>';
+      dots + labels + '</svg></div>' +
+      '<div class="flex items-center justify-center gap-5 mt-2 flex-wrap">' +
+      '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:3px;background:#1a5f4f;border-radius:2px"></span>Skor mingguan</span>' +
+      '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #8b5cf6;opacity:.6"></span>Proyeksi jika konsisten</span>' +
+      '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #f97316"></span>Target program</span></div>';
     after.parentElement.insertBefore(sec, after.nextSibling);
   }
 
