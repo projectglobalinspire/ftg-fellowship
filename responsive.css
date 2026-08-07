@@ -46,7 +46,20 @@
     font-size: 16px;
     box-shadow: 0 4px 14px rgba(0, 0, 0, .3);
     cursor: pointer;
+    transition: left .25s ease, background .25s ease;
   }
+  /* Saat drawer terbuka: tombol X pindah ke sisi kanan drawer, tidak menutupi logo */
+  aside[data-design-id].ftg-open ~ .ftg-burger {
+    left: 252px;
+    background: #1a5f4f;
+  }
+
+  /* Drawer: sembunyikan scrollbar tebal Windows */
+  aside[data-design-id] { scrollbar-width: none; }
+  aside[data-design-id]::-webkit-scrollbar { width: 0; height: 0; }
+
+  /* Badge status koneksi tidak boleh menimpa drawer/isi drawer */
+  .ftg-conn { z-index: 70 !important; }
   .ftg-overlay.ftg-show {
     display: block;
     position: fixed;

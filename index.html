@@ -4,24 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FTG x GI Future Builders Fellowship 2026</title>
-  <link rel="icon" type="image/png" href="assets/ftg-logo.png">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-    .card-hover { transition: transform .2s ease, box-shadow .2s ease; }
-    .card-hover:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(0,0,0,.15); }
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-up { animation: fadeUp .6s ease both; }
-    .fade-up-2 { animation: fadeUp .6s .15s ease both; }
-    .fade-up-3 { animation: fadeUp .6s .3s ease both; }
-  </style>
   <meta name="theme-color" content="#2c3e50">
-  <link rel="stylesheet" href="responsive.css">
-  <script src="ftg-config.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script defer src="app.js"></script>
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="manifest" href="manifest.json">
@@ -33,92 +16,8 @@
   <meta property="og:url" content="https://ftg-fellowship.vercel.app/">
   <meta name="twitter:card" content="summary">
   <meta name="description" content="Platform pendampingan 3 bulan FaithToGrow x Global Inspire untuk 30 pemuda Bandung.">
+  <script>location.replace('login.html' + location.search);</script>
+  <meta http-equiv="refresh" content="0;url=login.html">
 </head>
-<body class="min-h-screen bg-[#2c3e50]">
-
-  <!-- Hero -->
-  <div class="relative overflow-hidden">
-    <div class="absolute inset-0 opacity-10 pointer-events-none">
-      <div class="w-[500px] h-[500px] rounded-full bg-[#f97316] absolute -right-40 -top-40"></div>
-      <div class="w-[400px] h-[400px] rounded-full bg-[#8b5cf6] absolute -left-32 top-64"></div>
-      <div class="w-[300px] h-[300px] rounded-full bg-[#1a5f4f] absolute right-40 bottom-0"></div>
-    </div>
-
-    <div class="relative max-w-5xl mx-auto px-6 pt-14 pb-10 text-center fade-up">
-      <div class="flex items-center justify-center gap-4 mb-6">
-        <div class="bg-white/95 rounded-2xl px-4 py-3"><img src="assets/ftg-logo.png" alt="Faith To Grow" class="h-12 w-auto"></div>
-        <span class="text-white/40 text-2xl font-thin">×</span>
-        <div class="bg-white/95 rounded-2xl px-4 py-3"><img src="assets/gi-logo.png" alt="Global Inspire" class="h-12 w-auto"></div>
-      </div>
-      <p class="text-[#f97316] text-xs font-bold tracking-[0.3em] uppercase mb-3">Faith To Grow × Global Inspire</p>
-      <h1 class="text-white text-4xl md:text-5xl font-extrabold mb-3 leading-tight">Future Builders<br>Fellowship 2026</h1>
-      <p class="text-white/60 text-sm md:text-base max-w-2xl mx-auto mb-8">Platform pendampingan 3 bulan untuk 30 pemuda terpilih Bandung — belajar GI Design Thinking, workshop Career & Entrepreneur, dengan mentor berpengalaman dan KPI yang terukur.</p>
-
-      <div class="flex items-center justify-center gap-6 md:gap-10 mb-10">
-        <div class="text-center"><p class="text-white text-3xl font-extrabold">30</p><p class="text-white/50 text-xs">Fellows</p></div>
-        <div class="w-px h-10 bg-white/15"></div>
-        <div class="text-center"><p class="text-white text-3xl font-extrabold">6</p><p class="text-white/50 text-xs">Mentor</p></div>
-        <div class="w-px h-10 bg-white/15"></div>
-        <div class="text-center"><p class="text-white text-3xl font-extrabold">8</p><p class="text-white/50 text-xs">Workshop</p></div>
-        <div class="w-px h-10 bg-white/15"></div>
-        <div class="text-center"><p class="text-white text-3xl font-extrabold">92</p><p class="text-white/50 text-xs">Hari</p></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Role cards -->
-  <div class="max-w-4xl mx-auto px-6 pb-10">
-    <p class="text-white/40 text-xs font-bold tracking-widest uppercase text-center mb-4 fade-up-2">Masuk sebagai</p>
-    <div class="grid md:grid-cols-2 gap-5 fade-up-2">
-
-      <!-- Mentee -->
-      <a href="login.html?role=mentee" class="card-hover block bg-white rounded-3xl p-7 text-left">
-        <div class="flex items-center justify-between mb-4">
-          <div class="w-14 h-14 rounded-2xl bg-[#f97316] flex items-center justify-center text-white font-extrabold text-xl">AR</div>
-          <span class="bg-[#f97316]/10 text-[#f97316] text-xs font-bold px-3 py-1 rounded-full">MENTEE</span>
-        </div>
-        <h2 class="text-[#2c3e50] text-xl font-extrabold mb-1">Arya Ramadhan</h2>
-        <p class="text-slate-500 text-sm mb-4">Fellow · Career Path · Bulan 1, Minggu 2</p>
-        <ul class="space-y-2 mb-5">
-          <li class="flex items-center gap-2 text-xs text-slate-600"><i class="fa-solid fa-brain text-[#8b5cf6] w-4"></i> GI Design Thinking Canvas interaktif</li>
-          <li class="flex items-center gap-2 text-xs text-slate-600"><i class="fa-solid fa-file-arrow-up text-[#f97316] w-4"></i> Kumpulkan tugas & dapat feedback mentor</li>
-          <li class="flex items-center gap-2 text-xs text-slate-600"><i class="fa-solid fa-trophy text-[#1a5f4f] w-4"></i> KPI leaderboard, badge & streak</li>
-        </ul>
-        <span class="inline-flex items-center gap-2 bg-[#1a5f4f] text-white text-sm font-bold px-5 py-2.5 rounded-xl">Masuk sebagai Mentee <i class="fa-solid fa-arrow-right text-xs"></i></span>
-      </a>
-
-      <!-- Mentor -->
-      <a href="login.html?role=mentor" class="card-hover block bg-[#1a5f4f] rounded-3xl p-7 text-left">
-        <div class="flex items-center justify-between mb-4">
-          <div class="w-14 h-14 rounded-2xl bg-white flex items-center justify-center text-[#1a5f4f] font-extrabold text-xl">BF</div>
-          <span class="bg-white/15 text-white text-xs font-bold px-3 py-1 rounded-full">MENTOR</span>
-        </div>
-        <h2 class="text-white text-xl font-extrabold mb-1">Bapak Faris</h2>
-        <p class="text-white/60 text-sm mb-4">Senior Mentor · 5 Mentee Aktif</p>
-        <ul class="space-y-2 mb-5">
-          <li class="flex items-center gap-2 text-xs text-white/80"><i class="fa-solid fa-users text-[#f97316] w-4"></i> Pantau progres 5 mentee real-time</li>
-          <li class="flex items-center gap-2 text-xs text-white/80"><i class="fa-solid fa-file-lines text-[#f97316] w-4"></i> Review & nilai tugas yang masuk</li>
-          <li class="flex items-center gap-2 text-xs text-white/80"><i class="fa-solid fa-comments text-[#f97316] w-4"></i> Kirim feedback langsung ke mentee</li>
-        </ul>
-        <span class="inline-flex items-center gap-2 bg-white text-[#1a5f4f] text-sm font-bold px-5 py-2.5 rounded-xl">Masuk sebagai Mentor <i class="fa-solid fa-arrow-right text-xs"></i></span>
-      </a>
-    </div>
-
-    <!-- Event shortcuts -->
-    <div class="grid md:grid-cols-2 gap-5 mt-5 fade-up-3">
-      <a href="opening-ceremony.html" class="card-hover flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl px-5 py-4">
-        <div class="w-10 h-10 rounded-xl bg-[#f97316]/20 flex items-center justify-center"><i class="fa-solid fa-star text-[#f97316]"></i></div>
-        <div class="flex-1"><p class="text-white text-sm font-bold">Opening Ceremony</p><p class="text-white/50 text-xs">1 Juni 2026 · Sudah berlangsung</p></div>
-        <i class="fa-solid fa-chevron-right text-white/30 text-xs"></i>
-      </a>
-      <a href="closing-ceremony.html" class="card-hover flex items-center gap-4 bg-white/5 border border-white/10 rounded-2xl px-5 py-4">
-        <div class="w-10 h-10 rounded-xl bg-[#8b5cf6]/20 flex items-center justify-center"><i class="fa-solid fa-award text-[#8b5cf6]"></i></div>
-        <div class="flex-1"><p class="text-white text-sm font-bold">Closing Ceremony & Demo Day</p><p class="text-white/50 text-xs">31 Agustus 2026 · Coming soon</p></div>
-        <i class="fa-solid fa-chevron-right text-white/30 text-xs"></i>
-      </a>
-    </div>
-
-    <p class="text-white/30 text-xs text-center mt-10 pb-6">Prototype — FaithToGrow × Global Inspire · Future Builders Fellowship 2026</p>
-  </div>
-</body>
+<body style="background:#2c3e50"></body>
 </html>
