@@ -74,6 +74,14 @@ FTG Fellowship 2026/
 
 Berkas sampai 20 MB didukung. Berkas di atas 5 MB memakai resumable upload. Jika OAuth belum dikonfigurasi atau izin dibatalkan, UI menandai lampiran sebagai **belum diunggah** dan tidak menyimpan isi berkas ke Supabase.
 
+### Alur akun Google dan akses mentor
+
+- Login FTG menentukan role aplikasi (mentee/mentor/admin).
+- Mentee dan mentor menghubungkan akun Google pada awal sesi; token Drive berumur pendek hanya hidup di memori tab.
+- Saat mentee mengunggah, aplikasi membuat permission `reader` khusus untuk email Google mentor yang tersimpan di `ftg_users`.
+- File tidak dibuat publik. Mentor yang terhubung dapat membuka preview atau mengunduh file dari modal review tugas.
+- Jalankan `setup-v3-google.sql` sekali untuk menambahkan kolom koneksi Google.
+
 ## Teknologi
 
 HTML + Tailwind CSS (CDN) + Vanilla JS, dengan Supabase untuk sinkronisasi state dan Google Drive untuk lampiran. `localStorage` dipakai sebagai cache/fallback tampilan, bukan tempat menyimpan isi berkas.

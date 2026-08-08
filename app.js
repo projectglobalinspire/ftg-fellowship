@@ -97,6 +97,19 @@
   function mySession() {
     try { return JSON.parse(localStorage.getItem('ftgSession') || 'null'); } catch (e) { return null; }
   }
+  function googleProfile() {
+    try {
+      var p = JSON.parse(sessionStorage.getItem('ftgGoogleProfile') || 'null');
+      var s = mySession();
+      return p && s && p.ftgEmail === s.email ? p : null;
+    } catch (e) { return null; }
+  }
+  function clearGoogleSession() {
+    try {
+      sessionStorage.removeItem('ftgDrive');
+      sessionStorage.removeItem('ftgGoogleProfile');
+    } catch (e) {}
+  }
   function myRole() { var s = mySession(); return (s && s.role) || ''; }
   function myMenteeId() {
     var s = mySession();
@@ -900,7 +913,7 @@
         out.addEventListener('click', function (e) {
           e.preventDefault();
           localStorage.removeItem('ftgSession');
-          sessionStorage.removeItem('ftgDrive');
+          clearGoogleSession();
           location.replace('login.html');
         });
         nav.appendChild(out);
@@ -1026,7 +1039,7 @@
           a.addEventListener('click', function (e) {
             e.preventDefault();
             localStorage.removeItem('ftgSession');
-            sessionStorage.removeItem('ftgDrive');
+            clearGoogleSession();
             location.replace('login.html');
           });
         }
@@ -1063,7 +1076,7 @@
       out.addEventListener('click', function (e) {
         e.preventDefault();
         localStorage.removeItem('ftgSession');
-        sessionStorage.removeItem('ftgDrive');
+        clearGoogleSession();
         location.replace('login.html');
       });
       nav.appendChild(out);
@@ -1492,18 +1505,103 @@
      menyimpan tautannya (ringan). Folder dibuat otomatis & rapi:
        FTG Fellowship 2026 / Mentee / <Nama> / Minggu <N>
      ================================================================ */
-  var DRIVE = { token: null, expires: 0, tc: null };
+  var DRIVE = { token: null, expires: 0, tc: null, profile: null };
   function driveConfigured() { return !!(window.FTG_CONF && FTG_CONF.driveClientId); }
   function driveReady() { return DRIVE.token && Date.now() < DRIVE.expires; }
 
+  function googleIdentity() {
+    return fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: 'Bearer ' + DRIVE.token }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Identitas akun Google tidak dapat dibaca');
+      return r.json();
+    }).then(function (p) {
+      if (!p || !p.email) throw new Error('Email Google tidak ditemukan');
+      var s = mySession() || {};
+      DRIVE.profile = {
+        email: p.email,
+        name: p.name || p.email,
+        picture: p.picture || '',
+        ftgEmail: s.email || '',
+        role: s.role || '',
+        connectedAt: new Date().toISOString()
+      };
+      sessionStorage.setItem('ftgGoogleProfile', JSON.stringify(DRIVE.profile));
+      if (sb && s.email) {
+        return sb.from('ftg_users').update({
+          google_email: DRIVE.profile.email,
+          google_connected_at: DRIVE.profile.connectedAt
+        }).eq('email', s.email).then(function () { return DRIVE.profile; });
+      }
+      return DRIVE.profile;
+    });
+  }
+
+  function googleStatusBadge(profile) {
+    if (!profile || document.getElementById('ftg-google-status')) return;
+    var badge = document.createElement('div');
+    badge.id = 'ftg-google-status';
+    badge.title = 'Akun Google terhubung untuk sesi ini';
+    badge.style.cssText = 'position:fixed;right:16px;top:12px;z-index:55;display:flex;align-items:center;gap:7px;max-width:260px;background:#fff;border:1px solid #bbf7d0;box-shadow:0 6px 22px rgba(15,23,42,.12);border-radius:999px;padding:7px 12px;color:#166534;font-size:11px;font-weight:700;';
+    badge.innerHTML = '<i class="fa-brands fa-google-drive"></i><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(profile.email) + '</span>';
+    document.body.appendChild(badge);
+  }
+
+  function mountGoogleGate() {
+    var role = myRole();
+    var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
+      (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE));
+    if (!needsGate || document.getElementById('ftg-google-gate')) return;
+    var existing = googleProfile();
+    if (existing) { googleStatusBadge(existing); return; }
+    var mentor = role === 'mentor';
+    var gate = document.createElement('div');
+    gate.id = 'ftg-google-gate';
+    gate.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    gate.innerHTML = '<section role="dialog" aria-modal="true" aria-labelledby="ftg-google-title" style="width:min(440px,100%);background:#fff;border-radius:22px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.28);text-align:center">' +
+      '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:18px;background:#e8f5ef;color:#1a5f4f;display:grid;place-items:center;font-size:28px"><i class="fa-brands fa-google-drive"></i></div>' +
+      '<h2 id="ftg-google-title" style="font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px">Hubungkan akun Google</h2>' +
+      '<p style="font-size:13px;line-height:1.6;color:#64748b;margin-bottom:18px">' +
+      (mentor ? 'Wajib untuk membuka dan mengunduh berkas tugas yang dibagikan mentee. Pastikan memakai akun Google mentor.' : 'Akun Google diperlukan agar berkas tugas dapat diunggah ke Drive dan dibagikan secara privat kepada mentor.') +
+      '</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#475569">File tidak dibuat publik. Akses hanya diberikan kepada akun Google mentor yang terhubung.</div>' +
+      '<button id="btn-google-gate" type="button" style="width:100%;border:0;border-radius:12px;background:#1a5f4f;color:#fff;padding:12px 16px;font-size:13px;font-weight:800;cursor:pointer"><i class="fa-brands fa-google mr-2"></i> Lanjutkan dengan Google</button>' +
+      '<button id="btn-google-logout" type="button" style="margin-top:9px;width:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;color:#64748b;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer">Keluar / ganti akun FTG</button>' +
+      '<p id="ftg-google-error" style="display:none;color:#dc2626;font-size:11px;margin-top:10px"></p></section>';
+    document.body.appendChild(gate);
+    var connect = document.getElementById('btn-google-gate');
+    document.getElementById('btn-google-logout').addEventListener('click', function () {
+      localStorage.removeItem('ftgSession');
+      clearGoogleSession();
+      location.replace('login.html');
+    });
+    connect.addEventListener('click', function () {
+      connect.disabled = true;
+      connect.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menghubungkan...';
+      driveAuth()
+        .then(function () {
+          googleStatusBadge(DRIVE.profile);
+          gate.remove();
+          toast('Google terhubung sebagai ' + DRIVE.profile.email, '✅');
+        })
+        .catch(function (err) {
+          var msg = document.getElementById('ftg-google-error');
+          msg.textContent = err.message;
+          msg.style.display = 'block';
+          connect.disabled = false;
+          connect.innerHTML = '<i class="fa-brands fa-google mr-2"></i> Coba Hubungkan Lagi';
+        });
+    });
+  }
+
   function mountDriveConnect(anchor) {
-    if (!anchor || byId('btn-connect-drive')) return;
+    if (!anchor || document.getElementById('btn-connect-drive')) return;
     var btn = document.createElement('button');
     btn.id = 'btn-connect-drive';
     btn.type = 'button';
     btn.className = 'ftg-drive-connect';
     btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;gap:7px;margin:8px 8px 0 0;padding:9px 14px;border:1px solid #1a5f4f;border-radius:10px;background:#fff;color:#1a5f4f;font-size:12px;font-weight:700;cursor:pointer;';
-    btn.innerHTML = '<i class="fa-brands fa-google-drive"></i><span>Hubungkan Google Drive</span>';
+    var gp = googleProfile();
+    btn.innerHTML = '<i class="fa-brands fa-google-drive"></i><span>' + (gp ? 'Siapkan Drive untuk upload' : 'Hubungkan Google Drive') + '</span>';
     anchor.parentElement.insertBefore(btn, anchor);
     btn.addEventListener('click', function () {
       if (!driveConfigured()) {
@@ -1530,12 +1628,14 @@
     return new Promise(function (resolve, reject) {
       if (!driveConfigured()) { reject(new Error('Drive belum dikonfigurasi')); return; }
       if (force) { DRIVE.token = null; DRIVE.expires = 0; }
-      if (driveReady()) { resolve(DRIVE.token); return; }
+      if (driveReady() && DRIVE.profile) { resolve(DRIVE.token); return; }
       if (!window.google || !google.accounts || !google.accounts.oauth2) { reject(new Error('Google SDK belum siap')); return; }
       if (!DRIVE.tc) {
+        var scopes = 'https://www.googleapis.com/auth/userinfo.email' +
+          (myRole() === 'mentee' ? ' https://www.googleapis.com/auth/drive.file' : '');
         DRIVE.tc = google.accounts.oauth2.initTokenClient({
           client_id: FTG_CONF.driveClientId,
-          scope: 'https://www.googleapis.com/auth/drive.file',
+          scope: scopes,
           callback: function () {}
         });
       }
@@ -1543,7 +1643,7 @@
         if (resp && resp.access_token) {
           DRIVE.token = resp.access_token;
           DRIVE.expires = Date.now() + (resp.expires_in || 3600) * 1000 - 60000;
-          resolve(DRIVE.token);
+          googleIdentity().then(function () { resolve(DRIVE.token); }).catch(reject);
         } else reject(new Error((resp && resp.error) === 'access_denied' ? 'Izin Drive dibatalkan' : 'Izin Drive gagal'));
       };
       DRIVE.tc.error_callback = function (err) {
@@ -1584,6 +1684,28 @@
   function driveApi(path, opts) {
     return driveRequest('https://www.googleapis.com/drive/v3/' + path, opts, true);
   }
+
+  function mentorGoogleEmail() {
+    var fixed = window.FTG_CONF && FTG_CONF.mentorGoogleEmail;
+    if (fixed) return Promise.resolve(fixed);
+    if (!sb) return Promise.resolve('');
+    return sb.from('ftg_users').select('google_email').eq('email', 'faris@ftg.id').maybeSingle()
+      .then(function (res) { return (res.data && res.data.google_email) || ''; })
+      .catch(function () { return ''; });
+  }
+
+  function shareDriveFileWithMentor(fileId) {
+    return mentorGoogleEmail().then(function (email) {
+      if (!email) return { shared: false, reason: 'Mentor belum menghubungkan akun Google' };
+      if (DRIVE.profile && DRIVE.profile.email === email) return { shared: true, email: email };
+      return driveApi('files/' + encodeURIComponent(fileId) + '/permissions?sendNotificationEmail=false&fields=id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'user', role: 'reader', emailAddress: email })
+      }).then(function () { return { shared: true, email: email }; })
+        .catch(function (err) { return { shared: false, email: email, reason: err.message }; });
+    });
+  }
   /* cari folder bernama X di dalam parent; buat kalau belum ada */
   function driveFolder(name, parentId) {
     var q = "mimeType='application/vnd.google-apps.folder' and name='" + name.replace(/'/g, "\\'") + "' and trashed=false" +
@@ -1621,7 +1743,7 @@
       file,
       '\r\n--' + boundary + '--'
     ], { type: 'multipart/related; boundary=' + boundary });
-    return driveRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', {
+    return driveRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,size,mimeType', {
       method: 'POST',
       headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
       body: body
@@ -1630,7 +1752,7 @@
 
   /* Drive merekomendasikan resumable upload untuk berkas di atas 5 MB. */
   function driveUploadResumable(file, meta, mayRetry) {
-    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink,size', {
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink,webContentLink,size,mimeType', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + DRIVE.token,
@@ -1707,8 +1829,26 @@
         .then(function () { return driveFolderPath(menteeName, week); })
         .then(function (folderId) { return driveUpload(f, folderId); })
         .then(function (res) {
-          record({ driveId: res.id, link: res.webViewLink });
-          toast('Tersimpan di Drive → ' + menteeName + ' / ' + week, '✅');
+          return shareDriveFileWithMentor(res.id).then(function (sharing) {
+            return { file: res, sharing: sharing };
+          });
+        })
+        .then(function (result) {
+          var res = result.file, sharing = result.sharing;
+          record({
+            driveId: res.id,
+            link: res.webViewLink,
+            downloadLink: res.webContentLink || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(res.id)),
+            mimeType: res.mimeType || f.type || '',
+            googleOwnerEmail: DRIVE.profile && DRIVE.profile.email,
+            sharedWithMentor: !!sharing.shared,
+            sharePending: !sharing.shared,
+            shareReason: sharing.reason || ''
+          });
+          toast(sharing.shared
+            ? 'Tersimpan di Drive dan akses mentor sudah diberikan'
+            : 'Tersimpan di Drive, tetapi akses mentor tertunda: ' + sharing.reason,
+            sharing.shared ? '✅' : '⚠️');
         })
         .catch(function (err) {
           record({ pending: true, pendingReason: err.message });
@@ -1966,7 +2106,11 @@
         var meta = f && typeof f === 'object' ? f : {};
         var nm = meta.name || f;
         var link = typeof meta.link === 'string' ? meta.link : '';
-        if (link) return '<a href="' + esc(link) + '" target="_blank" rel="noopener" title="' + esc(meta.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#1a5f4f;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📄 ' + esc(nm) + ' ↗ Drive</a>';
+        var download = meta.downloadLink || (meta.driveId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(meta.driveId) : '');
+        if (link && meta.sharedWithMentor !== false) return '<span title="' + esc(meta.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#e8f5ef;color:#166534;font-size:11px;font-weight:700;padding:5px 8px 5px 12px;border-radius:12px;margin:0 6px 6px 0">📄 ' + esc(nm) +
+          '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="background:#1a5f4f;color:#fff;border-radius:8px;padding:5px 8px;text-decoration:none">Lihat</a>' +
+          (download ? '<a href="' + esc(download) + '" target="_blank" rel="noopener" style="background:#fff;color:#1a5f4f;border:1px solid #86efac;border-radius:8px;padding:4px 8px;text-decoration:none">Unduh</a>' : '') + '</span>';
+        if (link && meta.sharedWithMentor === false) return '<span title="' + esc(meta.shareReason || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#c2410c;font-size:11px;font-weight:700;padding:7px 11px;border-radius:10px;margin:0 6px 6px 0">📄 ' + esc(nm) + ' · akses mentor tertunda</span>';
         return '<span title="' + esc((meta.folder || '') + (meta.pendingReason ? ' — ' + meta.pendingReason : '')) + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + ' · belum diunggah</span>';
       }).join('') +
       links.map(function (l) {
@@ -2892,6 +3036,7 @@
     try { if (PAGE.indexOf('assignment-submission') === 0) insertAssignmentSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentor-feedback') === 0) insertFeedbackSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
+    try { mountGoogleGate(); } catch (e) { console.warn(e); }
   }
 
   /* ---------- Tanggal hidup: workshop & deadline mengikuti hari ini ---------- */

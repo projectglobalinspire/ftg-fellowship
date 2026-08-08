@@ -11,5 +11,9 @@ window.FTG_CONF = {
      Selama kosong, berkas hanya dicatat namanya (tidak diunggah). */
   driveClientId: '916717961665-f05tp163cvq5vf04iljr1b29dkumfohh.apps.googleusercontent.com',
   driveRootFolder: 'FTG Fellowship 2026',
-  driveMaxFileSizeMb: 20
+  driveMaxFileSizeMb: 20,
+
+  /* Opsional. Jika kosong, email Google mentor diambil dari ftg_users setelah
+     Pak Faris menghubungkan akun Google di dashboard mentor. */
+  mentorGoogleEmail: ''
 };
