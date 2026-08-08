@@ -1615,37 +1615,6 @@
     });
   }
 
-  function mountDriveConnect(anchor) {
-    if (!anchor || document.getElementById('btn-connect-drive')) return;
-    var btn = document.createElement('button');
-    btn.id = 'btn-connect-drive';
-    btn.type = 'button';
-    btn.className = 'ftg-drive-connect';
-    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;gap:7px;margin:8px 8px 0 0;padding:9px 14px;border:1px solid #1a5f4f;border-radius:10px;background:#fff;color:#1a5f4f;font-size:12px;font-weight:700;cursor:pointer;';
-    var gp = googleProfile();
-    btn.innerHTML = '<i class="fa-brands fa-google-drive"></i><span>' + (gp ? 'Siapkan Drive untuk upload' : 'Hubungkan Google Drive') + '</span>';
-    anchor.parentElement.insertBefore(btn, anchor);
-    btn.addEventListener('click', function () {
-      if (!driveConfigured()) {
-        toast('Google Drive belum dikonfigurasi oleh panitia', '⚠️');
-        return;
-      }
-      btn.disabled = true;
-      btn.setAttribute('aria-busy', 'true');
-      driveAuth()
-        .then(function () {
-          btn.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Drive tersambung</span>';
-          btn.style.background = '#e8f5ef';
-          toast('Google Drive tersambung. Silakan pilih berkas untuk diunggah', '✅');
-        })
-        .catch(function (err) { toast('Drive belum tersambung: ' + err.message, '⚠️'); })
-        .then(function () {
-          btn.disabled = false;
-          btn.removeAttribute('aria-busy');
-        });
-    });
-  }
-
   function driveAuth(force) {
     return new Promise(function (resolve, reject) {
       if (!driveConfigured()) { reject(new Error('Drive belum dikonfigurasi')); return; }
@@ -1803,7 +1772,6 @@
 
   /* Pilih berkas → unggah ke Drive (folder per mentee & per minggu). */
   function wireFilePicker(btn, onAdd) {
-    mountDriveConnect(btn);
     var inp = document.createElement('input');
     inp.type = 'file';
     inp.style.display = 'none';
