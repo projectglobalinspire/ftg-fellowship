@@ -1569,9 +1569,10 @@
 
   function mountGoogleGate() {
     var role = myRole();
-    // Mentor wajib terhubung agar dapat membuka lampiran privat. Mentee tetap
-    // bisa belajar dan mengumpulkan refleksi; OAuth baru diminta saat upload.
-    var needsGate = role === 'mentor' && IS_MENTOR_PAGE;
+    // Mentor dan mentee wajib menghubungkan Google pada alur utama. Dengan
+    // begitu akses Drive sudah siap sebelum proses unggah/review dimulai.
+    var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
+      (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE));
     if (!needsGate || document.getElementById('ftg-google-gate')) return;
     var existing = googleProfile();
     if (existing) { googleStatusBadge(existing); return; }
