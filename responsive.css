@@ -244,12 +244,16 @@ main[data-design-id] header {
 }
 
 /* ---------- Cetak / Unduh Laporan (PDF) ---------- */
+#printRekap { display: none; }
 @media print {
   aside, .ftg-burger, .ftg-overlay, .ftg-conn,
   main header button, header .relative, header .rounded-full { display: none !important; }
   main[data-design-id] { margin-left: 0 !important; }
   body { background: #fff !important; }
   section { break-inside: avoid; }
+  /* mode Rekap Nilai: hanya dokumen rekap yang dicetak */
+  body.ftg-rekap main, body.ftg-rekap aside { display: none !important; }
+  body.ftg-rekap #printRekap { display: block !important; }
 }
 
 /* ---------- iPad landscape / laptop kecil (sidebar tampil) ---------- */

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jurnal Saya – FTG x GI Fellowship</title>
+  <meta name="theme-color" content="#2c3e50">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; } textarea { outline: none; resize: none; }</style>
+  <link rel="stylesheet" href="responsive.css">
+  <script src="ftg-config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script defer src="app.js"></script>
+</head>
+<body class="min-h-screen bg-[#f8fafc] flex">
+
+  <aside data-design-id="sidebar-jurnal-a1b2c3" class="w-[240px] min-h-[900px] bg-[#2c3e50] flex flex-col fixed left-0 top-0">
+    <div class="px-5 py-5 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <img src="assets/ftg-logo.png" alt="FTG" class="h-9 w-auto">
+        <span class="text-white/40 text-lg font-thin">×</span>
+        <img src="assets/gi-logo.png" alt="GI" class="h-8 w-auto">
+      </div>
+      <p class="text-white/40 text-[10px] font-medium tracking-widest uppercase mt-2">Future Builders Fellowship</p>
+    </div>
+    <div class="mx-4 mt-4 bg-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-[#f97316] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">AR</div>
+      <div class="min-w-0">
+        <p class="text-white text-sm font-semibold truncate">Arya Ramadhan</p>
+        <p class="text-white/50 text-xs truncate">Career Path</p>
+      </div>
+    </div>
+    <nav data-design-id="nav-jurnal-sidebar-d4e5f6" class="flex-1 px-3 pt-5 space-y-0.5">
+      <a href="mentee-dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-house w-4 text-center"></i> Dashboard</a>
+      <a href="design-thinking-module.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-brain w-4 text-center"></i> Design Thinking</a>
+      <a href="workshop-library.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-chalkboard-user w-4 text-center"></i> Workshop Library</a>
+      <a href="assignment-submission.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-file-arrow-up w-4 text-center"></i> Submit Tugas</a>
+      <a href="progress-tracker.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-chart-line w-4 text-center"></i> Progress Saya</a>
+      <a href="jurnal.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#1a5f4f] text-white text-sm font-medium"><i class="fa-solid fa-book w-4 text-center"></i> Jurnal Saya</a>
+      <a href="mentor-feedback.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-comments w-4 text-center"></i> Feedback Mentor</a>
+      <a href="kpi-leaderboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-trophy w-4 text-center"></i> Leaderboard</a>
+      <div class="pt-3 pb-1"><p class="text-white/25 text-[10px] font-semibold tracking-widest uppercase px-3">Events</p></div>
+      <a href="opening-ceremony.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-star w-4 text-center text-[#f97316]"></i> Opening Ceremony</a>
+      <a href="closing-ceremony.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-award w-4 text-center text-[#f97316]"></i> Closing Ceremony</a>
+    </nav>
+  </aside>
+
+  <main data-design-id="main-jurnal-g7h8i9" class="ml-[240px] flex-1 min-h-[900px]">
+    <header data-design-id="header-jurnal-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4">
+      <h1 class="text-[#2c3e50] text-xl font-bold">📓 Jurnal Saya</h1>
+      <p class="text-slate-500 text-sm">Ruang refleksi pribadimu — hanya kamu yang bisa membacanya</p>
+    </header>
+
+    <div class="px-8 py-6">
+      <div class="grid grid-cols-3 gap-6">
+        <div class="col-span-2 space-y-5">
+          <!-- Entri hari ini -->
+          <section data-design-id="jurnal-today-m4n5o6" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <h2 class="text-[#2c3e50] text-base font-bold">✍️ Refleksi Hari Ini</h2>
+              <span class="text-slate-400 text-xs" id="jrnDate"></span>
+            </div>
+            <p class="text-slate-500 text-xs mb-4">Apa yang kamu pelajari hari ini? Apa yang membuatmu bersyukur? Tersimpan otomatis.</p>
+            <textarea id="jrnToday" rows="8" placeholder="Mulai menulis di sini... (contoh: Hari ini aku sadar bahwa mendengarkan itu lebih sulit dari berbicara...)"
+              class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-[#2c3e50] placeholder-slate-300 leading-relaxed"></textarea>
+            <div class="flex items-center justify-between mt-2">
+              <span class="text-slate-400 text-xs" id="jrnCount">0 kata</span>
+              <span class="text-[#22c55e] text-xs font-semibold" id="jrnSaved"></span>
+            </div>
+          </section>
+
+          <!-- Entri sebelumnya -->
+          <section data-design-id="jurnal-list-p7q8r9" class="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h2 class="text-[#2c3e50] text-base font-bold mb-4">🗂 Entri Sebelumnya</h2>
+            <div id="jrnList" class="space-y-3"></div>
+          </section>
+        </div>
+
+        <div class="space-y-5">
+          <section class="bg-[#1a5f4f] rounded-2xl p-5">
+            <h3 class="text-white text-sm font-bold mb-3">🌙 Kenapa Menulis Jurnal?</h3>
+            <ul class="space-y-2">
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Muhasabah harian — inti dari prophetic design thinking</p></li>
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">Refleksi rutin membuat tugas mingguanmu jauh lebih dalam</p></li>
+              <li class="flex items-start gap-2"><i class="fa-solid fa-check-circle text-[#f97316] mt-0.5 text-xs"></i><p class="text-white/80 text-xs">100% privat — mentor & panitia tidak bisa membacanya</p></li>
+            </ul>
+          </section>
+
+          <section class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <h3 class="text-[#2c3e50] text-sm font-bold mb-3">📊 Statistik Jurnal</h3>
+            <div class="space-y-2" id="jrnStats"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

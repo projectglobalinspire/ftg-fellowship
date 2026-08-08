@@ -20,7 +20,11 @@
     messages: [],        // chat mentee <-> mentor: { from, fromName, text, at }
     events: [],          // notifikasi: { icon, text, forRole, at, read }
     session1on1: null,   // jadwal sesi: { date, time, note, by, at }
-    loginDays: []        // tanggal login (YYYY-MM-DD) utk streak sungguhan
+    loginDays: [],       // tanggal login (YYYY-MM-DD) utk streak sungguhan
+    ideate: ['', '', ''],// kolom IDEATE (terbuka setelah W2 dinilai)
+    w3Celebrated: false, // perayaan pembukaan W3 sudah ditampilkan?
+    journal: [],         // jurnal pribadi: { date: 'YYYY-MM-DD', text, at }
+    targets: []          // target mingguan pribadi: { text, done }
   };
 
   /* Konten demo — terisi otomatis saat pertama kali dibuka (atau setelah
@@ -450,6 +454,128 @@
     }
   }
 
+  /* ================================================================
+     PAGE: JURNAL PRIBADI (mentee) — autosave, 100% privat
+     ================================================================ */
+  function initJournal() {
+    var ta = $('#jrnToday');
+    if (!ta) return;
+    var today = new Date().toISOString().slice(0, 10);
+    var dateEl = $('#jrnDate');
+    if (dateEl) dateEl.textContent = todayStr();
+    S.journal = S.journal || [];
+    var entry = S.journal.filter(function (e) { return e.date === today; })[0];
+    if (entry) ta.value = entry.text;
+    var cnt = $('#jrnCount'), saved = $('#jrnSaved');
+    function refreshCount() { if (cnt) cnt.textContent = wordCount(ta.value) + ' kata'; }
+    refreshCount();
+    var t;
+    ta.addEventListener('input', function () {
+      refreshCount();
+      clearTimeout(t);
+      t = setTimeout(function () {
+        if (!entry) { entry = { date: today, text: '', at: new Date().toISOString() }; S.journal.push(entry); }
+        entry.text = ta.value;
+        entry.at = new Date().toISOString();
+        saveState();
+        if (saved) {
+          saved.textContent = '✓ Tersimpan otomatis';
+          setTimeout(function () { saved.textContent = ''; }, 2000);
+        }
+        renderStats();
+      }, 800);
+    });
+
+    function renderList() {
+      var list = $('#jrnList');
+      if (!list) return;
+      var prev = S.journal.filter(function (e) { return e.date !== today && e.text.trim(); })
+        .sort(function (a, b) { return b.date < a.date ? -1 : 1; });
+      list.innerHTML = prev.length ? prev.map(function (e, i) {
+        var d = new Date(e.date + 'T12:00:00');
+        return '<div class="bg-slate-50 rounded-xl p-4">' +
+          '<div class="flex items-center justify-between mb-1">' +
+          '<p class="text-[#1a5f4f] text-xs font-bold">' + d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }) + '</p>' +
+          '<button type="button" data-jdel="' + e.date + '" class="text-slate-300 hover:text-[#ef4444] text-xs" style="border:0;background:none;cursor:pointer">hapus</button></div>' +
+          '<p class="text-slate-600 text-xs leading-relaxed" style="white-space:pre-wrap">' + esc(e.text) + '</p></div>';
+      }).join('') : '<p class="text-slate-400 text-xs">Belum ada entri sebelumnya. Jurnal pertamamu dimulai hari ini! 🌱</p>';
+      $all('[data-jdel]', list).forEach(function (b) {
+        b.addEventListener('click', function () {
+          var dd = b.getAttribute('data-jdel');
+          S.journal = S.journal.filter(function (e) { return e.date !== dd; });
+          saveState(); renderList(); renderStats();
+          toast('Entri dihapus', '🗑');
+        });
+      });
+    }
+    function renderStats() {
+      var el = $('#jrnStats');
+      if (!el) return;
+      var entries = S.journal.filter(function (e) { return e.text.trim(); });
+      var words = entries.reduce(function (a, e) { return a + wordCount(e.text); }, 0);
+      el.innerHTML =
+        '<div class="flex justify-between text-xs"><span class="text-slate-600">Total entri</span><span class="font-bold text-[#1a5f4f]">' + entries.length + '</span></div>' +
+        '<div class="flex justify-between text-xs"><span class="text-slate-600">Total kata ditulis</span><span class="font-bold text-[#8b5cf6]">' + words + '</span></div>' +
+        '<div class="flex justify-between text-xs"><span class="text-slate-600">Streak login</span><span class="font-bold text-[#f97316]">' + computeStreak(S.loginDays || []) + ' hari 🔥</span></div>';
+    }
+    renderList();
+    renderStats();
+  }
+
+  /* ---------- Target mingguan pribadi (mentee) ---------- */
+  function insertTargetsCard() {
+    var anchor = byId('weekly-checklist');
+    if (!anchor) return;
+    var sec = document.createElement('section');
+    sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mt-6';
+    anchor.parentElement.parentElement.appendChild(sec); // full-width di bawah grid badge+checklist
+    function render() {
+      var tgs = S.targets || [];
+      var rows = tgs.map(function (t, i) {
+        return '<div class="flex items-center gap-3 p-2.5 rounded-xl ' + (t.done ? 'bg-[#22c55e]/5' : 'bg-slate-50') + '">' +
+          '<button type="button" data-tgl="' + i + '" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:0;' + (t.done ? 'background:#22c55e' : 'background:#fff;border:2px solid #cbd5e1') + '">' + (t.done ? '<i class="fa-solid fa-check" style="color:#fff;font-size:10px"></i>' : '') + '</button>' +
+          '<span class="flex-1 text-xs ' + (t.done ? 'text-[#16a34a] line-through opacity-75' : 'text-[#2c3e50]') + '">' + esc(t.text) + '</span>' +
+          '<button type="button" data-tdel="' + i + '" class="text-slate-300 hover:text-[#ef4444] text-xs" style="border:0;background:none;cursor:pointer">✕</button></div>';
+      }).join('');
+      var done = tgs.filter(function (t) { return t.done; }).length;
+      sec.innerHTML =
+        '<div class="flex items-center justify-between mb-1 flex-wrap gap-2">' +
+        '<h3 class="text-[#2c3e50] text-sm font-bold">🎯 Target Pribadi Minggu Ini</h3>' +
+        '<span class="text-slate-400 text-xs">' + (tgs.length ? done + '/' + tgs.length + ' tercapai · terlihat oleh mentormu' : 'maks. 3 target · terlihat oleh mentormu') + '</span></div>' +
+        '<p class="text-slate-500 text-xs mb-3">Tulis komitmen kecilmu sendiri — bahan obrolan sesi 1-on-1 dengan mentor.</p>' +
+        '<div class="space-y-2 mb-3">' + (rows || '<p class="text-slate-400 text-xs py-1">Belum ada target. Tulis yang pertama! 💪</p>') + '</div>' +
+        (tgs.length < 3
+          ? '<div class="flex gap-2"><input id="tgInput" type="text" maxlength="90" placeholder="cth: Wawancara 2 narasumber sebelum Jumat" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-[#2c3e50] outline-none">' +
+            '<button type="button" id="tgAdd" class="bg-[#8b5cf6] text-white text-xs font-bold px-4 py-2.5 rounded-xl">Tambah</button></div>'
+          : '<p class="text-slate-400 text-[10px]">Maksimal 3 target per minggu — fokus itu kunci. ✨</p>');
+      $all('[data-tgl]', sec).forEach(function (b) {
+        b.addEventListener('click', function () {
+          var t = S.targets[+b.getAttribute('data-tgl')];
+          t.done = !t.done;
+          if (t.done) confetti();
+          saveState(); render();
+        });
+      });
+      $all('[data-tdel]', sec).forEach(function (b) {
+        b.addEventListener('click', function () { S.targets.splice(+b.getAttribute('data-tdel'), 1); saveState(); render(); });
+      });
+      var add = $('#tgAdd', sec);
+      if (add) {
+        var inp = $('#tgInput', sec);
+        var doAdd = function () {
+          var v = inp.value.trim();
+          if (!v) { toast('Tulis targetnya dulu ya', '✏️'); return; }
+          S.targets.push({ text: v, done: false });
+          saveState(); render();
+          toast('Target ditambahkan — semangat!', '🎯');
+        };
+        add.addEventListener('click', doAdd);
+        inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') doAdd(); });
+      }
+    }
+    render();
+  }
+
   /* ---------- Unduh laporan progres (cetak/PDF) ---------- */
   function insertPrintButton() {
     var header = $('main header');
@@ -784,6 +910,68 @@
     col.appendChild(tips);
   }
 
+  /* ---------- Rekap Nilai PDF (halaman Review Tugas mentor) ---------- */
+  function insertRekapButton() {
+    var header = $('main header');
+    if (!header) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'bg-[#1a5f4f] text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#155242] flex-shrink-0';
+    btn.innerHTML = '<i class="fa-solid fa-file-arrow-down mr-1.5"></i>Unduh Rekap Nilai';
+    header.style.display = 'flex';
+    header.style.alignItems = 'center';
+    header.style.justifyContent = 'space-between';
+    header.appendChild(btn);
+    btn.addEventListener('click', function () {
+      var old = $('#printRekap');
+      if (old) old.remove();
+      var rows = '';
+      var scores = [];
+      for (var i = 1; i <= 5; i++) {
+        var m = MENTEES[i], st = mstate(i);
+        var w1 = (st.reviews && st.reviews.w1) ? st.reviews.w1.score : (i === 1 ? 87 : '—');
+        var w2 = st.reviewW2 ? st.reviewW2.score : (st.submittedW2 ? 'Menunggu' : 'Belum kumpul');
+        if (typeof w1 === 'number') scores.push(w1);
+        if (st.reviewW2) scores.push(st.reviewW2.score);
+        var avg = [];
+        if (typeof w1 === 'number') avg.push(w1);
+        if (st.reviewW2) avg.push(st.reviewW2.score);
+        rows += '<tr>' +
+          '<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0"><b>' + m.name + '</b><br><span style="color:#64748b;font-size:11px">' + m.path + '</span></td>' +
+          '<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center">' + w1 + '</td>' +
+          '<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center">' + w2 + '</td>' +
+          '<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-weight:700;color:#1a5f4f">' + (avg.length ? Math.round(avg.reduce(function (a, b) { return a + b; }, 0) / avg.length) : '—') + '</td>' +
+          '<td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:11px">' + (st.reviewW2 ? '✅ Lengkap' : (st.submittedW2 ? '🕐 Perlu review' : '⚠️ Menunggu tugas')) + '</td></tr>';
+      }
+      var avgAll = scores.length ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length) : '—';
+      var div = document.createElement('div');
+      div.id = 'printRekap';
+      div.innerHTML =
+        '<div style="font-family:Inter,Arial,sans-serif;padding:24px">' +
+        '<h1 style="font-size:20px;font-weight:800;color:#2c3e50;margin-bottom:2px">Rekap Nilai Mentee — Bulan 1, Minggu 2</h1>' +
+        '<p style="font-size:12px;color:#64748b;margin-bottom:16px">FTG × GI Future Builders Fellowship 2026 · Mentor: Bapak Faris · Dicetak ' + todayStr() + '</p>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<thead><tr style="background:#f8fafc">' +
+        '<th style="padding:9px 12px;text-align:left;border-bottom:2px solid #1a5f4f">Mentee</th>' +
+        '<th style="padding:9px 12px;text-align:center;border-bottom:2px solid #1a5f4f">Nilai W1</th>' +
+        '<th style="padding:9px 12px;text-align:center;border-bottom:2px solid #1a5f4f">Nilai W2</th>' +
+        '<th style="padding:9px 12px;text-align:center;border-bottom:2px solid #1a5f4f">Rata-rata</th>' +
+        '<th style="padding:9px 12px;text-align:center;border-bottom:2px solid #1a5f4f">Status</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' +
+        '<p style="font-size:12px;color:#334155;margin-top:14px"><b>Rata-rata skor grup: ' + avgAll + '/100</b> · Tugas menunggu review: ' + pendingCount() + '</p>' +
+        '<p style="font-size:10px;color:#94a3b8;margin-top:20px">Dokumen ini dibuat otomatis oleh platform FTG × GI Fellowship untuk pelaporan mentor kepada panitia.</p></div>';
+      document.body.appendChild(div);
+      document.body.classList.add('ftg-rekap');
+      toast('Menyiapkan rekap — pilih "Save as PDF"', '🖨');
+      var cleanup = function () {
+        document.body.classList.remove('ftg-rekap');
+        window.removeEventListener('afterprint', cleanup);
+      };
+      window.addEventListener('afterprint', cleanup);
+      setTimeout(function () { window.print(); }, 400);
+    });
+  }
+
   /* ---------- Feed aktivitas terbaru (dashboard mentor) ----------
      Ditaruh di KOLOM KIRI bawah daftar mentee (2 kolom item) supaya
      tinggi kolom kiri-kanan seimbang — tidak ada ruang kosong. */
@@ -851,6 +1039,7 @@
     function home(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
     if (PAGE.indexOf('admin-') === 0 && ses.role !== 'admin') { location.replace(home(ses.role)); return false; }
     if (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) && ses.role !== 'mentor') { location.replace(home(ses.role)); return false; }
+    if (PAGE.indexOf('jurnal') === 0 && ses.role !== 'mentee') { location.replace(home(ses.role)); return false; }
     if (PAGE.indexOf('mentee-dashboard') === 0 && ses.role !== 'mentee') { location.replace(home(ses.role)); return false; }
     // panitia hanya memantau: halaman kerja mentee dialihkan ke dashboard panitia
     if (ses.role === 'admin' && /^(design-thinking|assignment|progress-tracker|mentor-feedback|workshop)/.test(PAGE)) {
@@ -1036,6 +1225,7 @@
     'Workshop Library': 'workshop-library.html',
     'Submit Tugas': 'assignment-submission.html',
     'Progress Saya': 'progress-tracker.html',
+    'Jurnal Saya': 'jurnal.html',
     'Feedback Mentor': 'mentor-feedback.html',
     'Leaderboard': 'kpi-leaderboard.html',
     'Opening Ceremony': 'opening-ceremony.html',
@@ -1079,6 +1269,20 @@
       else if (txt === 'Kumpulkan Sekarang') a.href = 'assignment-submission.html';
       else if (txt === 'Mulai') a.href = 'design-thinking-module.html';
     });
+
+    // Menu "Jurnal Saya" ditambahkan otomatis di semua halaman mentee lama
+    var ses0 = mySession();
+    var nav0 = $('aside nav');
+    if (nav0 && ses0 && ses0.role === 'mentee' && !$all('a', nav0).some(function (a) { return /Jurnal Saya/.test(a.textContent); })) {
+      var fbLink = $all('a', nav0).filter(function (a) { return /Feedback Mentor/.test(a.textContent); })[0];
+      if (fbLink) {
+        var j = document.createElement('a');
+        j.href = 'jurnal.html';
+        j.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium';
+        j.innerHTML = '<i class="fa-solid fa-book w-4 text-center"></i> Jurnal Saya';
+        fbLink.parentElement.insertBefore(j, fbLink);
+      }
+    }
 
     // Tombol "Keluar" di sidebar (sekali saja — personalize() mungkin sudah menambahkannya)
     var nav = $('aside nav');
@@ -1283,9 +1487,25 @@
     var ses = mySession() || {};
     var tid = targetId || MID;
     window.ftgChatTarget = tid;
+    // panel khusus mentor: target pribadi mentee + catatan pribadi (privat)
+    var mentorExtras = '';
+    if (me === 'mentor' && MENTEES[tid]) {
+      var tgs = (mstate(tid).targets || []).filter(function (t) { return t.text; });
+      if (tgs.length) {
+        mentorExtras += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:10px">' +
+          '<p style="font-size:10px;font-weight:800;color:#8b5cf6;letter-spacing:.05em;margin-bottom:5px">🎯 TARGET PRIBADI ' + esc(MENTEES[tid].name.split(' ')[0].toUpperCase()) + ' MINGGU INI</p>' +
+          tgs.map(function (t) {
+            return '<p style="font-size:12px;color:' + (t.done ? '#16a34a' : '#475569') + ';margin-bottom:2px">' + (t.done ? '✅' : '⬜') + ' ' + esc(t.text) + (t.done ? '' : '') + '</p>';
+          }).join('') + '</div>';
+      }
+      G.mentorNotes = G.mentorNotes || {};
+      mentorExtras += '<details style="margin-bottom:10px"><summary style="font-size:11px;font-weight:700;color:#64748b;cursor:pointer;user-select:none">📝 Catatan pribadimu tentang ' + esc(MENTEES[tid].name.split(' ')[0]) + ' <span style="font-weight:400;opacity:.7">(hanya kamu yang bisa lihat)</span></summary>' +
+        '<textarea id="mentorNote" rows="2" placeholder="cth: kurang responsif minggu ini, follow up Kamis..." style="width:100%;margin-top:6px;border:1px dashed #cbd5e1;border-radius:10px;padding:9px;font-size:12px;font-family:inherit;outline:none;resize:none;background:#fffbeb">' + esc(G.mentorNotes[tid] || '') + '</textarea></details>';
+    }
     modal(
       '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:2px">💬 Pesan — ' + esc(to) + '</h3>' +
       '<p style="font-size:11px;color:#64748b;margin-bottom:10px">' + (sb ? '● Terkirim real-time lewat server' : '○ Mode offline — tersimpan lokal') + '</p>' +
+      mentorExtras +
       '<div id="chatBox" style="max-height:260px;overflow-y:auto;border:1px solid #f1f5f9;border-radius:14px;padding:12px;margin-bottom:10px;background:#fafbfc">' + chatBubbles(tid) + '</div>' +
       '<div style="display:flex;gap:8px">' +
       '<textarea id="msgTxt" rows="2" placeholder="Tulis pesanmu..." style="flex:1;border:1px solid #e2e8f0;border-radius:12px;padding:10px;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea>' +
@@ -1293,6 +1513,19 @@
       function (box, close) {
         var chatBox = $('#chatBox', box);
         chatBox.scrollTop = chatBox.scrollHeight;
+        // catatan pribadi mentor: autosave
+        var noteTa = $('#mentorNote', box);
+        if (noteTa) {
+          var noteTimer;
+          noteTa.addEventListener('input', function () {
+            clearTimeout(noteTimer);
+            noteTimer = setTimeout(function () {
+              G.mentorNotes[tid] = noteTa.value;
+              saveState();
+              toast('Catatan pribadi tersimpan', '📝');
+            }, 900);
+          });
+        }
         var ta = $('#msgTxt', box);
         function send() {
           var t = ta.value.trim();
@@ -1498,18 +1731,69 @@
     // Lampirkan file
     var up = byId('btn-upload-file');
     if (up) wireFilePicker(up);
-    // Tab minggu — W1/W2 membuka materi pembelajaran, W3/W4 terkunci
+    // Tab minggu — W1/W2 membuka materi; W3 terbuka OTOMATIS setelah W2 dinilai
+    var w3Open = !!S.reviewW2;
     var w1b = byId('btn-week1-tab');
     if (w1b) w1b.addEventListener('click', function () { lessonModal('w1'); });
     var w2b = byId('btn-week2-tab');
     if (w2b) w2b.addEventListener('click', function () { lessonModal('w2'); });
     var w3b = byId('btn-week3-tab');
-    if (w3b) w3b.addEventListener('click', function () {
-      if (S.reviewW2) toast('Tugas W2 sudah dinilai ' + S.reviewW2.score + '/100 — IDEATE terbuka Senin depan! 🎉', '🔓');
-      else toast('Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai', '🔒');
-    });
+    if (w3b) {
+      if (w3Open) {
+        w3b.className = 'px-3 py-1.5 rounded-lg bg-[#22c55e] text-white text-sm font-semibold';
+        w3b.addEventListener('click', function () { lessonModal('w3'); });
+      } else {
+        w3b.addEventListener('click', function () { toast('Minggu 3 (IDEATE) terbuka setelah tugas W2 dinilai mentor', '🔒'); });
+      }
+    }
     var w4b = byId('btn-week4-tab');
-    if (w4b) w4b.addEventListener('click', function () { toast('Minggu 4 (PROTOTYPE + TEST) masih terkunci', '🔒'); });
+    if (w4b) w4b.addEventListener('click', function () { toast('Minggu 4 (PROTOTYPE + TEST) terbuka setelah W3 selesai', '🔒'); });
+
+    if (w3Open) {
+      // kartu fase W3 di "Perjalanan 4 Minggu" ikut terbuka
+      var w3card = $all('[data-design-id^="phase-nav"] .grid > div').filter(function (d) { return /IDEATE/.test(d.textContent); })[0];
+      if (w3card) {
+        w3card.className = 'bg-[#22c55e]/10 border-2 border-[#22c55e]/50 rounded-xl p-4 relative';
+        var lockIco = $('i.fa-lock', w3card);
+        if (lockIco) lockIco.className = 'fa-solid fa-unlock text-[#22c55e]';
+        var wk = $('span', w3card);
+        if (wk) wk.className = 'bg-[#22c55e] text-white text-[10px] font-bold px-2 py-0.5 rounded-full';
+        var obadge = document.createElement('div');
+        obadge.className = 'absolute -top-2 left-3 bg-[#22c55e] text-white text-[9px] font-bold px-2 py-0.5 rounded-full';
+        obadge.textContent = '🔓 TERBUKA';
+        w3card.appendChild(obadge);
+      }
+      // kolom IDEATE di canvas jadi bisa diisi
+      var canvasSec2 = byId('canvas-section');
+      if (canvasSec2) {
+        var ideateCol = $all('.grid.grid-cols-5 > div', canvasSec2).filter(function (c) { return /IDEATE/.test(c.textContent); })[0];
+        if (ideateCol) {
+          ideateCol.classList.remove('opacity-50');
+          $all('div.border-dashed', ideateCol).forEach(function (box, i) {
+            var ta = document.createElement('textarea');
+            ta.rows = 2;
+            ta.placeholder = 'Tulis idemu...';
+            ta.className = 'w-full bg-white border border-[#22c55e]/40 rounded-lg p-2 text-xs text-[#2c3e50] placeholder-slate-300';
+            ta.value = (S.ideate && S.ideate[i]) || '';
+            ta.addEventListener('input', function () { S.ideate[i] = ta.value; saveState(); });
+            box.replaceWith(ta);
+          });
+          $all('p', ideateCol).forEach(function (p) {
+            if (/Minggu 3/.test(p.textContent)) p.innerHTML = '<i class="fa-solid fa-unlock text-[#22c55e]"></i> Terbuka!';
+            if (p.textContent.trim() === 'IDEATE') p.className = 'text-[#22c55e] text-xs font-bold';
+          });
+        }
+      }
+      // perayaan sekali saat pertama kali terbuka
+      if (!S.w3Celebrated) {
+        S.w3Celebrated = true;
+        saveState();
+        setTimeout(function () {
+          confetti();
+          toast('🔓 Minggu 3 (IDEATE) terbuka! Klik tab W3 untuk materi barunya', '🎉');
+        }, 800);
+      }
+    }
     // back chevron
     var back = $('header a');
     if (back && back.getAttribute('href') === '#') back.href = 'mentee-dashboard.html';
@@ -1884,6 +2168,23 @@
         '<p style="font-size:12px;color:#64748b">💡 <b>Prophetic lens:</b> masalah yang layak diselesaikan adalah yang manfaatnya kembali ke komunitas — bukan sekadar menarik secara bisnis.</p>'
     }
   };
+  LESSONS.w3 = {
+    title: '📖 Materi Minggu 3 — IDEATE',
+    badge: '<span style="background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">🔓 BARU TERBUKA</span>',
+    body:
+      '<p style="font-size:13px;color:#475569;margin-bottom:10px"><b>IDEATE = membuka semua kemungkinan solusi.</b> Setelah masalahmu tajam (DEFINE), sekarang saatnya bebas berimajinasi — kuantitas dulu, kualitas belakangan.</p>' +
+      '<div style="background:#22c55e;border-radius:12px;padding:14px;margin-bottom:10px">' +
+      '<p style="font-size:11px;font-weight:700;color:#fff;opacity:.85;margin-bottom:4px">ATURAN EMAS BRAINSTORM</p>' +
+      '<p style="font-size:13px;font-weight:700;color:#fff">Tunda penilaian. Tulis 10+ ide dulu — ide "aneh" sering jadi benih terbaik.</p></div>' +
+      '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px">' +
+      '<p style="font-size:12px;font-weight:700;color:#334155;margin-bottom:6px">Langkah minggu ini:</p>' +
+      '<p style="font-size:12px;color:#475569;margin-bottom:4px">1️⃣ Brainstorm minimal 10 ide solusi untuk problem statement-mu</p>' +
+      '<p style="font-size:12px;color:#475569;margin-bottom:4px">2️⃣ Saring dengan pertanyaan: mana yang menguntungkan komunitas?</p>' +
+      '<p style="font-size:12px;color:#475569;margin-bottom:4px">3️⃣ Uji keselarasan nilai & etika setiap ide terpilih</p>' +
+      '<p style="font-size:12px;color:#475569">4️⃣ Isi kolom IDEATE di canvas dengan 3 jawaban terbaikmu</p></div>' +
+      '<p style="font-size:12px;color:#64748b">💡 <b>Prophetic lens:</b> ide terbaik bukan yang paling menguntungkanmu, tapi yang paling banyak manfaatnya bagi orang lain.</p>'
+  };
+
   function lessonModal(key) {
     var L = LESSONS[key];
     if (!L) return;
@@ -2121,17 +2422,39 @@
       '<label style="font-size:12px;font-weight:700;color:#334155">Skor: <span id="scoreVal" style="color:#1a5f4f;font-size:16px">85</span>/100</label>' +
       '<input id="scoreRange" type="range" min="50" max="100" value="85" style="width:100%;margin:8px 0 14px;accent-color:#1a5f4f">' +
       '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:6px">Feedback untuk mentee</label>' +
-      '<textarea id="fbTxt" rows="3" placeholder="Contoh: DEFINE-mu tajam! Problem statement sudah spesifik..." style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea>' +
+      '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">' +
+      '<button type="button" class="ftg-tpl" data-tpl="0" style="background:#22c55e1a;color:#16a34a;border:1px solid #22c55e44;font-size:11px;font-weight:700;padding:5px 11px;border-radius:99px;cursor:pointer">🌟 Sangat baik</button>' +
+      '<button type="button" class="ftg-tpl" data-tpl="1" style="background:#f973161a;color:#ea580c;border:1px solid #f9731644;font-size:11px;font-weight:700;padding:5px 11px;border-radius:99px;cursor:pointer">👍 Cukup, perlu dipertajam</button>' +
+      '<button type="button" class="ftg-tpl" data-tpl="2" style="background:#8b5cf61a;color:#7c3aed;border:1px solid #8b5cf644;font-size:11px;font-weight:700;padding:5px 11px;border-radius:99px;cursor:pointer">🤝 Perlu bimbingan</button></div>' +
+      '<textarea id="fbTxt" rows="3" placeholder="Klik template di atas lalu sesuaikan, atau tulis sendiri..." style="width:100%;border:1px solid #e2e8f0;border-radius:12px;padding:12px;font-size:13px;font-family:inherit;outline:none;resize:none"></textarea>' +
       '<button id="fbSave" style="margin-top:12px;width:100%;background:#1a5f4f;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Simpan Penilaian</button>',
       function (box, close) {
         var range = $('#scoreRange', box), val = $('#scoreVal', box);
         range.addEventListener('input', function () { val.textContent = range.value; });
+        // template feedback sekali klik — tinggal diedit
+        var first = name.split(' ')[0];
+        var TPL = [
+          'Kerja yang sangat baik, ' + first + '! Analisismu tajam dan refleksinya dalam. Pertahankan kualitas ini di minggu berikutnya. 🌟',
+          'Sudah cukup baik, ' + first + '. Ada beberapa bagian yang bisa dipertajam — terutama kaitkan temuanmu dengan kebutuhan user yang paling mendesak. Coba perdalam lagi ya.',
+          'Terima kasih sudah mengumpulkan, ' + first + '. Masih ada bagian yang perlu kita bahas bersama — yuk jadwalkan sesi 1-on-1 supaya bisa kubantu langsung. 🤝'
+        ];
+        var TPL_SCORE = [92, 78, 62];
+        $all('.ftg-tpl', box).forEach(function (b) {
+          b.addEventListener('click', function () {
+            var i = +b.getAttribute('data-tpl');
+            $('#fbTxt', box).value = TPL[i];
+            range.value = TPL_SCORE[i];
+            val.textContent = TPL_SCORE[i];
+            $('#fbTxt', box).focus();
+          });
+        });
         $('#fbSave', box).addEventListener('click', function () {
           var text = $('#fbTxt', box).value.trim() || 'Kerja bagus! Pertahankan konsistensinya.';
           st.reviews[week] = { score: +range.value, text: text, at: new Date().toISOString() };
           if (week === 'w2') {
             st.reviewW2 = st.reviews[week];
             pushEventTo(menteeId, '⭐', 'Tugas W2 kamu dinilai ' + range.value + '/100 oleh Pak Faris', 'mentee');
+            pushEventTo(menteeId, '🔓', 'Minggu 3 (IDEATE) terbuka! Materi & canvas baru menantimu', 'mentee');
           }
           saveState(); close();
           confetti();
@@ -3018,6 +3341,7 @@
       else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
       else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
       else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
+      else if (PAGE.indexOf('jurnal') === 0) initJournal();
       else if (PAGE.indexOf('admin-') === 0) initAdminDashboard();
     } catch (e) { console.error('FTG init error:', e); }
     try { personalize(); } catch (e) { console.warn(e); }
@@ -3026,7 +3350,8 @@
     try { if (PAGE.indexOf('mentee-dashboard') === 0) { insertSessionCard(); unlockDefinerBadges(); insertMenteeActivity(); } } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('assignment-submission') === 0) insertAssignmentSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentor-feedback') === 0) insertFeedbackSide(); } catch (e) { console.warn(e); }
-    try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); } } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); insertTargetsCard(); } } catch (e) { console.warn(e); }
+    try { if (PAGE.indexOf('mentor-review') === 0) insertRekapButton(); } catch (e) { console.warn(e); }
     try { mountGoogleGate(); } catch (e) { console.warn(e); }
   }
 
