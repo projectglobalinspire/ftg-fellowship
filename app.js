@@ -1862,12 +1862,14 @@
       if (drop) drop.parentElement.appendChild(fileWrap);
       var renderFiles = function () {
         fileWrap.innerHTML = S.files.map(function (f, i) {
-          var nm = f.name || f;
-          var pendingTitle = f.pendingReason ? (' — ' + f.pendingReason) : '';
-          var body = f.link
-            ? '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:none">📄 ' + esc(nm) + ' <span style="opacity:.75">↗ Drive</span></a>'
-            : '📎 ' + esc(nm) + (f.pending ? ' <span style="opacity:.75">(belum diunggah)</span>' : '');
-          return '<span title="' + esc((f.folder || '') + pendingTitle) + '" style="background:' + (f.link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
+          var meta = f && typeof f === 'object' ? f : {};
+          var nm = meta.name || f;
+          var link = typeof meta.link === 'string' ? meta.link : '';
+          var pendingTitle = meta.pendingReason ? (' — ' + meta.pendingReason) : '';
+          var body = link
+            ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:none">📄 ' + esc(nm) + ' <span style="opacity:.75">↗ Drive</span></a>'
+            : '📎 ' + esc(nm) + (meta.pending ? ' <span style="opacity:.75">(belum diunggah)</span>' : '');
+          return '<span title="' + esc((meta.folder || '') + pendingTitle) + '" style="background:' + (link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
             '<b data-fdel="' + i + '" style="cursor:pointer;opacity:.7">×</b></span>';
         }).join('');
         $all('[data-fdel]', fileWrap).forEach(function (x) {
@@ -1961,9 +1963,11 @@
     if (!files.length && !links.length) return '';
     return '<div style="margin-bottom:12px">' +
       files.map(function (f) {
-        var nm = f.name || f;
-        if (f.link) return '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" title="' + esc(f.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#1a5f4f;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📄 ' + esc(nm) + ' ↗ Drive</a>';
-        return '<span title="' + esc((f.folder || '') + (f.pendingReason ? ' — ' + f.pendingReason : '')) + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + ' · belum diunggah</span>';
+        var meta = f && typeof f === 'object' ? f : {};
+        var nm = meta.name || f;
+        var link = typeof meta.link === 'string' ? meta.link : '';
+        if (link) return '<a href="' + esc(link) + '" target="_blank" rel="noopener" title="' + esc(meta.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#1a5f4f;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📄 ' + esc(nm) + ' ↗ Drive</a>';
+        return '<span title="' + esc((meta.folder || '') + (meta.pendingReason ? ' — ' + meta.pendingReason : '')) + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + ' · belum diunggah</span>';
       }).join('') +
       links.map(function (l) {
         return '<a href="' + esc(l) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#334155;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">🔗 ' + esc(l.length > 34 ? l.slice(0, 34) + '…' : l) + '</a>';

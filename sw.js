@@ -1,12 +1,12 @@
 /* Service worker — network-first dengan fallback cache (offline support) */
-var CACHE = 'ftg-v10';
+var CACHE = 'ftg-v11';
 var CORE = [
   './', 'index.html', 'login.html', 'mentee-dashboard.html', 'mentor-dashboard.html',
   'admin-dashboard.html', 'admin-akun.html', 'mentor-mentee.html', 'mentor-review.html',
   'design-thinking-module.html', 'workshop-library.html', 'assignment-submission.html',
   'progress-tracker.html', 'mentor-feedback.html', 'kpi-leaderboard.html',
   'opening-ceremony.html', 'closing-ceremony.html',
-  'app.js?v=10', 'responsive.css?v=10', 'ftg-config.js?v=10', 'manifest.json',
+  'app.js?v=11', 'responsive.css?v=11', 'ftg-config.js?v=11', 'manifest.json',
   'assets/ftg-logo.png', 'assets/gi-logo.png', 'assets/icon-192.png', 'assets/icon-512.png'
 ];
 
