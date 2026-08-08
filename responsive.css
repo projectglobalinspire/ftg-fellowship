@@ -60,6 +60,23 @@
   html { scroll-behavior: smooth; }
 }
 
+/* Logo FTG x GI di sidebar & hero gelap: alas putih supaya selalu terlihat */
+aside[data-design-id] > div:first-child > div.flex,
+[data-design-id^="opening-hero"] > div > .flex.items-center.gap-3,
+[data-design-id^="opening-hero"] .flex.items-center.gap-3.mb-3,
+[data-design-id^="closing-hero"] .flex.items-center.gap-3.mb-4 {
+  background: rgba(255, 255, 255, .96);
+  border-radius: 12px;
+  padding: 7px 12px;
+  display: inline-flex;
+  width: fit-content;
+}
+aside[data-design-id] > div:first-child > div.flex > span,
+[data-design-id^="opening-hero"] .flex.items-center > span,
+[data-design-id^="closing-hero"] .flex.items-center > span {
+  color: #94a3b8 !important;
+}
+
 /* Header selalu di atas konten — dropdown notifikasi tidak tertutup kartu */
 main[data-design-id] header {
   position: relative;
