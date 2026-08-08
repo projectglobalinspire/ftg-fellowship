@@ -58,6 +58,21 @@
   #chatBox > div { animation: ftgRise .22s ease both; }
 
   html { scroll-behavior: smooth; }
+
+  /* grafik KPI: garis tergambar mengalir saat muncul */
+  .ftg-chart-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: ftgDraw 1.1s .25s cubic-bezier(.4, 0, .2, 1) forwards;
+  }
+  .ftg-chart-proj {
+    stroke-dasharray: 1 !important;
+    stroke-dashoffset: 1;
+    animation: ftgDrawProj 1s 1.2s ease forwards;
+  }
+  @keyframes ftgDraw { to { stroke-dashoffset: 0; } }
+  @keyframes ftgDrawProj { to { stroke-dashoffset: 0; stroke-dasharray: .04 .03; } }
+  .ftg-pt { animation: ftgFade .4s 1s ease both; }
 }
 
 /* Logo FTG x GI di sidebar & hero gelap: alas putih supaya selalu terlihat */

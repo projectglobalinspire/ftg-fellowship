@@ -2544,8 +2544,13 @@
     function X(i) { return padL + i * ((W - padL - padR) / 3); }
     function Y(v) { return padT + (hi - v) / (hi - lo) * (H - padT - padB); }
     var line = pts.map(function (p, i) { return X(i) + ',' + Y(p[1]); }).join(' ');
+    var tipData = [
+      { w: 'W1', v: 81.5, note: 'Skor awal minggu pertama' },
+      { w: 'W2', v: w2, note: (w2 - 81.5 >= 0 ? 'Naik +' : 'Turun ') + Math.abs(w2 - 81.5).toFixed(1) + ' dari W1' + (S.reviewW2 ? ' · setelah dinilai mentor' : (S.submittedW2 ? ' · tugas terkumpul' : '')) }
+    ];
     var dots = pts.map(function (p, i) {
-      return '<circle cx="' + X(i) + '" cy="' + Y(p[1]) + '" r="5" fill="#1a5f4f"/>' +
+      return '<circle class="ftg-pt" data-i="' + i + '" cx="' + X(i) + '" cy="' + Y(p[1]) + '" r="5" fill="#1a5f4f" style="transition:r .15s ease"/>' +
+        '<circle class="ftg-hit" data-i="' + i + '" cx="' + X(i) + '" cy="' + Y(p[1]) + '" r="18" fill="transparent" style="cursor:pointer"/>' +
         '<text x="' + X(i) + '" y="' + (Y(p[1]) - 12) + '" text-anchor="middle" font-size="12" font-weight="700" fill="#1a5f4f">' + p[1] + '</text>';
     }).join('');
     var labels = xs.map(function (l, i) {
@@ -2568,16 +2573,45 @@
       '<div class="flex items-center justify-between mb-3 flex-wrap gap-2">' +
       '<h2 class="text-[#2c3e50] text-sm font-bold">📈 Tren KPI Mingguan</h2>' +
       '<span class="text-[#22c55e] text-xs font-semibold bg-[#22c55e]/10 px-2.5 py-1 rounded-full">↑ +' + delta + ' poin sejak W1</span></div>' +
-      '<div style="max-width:640px;margin:0 auto">' +
+      '<div style="max-width:640px;margin:0 auto;position:relative">' +
       '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" xmlns="http://www.w3.org/2000/svg">' +
-      grid + tgt + proj +
-      '<polyline points="' + line + '" fill="none" stroke="#1a5f4f" stroke-width="3" stroke-linecap="round"/>' +
-      dots + labels + '</svg></div>' +
+      grid + tgt +
+      proj.replace('<line ', '<line class="ftg-chart-proj" pathLength="1" ') +
+      '<polyline class="ftg-chart-line" pathLength="1" points="' + line + '" fill="none" stroke="#1a5f4f" stroke-width="3" stroke-linecap="round"/>' +
+      dots + labels + '</svg>' +
+      '<div class="ftg-chart-tip" style="position:absolute;display:none;background:#2c3e50;color:#fff;font-size:11px;font-weight:600;padding:7px 11px;border-radius:10px;pointer-events:none;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.25);z-index:20;transform:translate(-50%,-115%)"></div></div>' +
       '<div class="flex items-center justify-center gap-5 mt-2 flex-wrap">' +
       '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:3px;background:#1a5f4f;border-radius:2px"></span>Skor mingguan</span>' +
       '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #8b5cf6;opacity:.6"></span>Proyeksi jika konsisten</span>' +
       '<span class="text-[10px] text-slate-500 flex items-center gap-1.5"><span style="display:inline-block;width:16px;height:0;border-top:2px dashed #f97316"></span>Target program</span></div>';
     after.parentElement.insertBefore(sec, after.nextSibling);
+
+    // interaksi: hover/tap titik -> tooltip detail, titik membesar
+    var svg = sec.querySelector('svg');
+    var tip = sec.querySelector('.ftg-chart-tip');
+    function showTip(i) {
+      var d = tipData[i];
+      if (!d) return;
+      var pt = sec.querySelector('.ftg-pt[data-i="' + i + '"]');
+      pt.setAttribute('r', '7');
+      var svgR = svg.getBoundingClientRect();
+      var scale = svgR.width / W;
+      tip.innerHTML = '<b>' + d.w + ' · Skor ' + d.v + '</b><br><span style="opacity:.75;font-weight:400">' + d.note + '</span>';
+      tip.style.left = (X(i) * scale) + 'px';
+      tip.style.top = (Y(pts[i][1]) * (svgR.height / H)) + 'px';
+      tip.style.display = 'block';
+    }
+    function hideTip() {
+      tip.style.display = 'none';
+      $all('.ftg-pt', sec).forEach(function (p) { p.setAttribute('r', '5'); });
+    }
+    $all('.ftg-hit', sec).forEach(function (hit) {
+      var i = +hit.getAttribute('data-i');
+      hit.addEventListener('mouseenter', function () { showTip(i); });
+      hit.addEventListener('mouseleave', hideTip);
+      hit.addEventListener('click', function (e) { e.stopPropagation(); showTip(i); });
+    });
+    document.addEventListener('click', hideTip);
   }
 
   /* ================================================================
