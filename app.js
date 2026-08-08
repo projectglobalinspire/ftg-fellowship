@@ -1569,8 +1569,9 @@
 
   function mountGoogleGate() {
     var role = myRole();
-    var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
-      (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE));
+    // Mentor wajib terhubung agar dapat membuka lampiran privat. Mentee tetap
+    // bisa belajar dan mengumpulkan refleksi; OAuth baru diminta saat upload.
+    var needsGate = role === 'mentor' && IS_MENTOR_PAGE;
     if (!needsGate || document.getElementById('ftg-google-gate')) return;
     var existing = googleProfile();
     if (existing) { googleStatusBadge(existing); return; }
@@ -1871,8 +1872,9 @@
             sharing.shared ? '✅' : '⚠️');
         })
         .catch(function (err) {
-          record({ pending: true, pendingReason: err.message });
-          toast('Gagal unggah: ' + err.message + ' — berkas tetap tercatat', '⚠️');
+          // Jangan mencatat lampiran semu: tanpa upload berhasil, mentor tidak
+          // memiliki berkas yang bisa dibuka atau diunduh.
+          toast('Berkas belum terunggah: ' + err.message + '. Silakan hubungkan Drive lalu coba lagi.', '⚠️');
         })
         .then(function () {
           inp.value = '';
