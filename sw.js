@@ -6,7 +6,7 @@ var CORE = [
   'design-thinking-module.html', 'workshop-library.html', 'assignment-submission.html',
   'progress-tracker.html', 'mentor-feedback.html', 'kpi-leaderboard.html',
   'opening-ceremony.html', 'closing-ceremony.html',
-  'app.js?v=18', 'responsive.css?v=18', 'ftg-config.js?v=18', 'manifest.json',
+  'app.js?v=19', 'responsive.css?v=19', 'ftg-config.js?v=19', 'manifest.json',
   'assets/ftg-logo.png', 'assets/gi-logo.png', 'assets/icon-192.png', 'assets/icon-512.png'
 ];
 
