@@ -48,9 +48,35 @@ Saat pertama dibuka, platform otomatis terisi data realistis milik Arya: niyyah,
 
 > Reset demo: jalankan `localStorage.clear()` di console browser lalu refresh — konten contoh akan terisi ulang otomatis, siap dipresentasikan lagi.
 
+## Google Drive untuk lampiran tugas
+
+Lampiran tidak disimpan sebagai blob/base64 di Supabase. Database hanya menyimpan metadata, status unggahan, folder tujuan, ID Drive, dan `webViewLink`.
+
+1. Aktifkan **Google Drive API** di project Google Cloud.
+2. Konfigurasikan OAuth consent screen. Jika app masih berstatus **Testing**, tambahkan akun Google yang akan dipakai mengunggah sebagai test user.
+3. Buat OAuth Client ID bertipe **Web application**.
+4. Tambahkan Authorized JavaScript origins berikut (tanpa slash di akhir):
+   - `https://ftg-fellowship.vercel.app`
+   - `http://localhost:4173`
+5. Isi Client ID di `ftg-config.js` pada `driveClientId`.
+
+Scope yang diminta hanya `drive.file`, sehingga aplikasi hanya dapat mengelola file/folder yang dibuat atau dipilih melalui aplikasi. Token akses berumur pendek dan hanya disimpan di memori tab, bukan di database atau `localStorage`.
+
+Struktur folder otomatis:
+
+```text
+FTG Fellowship 2026/
+└── Mentee/
+    └── <Nama Mentee>/
+        └── Minggu 2/
+            └── <berkas>
+```
+
+Berkas sampai 20 MB didukung. Berkas di atas 5 MB memakai resumable upload. Jika OAuth belum dikonfigurasi atau izin dibatalkan, UI menandai lampiran sebagai **belum diunggah** dan tidak menyimpan isi berkas ke Supabase.
+
 ## Teknologi
 
-HTML + Tailwind CSS (CDN) + Vanilla JS, data demo di `localStorage` — tanpa backend, siap dihosting statis (Vercel).
+HTML + Tailwind CSS (CDN) + Vanilla JS, dengan Supabase untuk sinkronisasi state dan Google Drive untuk lampiran. `localStorage` dipakai sebagai cache/fallback tampilan, bukan tempat menyimpan isi berkas.
 
 ---
 FaithToGrow × Global Inspire · Future Builders Fellowship 2026

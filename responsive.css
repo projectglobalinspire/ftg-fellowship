@@ -3,6 +3,11 @@
    Dimuat setelah Tailwind CDN; override pakai !important.
    ================================================================ */
 * { -webkit-tap-highlight-color: transparent; }
+html, body { max-width: 100%; }
+
+/* Halaman login berdiri di luar shell main/aside, jadi perlu aturan sendiri. */
+#loginCard { min-width: 0; }
+.login-heading { gap: 12px; }
 
 /* ---------- Lapisan animasi & mikro-interaksi ---------- */
 @media (prefers-reduced-motion: no-preference) {
@@ -261,6 +266,18 @@ main[data-design-id] header {
 
 /* ---------- HP kecil ---------- */
 @media (max-width: 640px) {
+  body:has(#loginCard) {
+    align-items: flex-start !important;
+    overflow-x: hidden;
+    padding: 28px 14px !important;
+  }
+  body:has(#loginCard) > .relative { min-width: 0; }
+  #loginCard { padding: 22px 18px !important; border-radius: 20px !important; }
+  .login-heading { align-items: flex-start !important; flex-wrap: wrap; }
+  #roleBadge { flex: 0 0 auto; }
+  .login-kicker { letter-spacing: .18em !important; line-height: 1.6; padding: 0 12px; }
+  #roleTabs button { min-width: 0; padding-left: 6px; padding-right: 6px; }
+
   /* font-size 16px mencegah auto-zoom Safari iOS saat mengetik */
   input, textarea, select { font-size: 16px !important; }
   main[data-design-id] h1 { font-size: 17px !important; }

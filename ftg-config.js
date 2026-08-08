@@ -9,6 +9,7 @@ window.FTG_CONF = {
      Struktur folder dibuat otomatis:
        FTG Fellowship 2026 / Mentee / <Nama Mentee> / Minggu <N> / <berkas>
      Selama kosong, berkas hanya dicatat namanya (tidak diunggah). */
-  driveClientId: '',
-  driveRootFolder: 'FTG Fellowship 2026'
+  driveClientId: '916717961665-f05tp163cvq5vf04iljr1b29dkumfohh.apps.googleusercontent.com',
+  driveRootFolder: 'FTG Fellowship 2026',
+  driveMaxFileSizeMb: 20
 };

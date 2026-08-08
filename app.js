@@ -897,7 +897,12 @@
         out.href = 'login.html';
         out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
         out.innerHTML = '<i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Keluar';
-        out.addEventListener('click', function () { localStorage.removeItem('ftgSession'); });
+        out.addEventListener('click', function (e) {
+          e.preventDefault();
+          localStorage.removeItem('ftgSession');
+          sessionStorage.removeItem('ftgDrive');
+          location.replace('login.html');
+        });
         nav.appendChild(out);
       }
       // banner "posisi kamu" hanya relevan untuk mentee
@@ -1014,6 +1019,19 @@
     $all('a').forEach(function (a) {
       var txt = a.textContent.replace(/\s+/g, ' ').trim();
       var href = a.getAttribute('href');
+      if (/^Keluar$/.test(txt)) {
+        a.href = 'login.html';
+        if (!a.getAttribute('data-ftg-logout')) {
+          a.setAttribute('data-ftg-logout', '1');
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.removeItem('ftgSession');
+            sessionStorage.removeItem('ftgDrive');
+            location.replace('login.html');
+          });
+        }
+        return;
+      }
       if (href && href !== '#') return; // sudah punya tujuan
       if (IS_MENTOR_PAGE) {
         if (txt === 'Dashboard') { a.href = 'mentor-dashboard.html'; return; }
@@ -1038,10 +1056,16 @@
     var nav = $('aside nav');
     if (nav && !$all('a', nav).some(function (a) { return /Keluar/.test(a.textContent); })) {
       var out = document.createElement('a');
-      out.href = 'index.html';
+      out.href = 'login.html';
       out.className = 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 text-sm font-medium mt-4';
       out.innerHTML = '<i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Keluar';
-      out.addEventListener('click', function () { localStorage.removeItem('ftgSession'); });
+      out.setAttribute('data-ftg-logout', '1');
+      out.addEventListener('click', function (e) {
+        e.preventDefault();
+        localStorage.removeItem('ftgSession');
+        sessionStorage.removeItem('ftgDrive');
+        location.replace('login.html');
+      });
       nav.appendChild(out);
     }
   }
@@ -1472,9 +1496,40 @@
   function driveConfigured() { return !!(window.FTG_CONF && FTG_CONF.driveClientId); }
   function driveReady() { return DRIVE.token && Date.now() < DRIVE.expires; }
 
-  function driveAuth() {
+  function mountDriveConnect(anchor) {
+    if (!anchor || byId('btn-connect-drive')) return;
+    var btn = document.createElement('button');
+    btn.id = 'btn-connect-drive';
+    btn.type = 'button';
+    btn.className = 'ftg-drive-connect';
+    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;gap:7px;margin:8px 8px 0 0;padding:9px 14px;border:1px solid #1a5f4f;border-radius:10px;background:#fff;color:#1a5f4f;font-size:12px;font-weight:700;cursor:pointer;';
+    btn.innerHTML = '<i class="fa-brands fa-google-drive"></i><span>Hubungkan Google Drive</span>';
+    anchor.parentElement.insertBefore(btn, anchor);
+    btn.addEventListener('click', function () {
+      if (!driveConfigured()) {
+        toast('Google Drive belum dikonfigurasi oleh panitia', '⚠️');
+        return;
+      }
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      driveAuth()
+        .then(function () {
+          btn.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Drive tersambung</span>';
+          btn.style.background = '#e8f5ef';
+          toast('Google Drive tersambung. Silakan pilih berkas untuk diunggah', '✅');
+        })
+        .catch(function (err) { toast('Drive belum tersambung: ' + err.message, '⚠️'); })
+        .then(function () {
+          btn.disabled = false;
+          btn.removeAttribute('aria-busy');
+        });
+    });
+  }
+
+  function driveAuth(force) {
     return new Promise(function (resolve, reject) {
       if (!driveConfigured()) { reject(new Error('Drive belum dikonfigurasi')); return; }
+      if (force) { DRIVE.token = null; DRIVE.expires = 0; }
       if (driveReady()) { resolve(DRIVE.token); return; }
       if (!window.google || !google.accounts || !google.accounts.oauth2) { reject(new Error('Google SDK belum siap')); return; }
       if (!DRIVE.tc) {
@@ -1488,27 +1543,46 @@
         if (resp && resp.access_token) {
           DRIVE.token = resp.access_token;
           DRIVE.expires = Date.now() + (resp.expires_in || 3600) * 1000 - 60000;
-          try { localStorage.setItem('ftgDrive', JSON.stringify({ t: DRIVE.token, e: DRIVE.expires })); } catch (e) {}
           resolve(DRIVE.token);
-        } else reject(new Error('Izin Drive ditolak'));
+        } else reject(new Error((resp && resp.error) === 'access_denied' ? 'Izin Drive dibatalkan' : 'Izin Drive gagal'));
+      };
+      DRIVE.tc.error_callback = function (err) {
+        var kind = err && err.type;
+        if (kind === 'popup_closed') reject(new Error('Jendela izin Drive ditutup'));
+        else if (kind === 'popup_failed_to_open') reject(new Error('Popup Drive diblokir browser. Izinkan popup lalu coba lagi'));
+        else reject(new Error('Jendela izin Drive gagal dibuka'));
       };
       DRIVE.tc.requestAccessToken({ prompt: DRIVE.token ? '' : 'consent' });
     });
   }
-  (function restoreDriveToken() {
-    try {
-      var d = JSON.parse(localStorage.getItem('ftgDrive') || 'null');
-      if (d && d.e > Date.now()) { DRIVE.token = d.t; DRIVE.expires = d.e; }
-    } catch (e) {}
-  })();
 
-  function driveApi(path, opts) {
+  /* Token akses hanya hidup di memori tab. Hapus token versi lama yang pernah
+     disimpan di browser oleh prototype sebelumnya. */
+  try { localStorage.removeItem('ftgDrive'); sessionStorage.removeItem('ftgDrive'); } catch (e) {}
+
+  function driveFailure(r) {
+    return r.json().catch(function () { return null; }).then(function (body) {
+      var apiMessage = body && body.error && body.error.message;
+      if (r.status === 403) throw new Error('Akses Drive ditolak. Pastikan Drive API aktif dan akun diizinkan');
+      if (r.status === 413) throw new Error('Berkas terlalu besar untuk diunggah');
+      throw new Error(apiMessage || ('Google Drive merespons ' + r.status));
+    });
+  }
+
+  function driveRequest(url, opts, mayRetry) {
     opts = opts || {};
-    opts.headers = Object.assign({ Authorization: 'Bearer ' + DRIVE.token }, opts.headers || {});
-    return fetch('https://www.googleapis.com/drive/v3/' + path, opts).then(function (r) {
-      if (!r.ok) throw new Error('Drive API ' + r.status);
+    opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + DRIVE.token });
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 401 && mayRetry !== false) {
+        return driveAuth(true).then(function () { return driveRequest(url, opts, false); });
+      }
+      if (!r.ok) return driveFailure(r);
       return r.json();
     });
+  }
+
+  function driveApi(path, opts) {
+    return driveRequest('https://www.googleapis.com/drive/v3/' + path, opts, true);
   }
   /* cari folder bernama X di dalam parent; buat kalau belum ada */
   function driveFolder(name, parentId) {
@@ -1536,18 +1610,56 @@
   }
   function driveUpload(file, folderId) {
     var meta = { name: file.name, parents: [folderId] };
-    var fd = new FormData();
-    fd.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
-    fd.append('file', file);
-    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', {
+    if (file.size > 5 * 1024 * 1024) {
+      return driveUploadResumable(file, meta, true);
+    }
+    var boundary = 'ftg_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    var body = new Blob([
+      '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n',
+      JSON.stringify(meta),
+      '\r\n--' + boundary + '\r\nContent-Type: ' + (file.type || 'application/octet-stream') + '\r\n\r\n',
+      file,
+      '\r\n--' + boundary + '--'
+    ], { type: 'multipart/related; boundary=' + boundary });
+    return driveRequest('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + DRIVE.token },
-      body: fd
-    }).then(function (r) { if (!r.ok) throw new Error('Upload gagal ' + r.status); return r.json(); });
+      headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
+      body: body
+    }, true);
+  }
+
+  /* Drive merekomendasikan resumable upload untuk berkas di atas 5 MB. */
+  function driveUploadResumable(file, meta, mayRetry) {
+    return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink,size', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + DRIVE.token,
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': file.type || 'application/octet-stream',
+        'X-Upload-Content-Length': String(file.size)
+      },
+      body: JSON.stringify(meta)
+    }).then(function (r) {
+      if (r.status === 401 && mayRetry !== false) {
+        return driveAuth(true).then(function () { return driveUploadResumable(file, meta, false); });
+      }
+      if (!r.ok) return driveFailure(r);
+      var uploadUrl = r.headers.get('Location');
+      if (!uploadUrl) throw new Error('Google Drive tidak mengirim sesi unggahan');
+      return fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      }).then(function (uploadResponse) {
+        if (!uploadResponse.ok) return driveFailure(uploadResponse);
+        return uploadResponse.json();
+      });
+    });
   }
 
   /* Pilih berkas → unggah ke Drive (folder per mentee & per minggu). */
   function wireFilePicker(btn, onAdd) {
+    mountDriveConnect(btn);
     var inp = document.createElement('input');
     inp.type = 'file';
     inp.style.display = 'none';
@@ -1559,6 +1671,18 @@
       var f = inp.files[0];
       var menteeName = (mySession() || {}).name || MENTEES[MID].name;
       var week = 'Minggu 2';
+      var maxMb = +(window.FTG_CONF && FTG_CONF.driveMaxFileSizeMb) || 20;
+      var allowed = /\.(pdf|png|jpe?g|docx?|pptx?)$/i.test(f.name);
+      if (!allowed) {
+        toast('Format tidak didukung. Gunakan PDF, gambar, Word, atau PowerPoint', '⚠️');
+        inp.value = '';
+        return;
+      }
+      if (f.size > maxMb * 1024 * 1024) {
+        toast('Ukuran berkas maksimal ' + maxMb + ' MB', '⚠️');
+        inp.value = '';
+        return;
+      }
 
       function record(extra) {
         S.files = (S.files || []).filter(function (x) { return (x.name || x) !== f.name; });
@@ -1571,12 +1695,14 @@
       }
 
       if (!driveConfigured()) {
-        record({ pending: true });
+        record({ pending: true, pendingReason: 'OAuth Client ID Google belum dikonfigurasi' });
         toast('Drive belum tersambung — berkas dicatat, hubungkan Drive untuk mengunggah', '⚠️');
         inp.value = '';
         return;
       }
       toast('Mengunggah "' + f.name + '" ke Google Drive...', '☁️');
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
       driveAuth()
         .then(function () { return driveFolderPath(menteeName, week); })
         .then(function (folderId) { return driveUpload(f, folderId); })
@@ -1585,10 +1711,14 @@
           toast('Tersimpan di Drive → ' + menteeName + ' / ' + week, '✅');
         })
         .catch(function (err) {
-          record({ pending: true });
+          record({ pending: true, pendingReason: err.message });
           toast('Gagal unggah: ' + err.message + ' — berkas tetap tercatat', '⚠️');
         })
-        .then(function () { inp.value = ''; });
+        .then(function () {
+          inp.value = '';
+          btn.disabled = false;
+          btn.removeAttribute('aria-busy');
+        });
     });
   }
 
@@ -1733,10 +1863,11 @@
       var renderFiles = function () {
         fileWrap.innerHTML = S.files.map(function (f, i) {
           var nm = f.name || f;
+          var pendingTitle = f.pendingReason ? (' — ' + f.pendingReason) : '';
           var body = f.link
             ? '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:none">📄 ' + esc(nm) + ' <span style="opacity:.75">↗ Drive</span></a>'
             : '📎 ' + esc(nm) + (f.pending ? ' <span style="opacity:.75">(belum diunggah)</span>' : '');
-          return '<span title="' + esc(f.folder || '') + '" style="background:' + (f.link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
+          return '<span title="' + esc((f.folder || '') + pendingTitle) + '" style="background:' + (f.link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
             '<b data-fdel="' + i + '" style="cursor:pointer;opacity:.7">×</b></span>';
         }).join('');
         $all('[data-fdel]', fileWrap).forEach(function (x) {
@@ -1832,7 +1963,7 @@
       files.map(function (f) {
         var nm = f.name || f;
         if (f.link) return '<a href="' + esc(f.link) + '" target="_blank" rel="noopener" title="' + esc(f.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#1a5f4f;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">📄 ' + esc(nm) + ' ↗ Drive</a>';
-        return '<span title="' + esc(f.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + '</span>';
+        return '<span title="' + esc((f.folder || '') + (f.pendingReason ? ' — ' + f.pendingReason : '')) + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + ' · belum diunggah</span>';
       }).join('') +
       links.map(function (l) {
         return '<a href="' + esc(l) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#334155;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;text-decoration:none;margin:0 6px 6px 0">🔗 ' + esc(l.length > 34 ? l.slice(0, 34) + '…' : l) + '</a>';
