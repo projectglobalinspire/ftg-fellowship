@@ -253,6 +253,12 @@
     }
     // mentee hanya perlu reload jika perubahan menyentuh datanya sendiri / dari mentor
     if (myRole() === 'mentee' && by !== 'mentor' && by !== 'admin') return;
+    // Leaderboard diperbarui di tempat. Hindari reload berkala yang sempat
+    // menampilkan identitas statis Arya sebelum role mentor dipersonalisasi.
+    if (PAGE.indexOf('kpi-leaderboard') === 0) {
+      try { initLeaderboardLive(); personalize(); } catch (e) { console.warn(e); }
+      return;
+    }
     toast('Update baru dari ' + who + ' — memuat ulang...', '📨');
     setTimeout(function () { location.reload(); }, 1200);
   }
@@ -926,6 +932,15 @@
           '<p class="text-white/60 text-xs">' + (ses.role === 'mentor' ? 'Memantau 5 mentee bimbingan' : 'Memantau seluruh peserta program') + '</p></div></div>';
         pos.className = 'bg-[#2c3e50] rounded-2xl p-5 mb-5 flex items-center justify-between flex-wrap gap-4';
       }
+      // Arya tetap tampil sebagai peserta, tetapi bukan lagi ditandai sebagai
+      // "Kamu" ketika leaderboard dibuka oleh mentor atau panitia.
+      var aryaParticipant = byId('lb-row-arya');
+      if (aryaParticipant) {
+        $all('span', aryaParticipant).forEach(function (sp) {
+          if (/Kamu/.test(sp.textContent)) sp.remove();
+        });
+        aryaParticipant.className = 'px-6 py-3 grid grid-cols-12 gap-2 items-center border-b border-slate-100';
+      }
     }
 
     if (ses.role !== 'mentee') return;
@@ -1542,9 +1557,14 @@
     var badge = document.createElement('div');
     badge.id = 'ftg-google-status';
     badge.title = 'Akun Google terhubung untuk sesi ini';
-    badge.style.cssText = 'position:fixed;right:16px;top:12px;z-index:55;display:flex;align-items:center;gap:7px;max-width:260px;background:#fff;border:1px solid #bbf7d0;box-shadow:0 6px 22px rgba(15,23,42,.12);border-radius:999px;padding:7px 12px;color:#166534;font-size:11px;font-weight:700;';
+    badge.style.cssText = 'display:flex;align-items:center;gap:7px;width:calc(100% - 32px);box-sizing:border-box;margin:8px 16px 0;background:rgba(34,197,94,.12);border:1px solid rgba(134,239,172,.28);border-radius:10px;padding:7px 10px;color:#86efac;font-size:10px;font-weight:700;';
     badge.innerHTML = '<i class="fa-brands fa-google-drive"></i><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(profile.email) + '</span>';
-    document.body.appendChild(badge);
+    var identity = $('aside .mx-4.mt-4');
+    if (identity && identity.parentNode) identity.parentNode.insertBefore(badge, identity.nextSibling);
+    else {
+      badge.style.cssText += 'position:fixed;right:16px;bottom:16px;z-index:55;width:auto;max-width:260px;background:#166534;color:#fff;';
+      document.body.appendChild(badge);
+    }
   }
 
   function mountGoogleGate() {
@@ -3116,6 +3136,7 @@
 
     // identitas sidebar & menu peran diganti SEKETIKA — tidak ada kilasan "Arya"
     try { personalize(); } catch (e) { console.warn(e); }
+    finally { document.documentElement.classList.add('ftg-role-ready'); }
 
     /* Hybrid render: beri server maks. 900ms untuk data segar (tanpa kedip
        reload), lebih dari itu render data lokal — tombol tetap cepat aktif. */
