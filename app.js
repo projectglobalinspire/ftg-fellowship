@@ -701,35 +701,6 @@
         }).join('') + '</div>';
     }
 
-    // tombol hapus data demo (khusus panitia)
-    var del = $('#btnWipe');
-    if (del) del.addEventListener('click', function () {
-      modal(
-        '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:6px">🗑 Hapus Semua Data Demo?</h3>' +
-        '<p style="font-size:13px;color:#64748b;margin-bottom:6px">Seluruh tugas, nilai, chat, notifikasi, dan lampiran <b>ke-5 mentee</b> akan dikosongkan dan dikembalikan ke kondisi awal presentasi.</p>' +
-        '<p style="font-size:12px;color:#ef4444;margin-bottom:16px">Tindakan ini berlaku untuk semua perangkat dan tidak bisa dibatalkan.</p>' +
-        '<div style="display:flex;gap:10px"><button id="wCancel" style="flex:1;background:#f1f5f9;color:#475569;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Batal</button>' +
-        '<button id="wGo" style="flex:1;background:#ef4444;color:#fff;font-weight:700;font-size:13px;padding:11px;border-radius:12px;border:0;cursor:pointer">Ya, Hapus Semua</button></div>',
-        function (box, close) {
-          $('#wCancel', box).addEventListener('click', close);
-          $('#wGo', box).addEventListener('click', function () {
-            $('#wGo', box).textContent = 'Menghapus...';
-            G = normalizeG(seedAll());
-            bindS();
-            G.updatedAt = Date.now();
-            G.updatedBy = 'admin';
-            lastAppliedAt = G.updatedAt;
-            persistLocal();
-            function done() { close(); toast('Data demo dihapus — siap presentasi', '🗑'); setTimeout(function () { location.reload(); }, 900); }
-            if (sb) {
-              sb.from('ftg_state').update({ data: G, updated_at: new Date().toISOString() }).eq('id', 1)
-                .then(done).catch(done);
-            } else done();
-          });
-        }
-      );
-    });
-
     // feed aktivitas gabungan (ringkas)
     var feed = $('#adminFeed');
     if (feed) {
@@ -3978,6 +3949,11 @@
   function mountSecureAccountAdmin() {
     if (PAGE.indexOf('admin-akun') !== 0 || !AUTH.profile || AUTH.profile.role !== 'admin') return;
     var wrap = $('#accountRows'); if (!wrap) return;
+    function accountRoleChip(role) {
+      var style = role === 'mentor' ? 'background:#dcfce7;color:#166534' : role === 'admin' ? 'background:#ede9fe;color:#6d28d9' : 'background:#ffedd5;color:#c2410c';
+      var label = role === 'admin' ? 'Panitia' : role === 'mentor' ? 'Mentor' : 'Mentee';
+      return '<span style="' + style + ';font-size:9px;font-weight:800;padding:4px 7px;border-radius:999px">' + label + '</span>';
+    }
     var oldMentee = $('#btnAddMentee'), oldMentor = $('#btnAddMentor');
     function replaceButton(old, role) { if (!old) return; var fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old); fresh.addEventListener('click', function () { secureAccountModal(role, load); }); }
     replaceButton(oldMentee, 'mentee'); replaceButton(oldMentor, 'mentor');
@@ -3988,7 +3964,7 @@
       var q = ($('#accountSearch').value || '').toLowerCase(), role = $('#accountRoleFilter').value;
       var rows = profiles.filter(function (p) { return (!q || (p.full_name + ' ' + p.email).toLowerCase().indexOf(q) > -1) && (!role || p.role === role); });
       var count = $('#accountCount'); if (count) count.textContent = rows.length + ' akun ditemukan';
-      wrap.innerHTML = rows.length ? rows.map(function (p) { var active = p.status === 'active'; return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50"><div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[10px]" style="background:' + (p.role === 'mentor' ? '#1a5f4f' : p.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(p.initials || initialsOf(p.full_name)) + '</div><div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(p.full_name) + '</p><p class="text-slate-400 text-[10px] truncate">' + esc(p.email) + ' · ' + esc(p.path || '') + '</p></div>' + roleChip(p.role) + '<span style="font-size:9px;font-weight:800;color:' + (active ? '#16a34a' : '#ef4444') + '">' + (active ? 'AKTIF' : esc(p.status.toUpperCase())) + '</span><button data-account-edit="' + p.id + '" style="border:0;background:#f1f5f9;color:#475569;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:800">Kelola</button></div>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">Tidak ada akun yang cocok.</p>';
+      wrap.innerHTML = rows.length ? rows.map(function (p) { var active = p.status === 'active'; return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50"><div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[10px]" style="background:' + (p.role === 'mentor' ? '#1a5f4f' : p.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(p.initials || initialsOf(p.full_name)) + '</div><div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(p.full_name) + '</p><p class="text-slate-400 text-[10px] truncate">' + esc(p.email) + ' · ' + esc(p.path || '') + '</p></div>' + accountRoleChip(p.role) + '<span style="font-size:9px;font-weight:800;color:' + (active ? '#16a34a' : '#ef4444') + '">' + (active ? 'AKTIF' : esc(p.status.toUpperCase())) + '</span><button data-account-edit="' + p.id + '" style="border:0;background:#f1f5f9;color:#475569;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:800">Kelola</button></div>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">Tidak ada akun yang cocok.</p>';
       $all('[data-account-edit]', wrap).forEach(function (b) { b.addEventListener('click', function () { secureAccountManage(profiles.filter(function (p) { return p.id === b.getAttribute('data-account-edit'); })[0], load); }); });
     }
     function load() { wrap.innerHTML = '<p style="padding:24px;text-align:center;color:#64748b;font-size:12px">Memuat akun aman...</p>'; apiRequest('/api/admin-users').then(function (data) { profiles = data.profiles || []; render(); }).catch(function (e) { wrap.innerHTML = '<p style="padding:18px;color:#dc2626;font-size:11px">' + esc(e.message) + '</p>'; }); }

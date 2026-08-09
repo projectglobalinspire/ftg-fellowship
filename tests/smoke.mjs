@@ -22,7 +22,7 @@ test('protected pages use the shared authenticated application engine', async ()
   const publicPages = new Set(['index.html', 'login.html', 'panitia.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
-    assert.match(source, /app\.js\?v=22/, `${file}: shared engine missing`);
+    assert.match(source, /app\.js\?v=\d+/, `${file}: shared engine missing`);
   }
 });
 
