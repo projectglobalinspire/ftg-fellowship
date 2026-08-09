@@ -1416,8 +1416,9 @@
   function secureLogout() {
     clearGoogleSession();
     try { localStorage.removeItem('ftgSession'); } catch (e) {}
-    if (sb) sb.auth.signOut().catch(function () {});
-    location.replace('login.html');
+    function finishLogout() { location.replace('login.html'); }
+    if (sb) sb.auth.signOut().then(finishLogout).catch(finishLogout);
+    else finishLogout();
   }
   function ensureSecureSession() {
     if (!sb || !IS_APP_PAGE) return Promise.resolve(!IS_APP_PAGE);
