@@ -13,10 +13,18 @@ module.exports = async function handler(req, res) {
         current_month: Math.max(1, Number(body.current_month) || 1),
         current_week: Math.max(1, Number(body.current_week) || 1),
         passing_score: Math.min(100, Math.max(0, Number(body.passing_score) || 75)),
+        active_phase: ['EMPATHIZE','DEFINE','IDEATE','PROTOTYPE','TEST'].includes(body.active_phase) ? body.active_phase : 'DEFINE',
+        completion_requirement: Math.min(100, Math.max(0, Number(body.completion_requirement) || 80)),
+        attendance_requirement: Math.min(100, Math.max(0, Number(body.attendance_requirement) || 80)),
+        quality_requirement: Math.min(100, Math.max(0, Number(body.quality_requirement) || 75)),
+        feature_flags: body.feature_flags && typeof body.feature_flags === 'object' ? body.feature_flags : {},
+        kpi_weights: body.kpi_weights && typeof body.kpi_weights === 'object' ? body.kpi_weights : {},
+        rubric_templates: Array.isArray(body.rubric_templates) ? body.rubric_templates.slice(0, 30) : [],
         updated_by: auth.user.id,
         updated_at: new Date().toISOString()
       };
       await adminFetch('/rest/v1/program_settings?on_conflict=id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(patch) });
+      await adminFetch('/rest/v1/audit_logs', { method:'POST', body:JSON.stringify({ actor_id:auth.user.id, action:'settings.update', entity_type:'program_settings', entity_id:'1', detail:{ active_phase:patch.active_phase, current_month:patch.current_month, current_week:patch.current_week } }) });
       return send(res, 200, { ok: true });
     }
     if (body.action === 'cohort') {

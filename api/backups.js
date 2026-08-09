@@ -1,6 +1,6 @@
 const { send, adminFetch, requireRole, method } = require('./_lib');
-const tables = ['cohorts','program_settings','profiles','assignments','assignment_targets','submissions','submission_versions','reviews','task_discussions','notifications','mentor_sessions','mentor_notes'];
-const conflicts = { assignment_targets: 'assignment_id,mentee_id' };
+const tables = ['cohorts','program_settings','profiles','assignments','assignment_targets','submissions','submission_versions','reviews','review_history','task_discussions','notifications','mentor_sessions','mentor_notes','program_events','attendance_sessions','attendance_records','discipline_actions','certificates'];
+const conflicts = { assignment_targets: 'assignment_id,mentee_id', submission_versions:'submission_id,version_number', attendance_records:'session_id,mentee_id' };
 
 async function capture(createdBy, label) {
   const payload = {};

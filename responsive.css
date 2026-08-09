@@ -463,3 +463,9 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+/* Program operations suite */
+.ftg-suite-primary,.ftg-suite-secondary,.ftg-suite-danger{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:9px;padding:8px 11px;font:700 11px/1.2 Inter,system-ui;cursor:pointer;text-decoration:none}
+.ftg-suite-primary{background:#1a5f4f;color:#fff}.ftg-suite-secondary{background:#e8f5ef;color:#166534}.ftg-suite-danger{background:#fef2f2;color:#b91c1c;margin-top:5px}
+.ftg-suite-grid{display:grid;grid-template-columns:repeat(5,minmax(100px,1fr));gap:7px;margin-top:12px}.ftg-suite-grid button{border:1px solid #e2e8f0;background:#fff;border-radius:12px;padding:11px 7px;color:#334155;cursor:pointer;font-size:17px;transition:.18s}.ftg-suite-grid button:hover{border-color:#1a5f4f;transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,23,42,.08)}.ftg-suite-grid button b{display:block;font-size:9px;margin-top:4px}
+.ftg-modal-box label{font-size:10px;font-weight:700;color:#475569}.ftg-modal-box input:not([type=checkbox]):not([type=range]),.ftg-modal-box textarea,.ftg-modal-box select{width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;font:inherit;font-size:11px;background:#fff;margin:4px 0}.ftg-modal-box textarea{resize:vertical}
+@media(max-width:900px){.ftg-suite-grid{grid-template-columns:repeat(2,1fr)}#mentee-program-suite>div{align-items:flex-start!important;flex-direction:column}#mentee-program-suite>div>div:last-child{flex-wrap:wrap}}

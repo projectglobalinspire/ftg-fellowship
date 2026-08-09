@@ -1,4 +1,5 @@
 const { send, adminFetch, requireRole, method } = require('./_lib');
+const { deliverEmail } = require('./_email');
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST', 'PATCH', 'DELETE'])) return;
@@ -24,10 +25,11 @@ module.exports = async function handler(req, res) {
     if (!id) return send(res, 400, { error: 'ID pengguna wajib ada' });
     if (req.method === 'PATCH') {
       if (body.action && ['record_absence', 'correct_absence', 'lock', 'unlock', 'drop', 'restore'].includes(body.action)) {
-        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,absence_count,discipline_note`);
+        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,absence_count,warning_level,discipline_note`);
         const participant = rows && rows[0];
         if (!participant || participant.role !== 'mentee') return send(res, 404, { error: 'Mentee tidak ditemukan' });
         const currentAbsences = Math.max(0, Number(participant.absence_count || 0));
+        const currentLevel = Math.max(0, Number(participant.warning_level || 0));
         const profilePatch = {
           discipline_note: String(body.note || participant.discipline_note || '').slice(0, 1000),
           discipline_updated_at: new Date().toISOString(),
@@ -37,26 +39,37 @@ module.exports = async function handler(req, res) {
         let notification = null;
         if (body.action === 'record_absence') {
           profilePatch.absence_count = Math.min(99, currentAbsences + 1);
-          notification = { type: 'attendance_warning', title: 'Peringatan kehadiran', body: `Ketidakhadiran kamu tercatat ${profilePatch.absence_count} dari 3 kali. Hubungi panitia bila ada kekeliruan.`, href: 'mentee-dashboard.html' };
+          profilePatch.warning_level = Math.min(3, profilePatch.absence_count);
+          if (profilePatch.warning_level >= 3) profilePatch.status = 'suspended';
+          notification = { type: 'attendance_warning', title: profilePatch.warning_level >= 3 ? 'Akun terkunci karena ketidakhadiran' : `Peringatan ${profilePatch.warning_level}`, body: `Ketidakhadiran kamu tercatat ${profilePatch.absence_count} kali. ${profilePatch.warning_level >= 3 ? 'Akun dikunci; hubungi panitia.' : 'Hubungi panitia bila ada kekeliruan.'}`, href: profilePatch.warning_level >= 3 ? 'login.html' : 'mentee-dashboard.html' };
         } else if (body.action === 'correct_absence') {
           profilePatch.absence_count = Math.max(0, currentAbsences - 1);
+          profilePatch.warning_level = Math.min(2, profilePatch.absence_count);
         } else if (body.action === 'lock') {
           profilePatch.status = 'suspended';
+          profilePatch.warning_level = 3;
           notification = { type: 'account_locked', title: 'Akun dikunci panitia', body: profilePatch.discipline_note || 'Hubungi panitia untuk informasi lebih lanjut.', href: 'login.html' };
         } else if (body.action === 'unlock' || body.action === 'restore') {
           profilePatch.status = 'active';
+          profilePatch.warning_level = Math.min(2, currentAbsences);
           notification = { type: 'account_restored', title: 'Akun kembali aktif', body: 'Kamu sudah dapat mengikuti kegiatan fellowship kembali.', href: 'mentee-dashboard.html' };
         } else if (body.action === 'drop') {
           if (currentAbsences < 3) return send(res, 400, { error: 'Status gugur hanya dapat diberikan setelah 3 kali tidak hadir' });
           if (body.confirmation !== 'GUGUR') return send(res, 400, { error: 'Konfirmasi GUGUR tidak valid' });
           profilePatch.status = 'dropped';
+          profilePatch.warning_level = 4;
           notification = { type: 'participant_dropped', title: 'Status kepesertaan: gugur', body: profilePatch.discipline_note || 'Tercatat tidak mengikuti kegiatan sebanyak 3 kali.', href: 'login.html' };
         }
         const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
         if (profilePatch.status) {
           await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ ban_duration: profilePatch.status === 'active' ? 'none' : '876000h' }) });
         }
-        if (notification) await adminFetch('/rest/v1/notifications', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ user_id: id, delivery: { in_app: 'sent' } }, notification)) });
+        if (notification) {
+          const notices = await adminFetch('/rest/v1/notifications', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(Object.assign({ user_id: id, delivery: { in_app: 'sent', email:'queued' } }, notification)) });
+          await deliverEmail(participant, notification, notices[0] && notices[0].id);
+        }
+        const actionMap = { record_absence:profilePatch.warning_level === 1?'warning_1':profilePatch.warning_level === 2?'warning_2':'lock', correct_absence:'note', lock:'lock', unlock:'unlock', drop:'drop', restore:'restore' };
+        await adminFetch('/rest/v1/discipline_actions', { method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({ mentee_id:id, action:actionMap[body.action], from_level:currentLevel, to_level:profilePatch.warning_level === undefined ? currentLevel : profilePatch.warning_level, reason:String(body.note || `Tindakan ${body.action} oleh panitia`).slice(0,1000), actor_id:auth.user.id }) });
         await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: `discipline.${body.action}`, entity_type: 'profile', entity_id: id, detail: profilePatch }) });
         return send(res, 200, { ok: true, profile: updated && updated[0] });
       }

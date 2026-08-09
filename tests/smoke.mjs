@@ -18,11 +18,11 @@ test('all application pages have responsive metadata and valid local links', asy
   }
 });
 
-test('protected pages use the shared authenticated application engine', async () => {
-  const publicPages = new Set(['index.html', 'login.html', 'panitia.html']);
+test('protected pages use the shared engine or a dedicated authenticated flow', async () => {
+  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
-    assert.match(source, /app\.js\?v=\d+/, `${file}: shared engine missing`);
+    assert.ok(/app\.js\?v=\d+/.test(source) || (file === 'attendance.html' && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
   }
 });
 
@@ -116,4 +116,47 @@ test('every remaining dummy anchor is an intentional wired action', async () => 
       assert.ok(wired.some(pattern => pattern.test(label)), `${file}: unhandled dummy link "${label}"`);
     }
   }
+});
+
+test('central Drive uploads keep credentials server-side', async () => {
+  const app = await text('app.js');
+  const config = await text('ftg-config.js');
+  const driveApi = await text('api/drive.js');
+  assert.match(config, /driveMode:\s*'central'/);
+  assert.match(config, /projectglobalinspire@gmail\.com/);
+  assert.match(app, /centralDriveUpload/);
+  assert.match(app, /\/api\/drive/);
+  assert.match(driveApi, /GOOGLE_DRIVE_REFRESH_TOKEN/);
+  assert.match(driveApi, /uploadType=resumable/);
+  assert.match(driveApi, /requireRole\(req, res, \['mentee', 'mentor', 'admin'\]\)/);
+  assert.doesNotMatch([app, config].join('\n'), /GOOGLE_DRIVE_CLIENT_SECRET|GOOGLE_DRIVE_REFRESH_TOKEN/);
+});
+
+test('program suite covers durable revisions, flexible rubrics and operations', async () => {
+  const app = await text('app.js');
+  const migration = await text('supabase/migrations/20260810_program_suite.sql');
+  const operations = await text('api/operations.js');
+  assert.match(migration, /create table if not exists public\.review_history/i);
+  assert.match(migration, /create table if not exists public\.attendance_records/i);
+  assert.match(migration, /create table if not exists public\.certificates/i);
+  assert.match(app, /submission_versions/);
+  assert.match(app, /Riwayat versi & feedback/);
+  assert.match(app, /Template Rubrik Panitia/);
+  assert.match(operations, /attendance_create/);
+  assert.match(operations, /certificate_issue/);
+});
+
+test('real notifications, calendar, reports and health monitoring have server endpoints', async () => {
+  const email = await text('api/_email.js');
+  const reminders = await text('api/cron-reminders.js');
+  const calendar = await text('api/calendar.js');
+  const reports = await text('api/reports.js');
+  const app = await text('app.js');
+  assert.match(email, /api\.resend\.com\/emails/);
+  assert.match(reminders, /reminder_days: \[3, 1, 0\]/);
+  assert.match(reminders, /Tugas terlambat/);
+  assert.match(calendar, /BEGIN:VCALENDAR/);
+  assert.match(reports, /application\/vnd\.ms-excel/);
+  assert.match(app, /Kesehatan Program/);
+  assert.match(app, /Audit Log/);
 });

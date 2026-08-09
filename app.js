@@ -1488,12 +1488,18 @@
   function loadStructuredData() {
     if (!sb || !AUTH.profile) return Promise.resolve(false);
     return Promise.all([
-      sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status'),
+      sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status,warning_level,absence_count,last_active_at,graduation_eligible'),
       sb.from('program_settings').select('*').eq('id', 1).maybeSingle(),
       sb.from('cohorts').select('*').order('created_at', { ascending: false })
     ]).then(function (results) {
       var p = results[0], settings = results[1] && results[1].data, cohorts = results[2] && results[2].data;
-      if (settings) Object.assign(G.programSettings, { programName: settings.program_name, currentMonth: settings.current_month, currentWeek: settings.current_week, passingScore: settings.passing_score });
+      if (settings) Object.assign(G.programSettings, {
+        programName: settings.program_name, currentMonth: settings.current_month, currentWeek: settings.current_week,
+        passingScore: settings.passing_score, activePhase: settings.active_phase || 'DEFINE',
+        completionRequirement: settings.completion_requirement || 80, attendanceRequirement: settings.attendance_requirement || 80,
+        qualityRequirement: settings.quality_requirement || settings.passing_score || 75,
+        featureFlags: settings.feature_flags || {}, kpiWeights: settings.kpi_weights || {}, rubricTemplates: settings.rubric_templates || []
+      });
       if (cohorts && cohorts.length) G.cohorts = cohorts.map(function (c) { return { id:c.id, name:c.name, status:c.status, startDate:c.start_date || '', endDate:c.end_date || '' }; });
       (p.data || []).forEach(function (x) { AUTH.profilesById[x.id] = x; if (x.mentee_number) { AUTH.profilesByNumber[x.mentee_number] = x; if (x.mentor_id) G.pairings[x.mentee_number] = x.mentor_id; } });
       if (AUTH.profile.mentee_number) AUTH.profilesByNumber[AUTH.profile.mentee_number] = AUTH.profile;
@@ -1510,13 +1516,25 @@
         if (!task) { task = { id: a.id }; mentorAssignments().push(task); }
         Object.assign(task, { title: a.title, description: a.description, deadline: a.deadline ? String(a.deadline).slice(0, 10) : '', points: a.points, referenceLink: a.reference_link || '', checklist: a.checklist || [], rubric: a.rubric || [], targets: targets.length ? targets : (AUTH.profile.mentee_number ? [AUTH.profile.mentee_number] : []), active: a.status !== 'archived', createdAt: a.created_at, updatedAt: a.updated_at, structured: true });
       });
-      return sb.from('submissions').select('*,reviews(*),task_discussions(*)');
-    }).then(function (subResult) {
+      return Promise.all([
+        sb.from('submissions').select('*,reviews(*),task_discussions(*)'),
+        sb.from('submission_versions').select('*').order('version_number', { ascending: true }),
+        sb.from('review_history').select('*').order('created_at', { ascending: true })
+      ]);
+    }).then(function (subResults) {
+      var subResult = subResults && subResults[0], versionResult = subResults && subResults[1], historyResult = subResults && subResults[2];
       if (!subResult || subResult.error) return false;
+      var versionsBySubmission = {}, historyBySubmission = {};
+      ((versionResult && versionResult.data) || []).forEach(function (v) {
+        (versionsBySubmission[v.submission_id] = versionsBySubmission[v.submission_id] || []).push({ number:v.version_number, text:v.text_content || '', link:v.link_url || '', files:v.files || [], at:v.created_at });
+      });
+      ((historyResult && historyResult.data) || []).forEach(function (h) {
+        (historyBySubmission[h.submission_id] = historyBySubmission[h.submission_id] || []).push({ version:h.submission_version, score:h.score, decision:h.decision, text:h.feedback, rubricScores:h.rubric_scores || [], at:h.created_at, by:(AUTH.profilesById[h.reviewer_id] || {}).full_name || 'Mentor' });
+      });
       (subResult.data || []).forEach(function (row) {
         var p = AUTH.profilesById[row.mentee_id]; if (!p || !p.mentee_number) return;
-        var review = row.reviews && row.reviews[0];
-        mstate(p.mentee_number).assignmentSubmissions[row.assignment_id] = { text: row.text_content || '', link: row.link_url || '', files: row.files || [], checks: row.checklist_state || {}, submittedAt: row.submitted_at, status: row.status, discussion: (row.task_discussions || []).map(function (d) { var author = AUTH.profilesById[d.author_id]; return { from: author ? author.full_name : 'Pengguna', role: author ? author.role : '', text: d.message, at: d.created_at }; }), review: review ? { score: review.score, text: review.feedback, decision: review.decision, rubricScores: review.rubric_scores || [], at: review.updated_at, by: 'Mentor' } : null };
+        var review = row.status === 'submitted' ? null : (row.reviews && row.reviews[0]);
+        mstate(p.mentee_number).assignmentSubmissions[row.assignment_id] = { text: row.text_content || '', link: row.link_url || '', files: row.files || [], checks: row.checklist_state || {}, submittedAt: row.submitted_at, status: row.status, versions: versionsBySubmission[row.id] || [], reviewHistory: historyBySubmission[row.id] || [], discussion: (row.task_discussions || []).map(function (d) { var author = AUTH.profilesById[d.author_id]; return { from: author ? author.full_name : 'Pengguna', role: author ? author.role : '', text: d.message, at: d.created_at }; }), review: review ? { score: review.score, text: review.feedback, decision: review.decision, rubricScores: review.rubric_scores || [], at: review.updated_at, by: 'Mentor' } : null };
       });
       persistLocal(); return true;
     });
@@ -1538,14 +1556,27 @@
     var id = task.id + ':' + AUTH.user.id;
     return sb.from('submissions').upsert({ id: id, assignment_id: task.id, mentee_id: AUTH.user.id, text_content: sub.text || '', link_url: sub.link || null, files: sub.files || [], checklist_state: sub.checks || {}, status: sub.submittedAt ? 'submitted' : 'draft', submitted_at: sub.submittedAt || null, updated_at: new Date().toISOString() }).then(function (r) {
       if (r.error) throw r.error;
-      if (createVersion && sub.submittedAt) return sb.from('submission_versions').upsert({ submission_id: id, version_number: Math.max(1, (sub.versions || []).length), text_content: sub.text || '', link_url: sub.link || null, files: sub.files || [] }, { onConflict: 'submission_id,version_number' });
+      if (createVersion && sub.submittedAt) {
+        var versionNumber = (sub.versions || []).reduce(function (max, v) { return Math.max(max, Number(v.number) || 0); }, 0) + 1;
+        return sb.from('submission_versions').insert({ submission_id: id, version_number: versionNumber, text_content: sub.text || '', link_url: sub.link || null, files: sub.files || [] }).then(function (vr) {
+          if (vr.error) throw vr.error;
+          sub.versions.push({ number:versionNumber, text:sub.text || '', link:sub.link || '', files:JSON.parse(JSON.stringify(sub.files || [])), at:new Date().toISOString() });
+        });
+      }
     }).catch(reportError);
   }
   function structuredReviewSave(menteeId, task, sub) {
     if (!sb || !AUTH.user || !sub.review) return Promise.resolve();
     var p = AUTH.profilesByNumber[menteeId]; if (!p) return Promise.resolve();
     var sid = task.id + ':' + p.id;
-    return sb.from('reviews').upsert({ submission_id: sid, reviewer_id: AUTH.user.id, score: sub.review.score, decision: sub.review.decision || 'approved', feedback: sub.review.text, rubric_scores: sub.review.rubricScores || [], updated_at: new Date().toISOString() }, { onConflict: 'submission_id' }).then(function (r) { if (r.error) throw r.error; return sb.from('submissions').update({ status: sub.review.decision === 'revision' ? 'revision' : 'approved' }).eq('id', sid); }).then(function () { return apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ user_id:p.id, type:'review', title:sub.review.decision === 'revision' ? 'Tugas perlu direvisi' : 'Tugas sudah dinilai', body:task.title, href:'mentee-dashboard.html#tugas' }) }); }).catch(reportError);
+    var versionNumber = (sub.versions || []).reduce(function (max, v) { return Math.max(max, Number(v.number) || 0); }, 0) || 1;
+    var history = { submission_id:sid, submission_version:versionNumber, reviewer_id:AUTH.user.id, score:sub.review.score, decision:sub.review.decision || 'approved', feedback:sub.review.text, rubric_scores:sub.review.rubricScores || [] };
+    return sb.from('review_history').insert(history).then(function (hr) {
+      if (hr.error) throw hr.error;
+      sub.reviewHistory = sub.reviewHistory || [];
+      sub.reviewHistory.push({ version:versionNumber, score:history.score, decision:history.decision, text:history.feedback, rubricScores:history.rubric_scores, at:new Date().toISOString(), by:(mySession() || {}).name || 'Mentor' });
+      return sb.from('reviews').upsert({ submission_id: sid, reviewer_id: AUTH.user.id, score: sub.review.score, decision: sub.review.decision || 'approved', feedback: sub.review.text, rubric_scores: sub.review.rubricScores || [], updated_at: new Date().toISOString() }, { onConflict: 'submission_id' });
+    }).then(function (r) { if (r && r.error) throw r.error; return sb.from('submissions').update({ status: sub.review.decision === 'revision' ? 'revision' : 'approved' }).eq('id', sid); }).then(function () { return apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ user_id:p.id, type:'review', title:sub.review.decision === 'revision' ? 'Tugas perlu direvisi' : 'Tugas sudah dinilai', body:task.title, href:'mentee-dashboard.html#tugas' }) }); }).catch(reportError);
   }
   function structuredDiscussionSave(menteeId, task, text) {
     if (!sb || !AUTH.user) return Promise.resolve();
@@ -2012,6 +2043,7 @@
      ================================================================ */
   var DRIVE = { token: null, expires: 0, tc: null, profile: null };
   function driveConfigured() { return !!(window.FTG_CONF && FTG_CONF.driveClientId); }
+  function centralDriveEnabled() { return !!(window.FTG_CONF && FTG_CONF.driveMode === 'central' && FTG_CONF.driveRootFolderId); }
   function driveReady() { return DRIVE.token && Date.now() < DRIVE.expires; }
 
   function googleIdentity() {
@@ -2077,8 +2109,8 @@
       '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:18px;background:#e8f5ef;color:#1a5f4f;display:grid;place-items:center;font-size:28px"><i class="fa-brands fa-google-drive"></i></div>' +
       '<h2 id="ftg-google-title" style="font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px">Hubungkan akun Google</h2>' +
       '<p style="font-size:13px;line-height:1.6;color:#64748b;margin-bottom:18px">' +
-      (mentor ? 'Wajib untuk membuka dan mengunduh berkas tugas yang dibagikan mentee. Pastikan memakai akun Google mentor.' : 'Akun Google diperlukan agar berkas tugas dapat diunggah ke Drive dan dibagikan secara privat kepada mentor.') +
-      '</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#475569">File tidak dibuat publik. Akses hanya diberikan kepada akun Google mentor yang terhubung.</div>' +
+      (mentor ? 'Wajib untuk membuka dan mengunduh berkas tugas dari Drive pusat FTG. Pastikan memakai akun Google mentor.' : 'Akun Google diperlukan untuk identitas pengumpulan. Berkas disimpan di Drive pusat FTG, bukan Drive pribadimu.') +
+      '</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#475569">File tidak dibuat publik. Pemilik berkas: <b>' + esc((window.FTG_CONF && FTG_CONF.driveOwnerEmail) || 'projectglobalinspire@gmail.com') + '</b>; akses baca diberikan kepada mentee dan mentor terkait.</div>' +
       '<button id="btn-google-gate" type="button" style="width:100%;border:0;border-radius:12px;background:#1a5f4f;color:#fff;padding:12px 16px;font-size:13px;font-weight:800;cursor:pointer"><i class="fa-brands fa-google mr-2"></i> Lanjutkan dengan Google</button>' +
       '<button id="btn-google-logout" type="button" style="margin-top:9px;width:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;color:#64748b;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer">Keluar / ganti akun FTG</button>' +
       '<p id="ftg-google-error" style="display:none;color:#dc2626;font-size:11px;margin-top:10px"></p></section>';
@@ -2114,7 +2146,7 @@
       if (!window.google || !google.accounts || !google.accounts.oauth2) { reject(new Error('Google SDK belum siap')); return; }
       if (!DRIVE.tc) {
         var scopes = 'https://www.googleapis.com/auth/userinfo.email' +
-          (myRole() === 'mentee' ? ' https://www.googleapis.com/auth/drive.file' : '');
+          (myRole() === 'mentee' && !centralDriveEnabled() ? ' https://www.googleapis.com/auth/drive.file' : '');
         DRIVE.tc = google.accounts.oauth2.initTokenClient({
           client_id: FTG_CONF.driveClientId,
           scope: scopes,
@@ -2261,6 +2293,47 @@
     });
   }
 
+  /* Mode pusat: refresh token akun FTG hanya berada di server. Browser
+     menerima URL resumable sekali pakai untuk mengirim isi berkas langsung
+     ke Google tanpa melewati batas ukuran Vercel Function. */
+  function centralDriveUpload(file, folderLabel) {
+    return apiRequest('/api/drive', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'session', file_name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size: file.size, folder_label: folderLabel
+      })
+    }).then(function (session) {
+      return fetch(session.upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      }).then(function (response) {
+        if (!response.ok) return driveFailure(response);
+        return response.json();
+      });
+    }).then(function (uploaded) {
+      return apiRequest('/api/drive', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'finalize', file_id: uploaded.id })
+      }).then(function (result) {
+        return { file: result.file || uploaded, sharing: result.sharing || {}, owner: result.owner || 'projectglobalinspire@gmail.com' };
+      });
+    });
+  }
+
+  function uploadToConfiguredDrive(file, menteeName, folderLabel) {
+    if (centralDriveEnabled()) return centralDriveUpload(file, folderLabel);
+    return driveFolderPath(menteeName, folderLabel)
+      .then(function (folderId) { return driveUpload(file, folderId); })
+      .then(function (uploaded) {
+        return shareDriveFileWithMentor(uploaded.id).then(function (sharing) {
+          return { file: uploaded, sharing: sharing, owner: DRIVE.profile && DRIVE.profile.email };
+        });
+      });
+  }
+
   /* Pilih berkas → unggah ke Drive (folder per mentee & per minggu). */
   function wireFilePicker(btn, onAdd) {
     var inp = document.createElement('input');
@@ -2307,13 +2380,7 @@
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
       driveAuth()
-        .then(function () { return driveFolderPath(menteeName, week); })
-        .then(function (folderId) { return driveUpload(f, folderId); })
-        .then(function (res) {
-          return shareDriveFileWithMentor(res.id).then(function (sharing) {
-            return { file: res, sharing: sharing };
-          });
-        })
+        .then(function () { return uploadToConfiguredDrive(f, menteeName, week); })
         .then(function (result) {
           var res = result.file, sharing = result.sharing;
           record({
@@ -2321,7 +2388,7 @@
             link: res.webViewLink,
             downloadLink: res.webContentLink || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(res.id)),
             mimeType: res.mimeType || f.type || '',
-            googleOwnerEmail: DRIVE.profile && DRIVE.profile.email,
+            googleOwnerEmail: result.owner || (DRIVE.profile && DRIVE.profile.email),
             sharedWithMentor: !!sharing.shared,
             sharePending: !sharing.shared,
             shareReason: sharing.reason || ''
@@ -2393,18 +2460,16 @@
       btn.textContent = 'Mengunggah...';
       var menteeName = (mySession() || {}).name || MENTEES[MID].name;
       driveAuth()
-        .then(function () { return driveFolderPath(menteeName, 'Tugas Mentor - ' + task.title); })
-        .then(function (folderId) { return driveUpload(f, folderId); })
-        .then(function (uploaded) {
-          return shareDriveFileWithMentor(uploaded.id).then(function (sharing) { return { uploaded: uploaded, sharing: sharing }; });
-        })
+        .then(function () { return uploadToConfiguredDrive(f, menteeName, 'Tugas Mentor - ' + task.title); })
         .then(function (result) {
+          var uploaded = result.file;
           sub.files = (sub.files || []).filter(function (x) { return x.name !== f.name; });
           sub.files.push({
-            name: f.name, size: f.size, driveId: result.uploaded.id,
-            link: result.uploaded.webViewLink,
-            downloadLink: result.uploaded.webContentLink || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(result.uploaded.id)),
-            mimeType: result.uploaded.mimeType || f.type || '',
+            name: f.name, size: f.size, driveId: uploaded.id,
+            link: uploaded.webViewLink,
+            downloadLink: uploaded.webContentLink || ('https://drive.google.com/uc?export=download&id=' + encodeURIComponent(uploaded.id)),
+            mimeType: uploaded.mimeType || f.type || '',
+            googleOwnerEmail: result.owner || 'projectglobalinspire@gmail.com',
             sharedWithMentor: !!result.sharing.shared,
             shareReason: result.sharing.reason || '',
             at: new Date().toISOString()
@@ -2421,10 +2486,11 @@
   function openTaskSubmission(task, onDone) {
     var sub = taskSubmission(MID, task.id) || { text: '', link: '', files: [] };
     sub.files = sub.files || []; sub.checks = sub.checks || {}; sub.discussion = sub.discussion || []; sub.versions = sub.versions || [];
+    var historyHtml = assignmentHistoryHtml(sub);
     if (sub.review && sub.review.decision !== 'revision') {
       modal('<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:4px">✅ ' + esc(task.title) + '</h3>' +
         '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Tugas sudah dinilai oleh mentor.</p>' +
-        '<div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:14px"><b style="color:#166534">Skor ' + sub.review.score + '/100</b><p style="font-size:12px;color:#475569;margin-top:6px">' + esc(sub.review.text) + '</p></div>');
+        '<div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:14px"><b style="color:#166534">Skor ' + sub.review.score + '/100</b><p style="font-size:12px;color:#475569;margin-top:6px">' + esc(sub.review.text) + '</p></div>' + historyHtml);
       return;
     }
     modal(
@@ -2434,7 +2500,7 @@
       (task.referenceLink ? '<a href="' + esc(task.referenceLink) + '" target="_blank" rel="noopener" style="display:inline-block;color:#8b5cf6;font-size:11px;font-weight:700;margin-bottom:12px">🔗 Buka materi/referensi</a>' : '') +
       ((task.checklist || []).length ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px;margin-bottom:12px"><p style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:6px">Checklist pengerjaan</p>' + task.checklist.map(function (item, i) { return '<label style="display:flex;gap:7px;align-items:center;font-size:11px;color:#334155;margin:5px 0"><input type="checkbox" data-task-check="' + i + '" ' + (sub.checks[i] ? 'checked' : '') + '> ' + esc(item) + '</label>'; }).join('') + '</div>' : '') +
       (sub.review && sub.review.decision === 'revision' ? '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px;margin-bottom:12px"><b style="font-size:11px;color:#b91c1c">Mentor meminta revisi</b><p style="font-size:11px;color:#475569;margin-top:4px">' + esc(sub.review.text || '') + '</p></div>' : '') +
-      '<label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:5px">Jawaban / catatan pengerjaan</label>' +
+      historyHtml + '<label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:5px">Jawaban / catatan pengerjaan</label>' +
       '<textarea id="customTaskText" rows="5" style="width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px;font:inherit;font-size:12px;resize:vertical" placeholder="Tulis hasil pekerjaanmu...">' + esc(sub.text || '') + '</textarea>' +
       '<label style="display:block;font-size:12px;font-weight:700;color:#334155;margin:10px 0 5px">Link hasil (opsional)</label>' +
       '<input id="customTaskLink" type="url" value="' + esc(sub.link || '') + '" placeholder="https://..." style="width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:10px;font-size:12px">' +
@@ -2486,14 +2552,13 @@
           if (!text && !link && !(sub.files || []).length) { toast('Isi jawaban, link, atau unggah file terlebih dahulu', '✏️'); return; }
           sub.text = text; sub.link = link;
           var now = new Date().toISOString();
-          sub.versions.push({ number: sub.versions.length + 1, text: text, link: link, files: (sub.files || []).slice(), at: now });
           sub.submittedAt = now; sub.review = null; sub.status = 'review';
           S.assignmentSubmissions[task.id] = sub;
           S.portfolio = (S.portfolio || []).filter(function (p) { return p.taskId !== task.id; });
           S.portfolio.unshift({ taskId: task.id, title: task.title, link: link, files: (sub.files || []).slice(), submittedAt: now });
           addAudit('assignment.submit', task.title, task.id);
           pushEvent('📥', ((mySession() || {}).name || MENTEES[MID].name) + ' mengumpulkan tugas "' + task.title + '"', 'mentor');
-          saveState(); structuredSubmissionSave(task, sub, true); close(); toast('Tugas berhasil dikumpulkan ke mentor', '✅'); confetti();
+          saveState(); structuredSubmissionSave(task, sub, true).then(saveState); close(); toast('Tugas berhasil dikumpulkan ke mentor', '✅'); confetti();
           if (onDone) onDone();
         });
       }
@@ -2773,8 +2838,9 @@
     task = task || null;
     var defaultDeadline = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     var selected = task ? (task.targets || []).slice() : menteeIds().slice();
-    var defaultRubric = [{ label: 'Kedalaman analisis', weight: 40 }, { label: 'Keselarasan nilai', weight: 25 }, { label: 'Kualitas refleksi', weight: 20 }, { label: 'Ketepatan waktu', weight: 15 }];
+    var defaultRubric = [{ label: 'Kedalaman analisis', weight: 40, max: 100 }, { label: 'Keselarasan nilai', weight: 25, max: 100 }, { label: 'Kualitas refleksi', weight: 20, max: 100 }, { label: 'Ketepatan waktu', weight: 15, max: 100 }];
     var rubric = task && task.rubric ? task.rubric : defaultRubric;
+    var adminRubrics = (G.programSettings && G.programSettings.rubricTemplates) || [];
     modal(
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">' + (task ? '✏️ Edit Tugas' : '➕ Berikan Tugas Baru') + '</h3>' +
       '<p style="font-size:11px;color:#64748b;margin-bottom:14px">Tugas dan notifikasi langsung muncul pada akun mentee yang dipilih.</p>' +
@@ -2789,8 +2855,9 @@
       '<input id="mentorTaskLink" type="url" value="' + esc(task ? (task.referenceLink || '') : '') + '" placeholder="https://..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px">' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Checklist pengerjaan (satu langkah per baris)</label>' +
       '<textarea id="mentorTaskChecklist" rows="3" placeholder="Baca brief&#10;Kerjakan analisis&#10;Periksa kembali hasil" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical">' + esc(task ? (task.checklist || []).join('\n') : '') + '</textarea>' +
-      '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Rubrik penilaian (kriteria | bobot)</label>' +
-      '<textarea id="mentorTaskRubric" rows="4" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical">' + esc(rubric.map(function (r) { return r.label + ' | ' + r.weight; }).join('\n')) + '</textarea>' +
+      '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Rubrik penilaian (kriteria | bobot | nilai maksimum)</label>' +
+      (adminRubrics.length ? '<select id="mentorRubricTemplate" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;background:#fff;margin-bottom:6px"><option value="">Pilih template rubrik panitia</option>' + adminRubrics.map(function(r,i){return '<option value="'+i+'">'+esc(r.name)+'</option>';}).join('') + '</select>' : '') +
+      '<textarea id="mentorTaskRubric" rows="4" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical">' + esc(rubric.map(function (r) { return r.label + ' | ' + r.weight + ' | ' + (r.max || 100); }).join('\n')) + '</textarea>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:11px 0 6px"><label style="font-size:11px;font-weight:800;color:#334155">Berikan kepada *</label><button id="mentorTaskAll" type="button" style="border:0;background:#e8f5ef;color:#166534;border-radius:8px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer">Pilih Semua</button></div>' +
       '<div id="mentorTaskTargets" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:130px;overflow:auto">' + menteeIds().map(function (id) {
         var m = MENTEES[id];
@@ -2799,10 +2866,12 @@
       '<label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:11px;color:#475569"><input id="mentorTaskTemplate" type="checkbox"> Simpan juga sebagai template mentor</label>' +
       '<button id="mentorTaskSave" type="button" style="margin-top:12px;width:100%;border:0;background:#1a5f4f;color:#fff;border-radius:12px;padding:11px;font-size:13px;font-weight:800;cursor:pointer">' + (task ? 'Simpan Perubahan' : 'Berikan Tugas & Kirim Notifikasi') + '</button>',
       function (box, close) {
+        var rubricTemplate = $('#mentorRubricTemplate', box);
+        if (rubricTemplate) rubricTemplate.addEventListener('change', function () { var picked=adminRubrics[+this.value]; if(picked) $('#mentorTaskRubric',box).value=(picked.criteria||[]).map(function(r){return r.label+' | '+r.weight+' | '+(r.max||100);}).join('\n'); });
         var templatePick = $('#mentorTaskTemplatePick', box);
         if (templatePick) templatePick.addEventListener('change', function () {
           var t = G.assignmentTemplates.filter(function (x) { return x.id === templatePick.value; })[0]; if (!t) return;
-          $('#mentorTaskTitle', box).value = t.title || ''; $('#mentorTaskDesc', box).value = t.description || ''; $('#mentorTaskPoints', box).value = t.points || 0; $('#mentorTaskLink', box).value = t.referenceLink || ''; $('#mentorTaskChecklist', box).value = (t.checklist || []).join('\n'); $('#mentorTaskRubric', box).value = (t.rubric || []).map(function (r) { return r.label + ' | ' + r.weight; }).join('\n');
+          $('#mentorTaskTitle', box).value = t.title || ''; $('#mentorTaskDesc', box).value = t.description || ''; $('#mentorTaskPoints', box).value = t.points || 0; $('#mentorTaskLink', box).value = t.referenceLink || ''; $('#mentorTaskChecklist', box).value = (t.checklist || []).join('\n'); $('#mentorTaskRubric', box).value = (t.rubric || []).map(function (r) { return r.label + ' | ' + r.weight + ' | ' + (r.max || 100); }).join('\n');
         });
         $('#mentorTaskAll', box).addEventListener('click', function () {
           $all('#mentorTaskTargets input', box).forEach(function (c) { c.checked = true; });
@@ -2817,7 +2886,7 @@
           var checklist = $('#mentorTaskChecklist', box).value.split(/\r?\n/).map(function (v) { return v.trim(); }).filter(Boolean);
           var rubricRows = $('#mentorTaskRubric', box).value.split(/\r?\n/).map(function (line) {
             var parts = line.split('|');
-            return { label: (parts[0] || '').trim(), weight: Math.max(0, +(parts[1] || 0)) };
+            return { label: (parts[0] || '').trim(), weight: Math.max(0, +(parts[1] || 0)), max: Math.max(1, +(parts[2] || 100)) };
           }).filter(function (r) { return r.label && r.weight; });
           var weightTotal = rubricRows.reduce(function (sum, r) { return sum + r.weight; }, 0);
           if (!rubricRows.length || weightTotal !== 100) { toast('Total bobot rubrik harus tepat 100%', '⚠️'); return; }
@@ -2940,8 +3009,8 @@
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">📝 Review — ' + esc(name) + '</h3>' +
       '<p style="font-size:12px;color:#64748b;margin-bottom:12px">' + esc(task.title) + '</p>' +
       (sub.text ? '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:11px;max-height:150px;overflow:auto"><p style="font-size:10px;font-weight:800;color:#8b5cf6;margin-bottom:4px">JAWABAN MENTEE</p><p style="font-size:12px;color:#475569;white-space:pre-line">' + esc(sub.text) + '</p></div>' : '') +
-      attachmentLinks({ files: sub.files || [], links: sub.link ? [sub.link] : [] }) +
-      ((task.rubric || []).length ? '<div style="background:#f8fafc;border-radius:12px;padding:10px;margin-bottom:10px"><p style="font-size:11px;font-weight:800;color:#334155;margin-bottom:6px">Nilai per rubrik</p>' + task.rubric.map(function (r, i) { return '<label style="display:grid;grid-template-columns:1fr 70px;gap:8px;align-items:center;font-size:10px;color:#475569;margin:5px 0"><span>' + esc(r.label) + ' (' + r.weight + '%)</span><input type="number" min="0" max="100" value="85" data-rubric-score="' + i + '" style="border:1px solid #cbd5e1;border-radius:8px;padding:5px;width:70px"></label>'; }).join('') + '</div>' : '') +
+      attachmentLinks({ files: sub.files || [], links: sub.link ? [sub.link] : [] }) + assignmentHistoryHtml(sub) +
+      ((task.rubric || []).length ? '<div style="background:#f8fafc;border-radius:12px;padding:10px;margin-bottom:10px"><p style="font-size:11px;font-weight:800;color:#334155;margin-bottom:6px">Nilai per rubrik</p>' + task.rubric.map(function (r, i) { var max=r.max || 100; return '<label style="display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;font-size:10px;color:#475569;margin:5px 0"><span>' + esc(r.label) + ' (' + r.weight + '%)</span><span><input type="number" min="0" max="'+max+'" value="'+Math.round(max*.85)+'" data-rubric-score="' + i + '" style="border:1px solid #cbd5e1;border-radius:8px;padding:5px;width:55px"> / '+max+'</span></label>'; }).join('') + '</div>' : '') +
       '<label style="font-size:12px;font-weight:700;color:#334155">Skor: <span id="customScoreVal" style="color:#1a5f4f;font-size:16px">85</span>/100</label>' +
       '<input id="customScoreRange" type="range" min="50" max="100" value="85" style="width:100%;margin:8px 0 14px;accent-color:#1a5f4f">' +
       '<label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:6px">Feedback untuk mentee</label>' +
@@ -2954,7 +3023,7 @@
         function recalcRubric() {
           var inputs = $all('[data-rubric-score]', box);
           if (!inputs.length) return;
-          var total = inputs.reduce(function (sum, inp, i) { return sum + Math.max(0, Math.min(100, +inp.value || 0)) * task.rubric[i].weight / 100; }, 0);
+          var total = inputs.reduce(function (sum, inp, i) { var max=task.rubric[i].max || 100; return sum + (Math.max(0, Math.min(max, +inp.value || 0)) / max * 100) * task.rubric[i].weight / 100; }, 0);
           range.value = Math.round(total); val.textContent = Math.round(total);
         }
         range.addEventListener('input', function () { val.textContent = range.value; });
@@ -2962,7 +3031,7 @@
         $('#customReviewSave', box).addEventListener('click', function () {
           var text = $('#customFeedback', box).value.trim() || 'Kerja bagus! Pertahankan dan terus tingkatkan kualitasnya.';
           var decision = $('#customDecision', box).value;
-          var rubricScores = $all('[data-rubric-score]', box).map(function (inp, i) { return { label: task.rubric[i].label, weight: task.rubric[i].weight, score: +inp.value || 0 }; });
+          var rubricScores = $all('[data-rubric-score]', box).map(function (inp, i) { return { label: task.rubric[i].label, weight: task.rubric[i].weight, max:task.rubric[i].max || 100, score: +inp.value || 0 }; });
           sub.review = { score: +range.value, text: text, decision: decision, rubricScores: rubricScores, at: new Date().toISOString(), by: (mySession() || {}).name || 'Pak Faris' };
           var reply = $('#customMentorReply', box).value.trim();
           if (reply) { sub.discussion = sub.discussion || []; sub.discussion.push({ from: (mySession() || {}).name || 'Pak Faris', role: 'mentor', text: reply, at: new Date().toISOString() }); }
@@ -3931,6 +4000,14 @@
     var done = Object.keys((sub && sub.checks) || {}).filter(function (k) { return sub.checks[k]; }).length;
     return Math.round(done / total * 100);
   }
+  function assignmentHistoryHtml(sub) {
+    var versions = sub.versions || [], reviews = sub.reviewHistory || [];
+    if (!versions.length && !reviews.length) return '';
+    return '<details style="margin:10px 0;border:1px solid #e2e8f0;border-radius:12px;padding:9px;background:#fff"><summary style="cursor:pointer;font-size:11px;font-weight:800;color:#334155">Riwayat versi & feedback (' + versions.length + ' versi)</summary><div style="max-height:180px;overflow:auto;margin-top:7px">' + versions.slice().reverse().map(function (v) {
+      var related = reviews.filter(function (r) { return Number(r.version) === Number(v.number); });
+      return '<div style="border-left:3px solid #8b5cf6;padding:6px 9px;margin:6px 0;background:#f8fafc"><b style="font-size:10px;color:#6d28d9">Versi ' + v.number + '</b><small style="float:right;color:#94a3b8">' + esc(v.at ? new Date(v.at).toLocaleString('id-ID') : '') + '</small><p style="font-size:10px;color:#475569;margin-top:4px">' + esc((v.text || 'Lampiran/link').slice(0, 180)) + '</p>' + related.map(function (r) { return '<p style="font-size:10px;color:' + (r.decision === 'revision' ? '#b91c1c' : '#166534') + ';margin-top:5px"><b>' + (r.decision === 'revision' ? 'Revisi diminta' : 'Disetujui') + ' · ' + r.score + '/100:</b> ' + esc(r.text) + '</p>'; }).join('') + '</div>';
+    }).join('') + '</div></details>';
+  }
   function mountMenteeWorkCenter() {
     if (PAGE.indexOf('mentee-dashboard') !== 0) return;
     var host = $('main > div.px-8'); if (!host || document.getElementById('mentee-work-center')) return;
@@ -4033,13 +4110,40 @@
       $('#cohortSave', box).addEventListener('click', function () { active.name = $('#cohortName', box).value.trim() || 'Cohort FTG'; active.startDate = $('#cohortStart', box).value; active.endDate = $('#cohortEnd', box).value; active.status = 'active'; if (!G.cohorts.length) G.cohorts.push(active); $all('[data-pairing]', box).forEach(function (s) { G.pairings[s.getAttribute('data-pairing')] = s.value; }); addAudit('cohort.update', active.name); saveState(); var pairings=$all('[data-pairing]',box).map(function(s){return {mentee_number:+s.getAttribute('data-pairing'),mentor_email:s.value==='faris'?'faris@ftg.id':null};}); apiRequest('/api/program',{method:'POST',body:JSON.stringify({action:'cohort',id:active.id,name:active.name,start_date:active.startDate,end_date:active.endDate,pairings:pairings})}).catch(reportError); close(); toast('Cohort dan pairing tersimpan', '👥'); });
     });
   }
+  function downloadProtected(url, filename) {
+    fetch(url, { headers:{ Authorization:'Bearer ' + AUTH.accessToken } }).then(function(r){ if(!r.ok) return r.json().then(function(x){throw new Error(x.error || 'Unduhan gagal');}); return r.blob(); }).then(function(blob){ var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(a.href);},1000); }).catch(function(e){toast(e.message,'⚠️');});
+  }
+  function openProtectedReport(url) { var win=window.open('about:blank','_blank');fetch(url,{headers:{Authorization:'Bearer '+AUTH.accessToken}}).then(function(r){if(!r.ok)throw new Error('Laporan gagal dibuka');return r.blob();}).then(function(blob){if(win)win.location.href=URL.createObjectURL(blob);}).catch(function(e){if(win)win.close();toast(e.message,'⚠️');}); }
+  function openProgramSettingsSuite() {
+    var p=G.programSettings || {}, flags=Object.assign({assignments:true,workshops:true,journal:true,leaderboard:true,certificates:true},p.featureFlags||{});
+    modal('<h3 style="font-weight:800;color:#1e293b">⚙️ Pengaturan Program Lengkap</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><label>Nama program<input id="suiteName" value="'+esc(p.programName||'')+'"></label><label>Tahap aktif<select id="suitePhase"><option>EMPATHIZE</option><option>DEFINE</option><option>IDEATE</option><option>PROTOTYPE</option><option>TEST</option></select></label><label>Bulan aktif<input id="suiteMonth" type="number" min="1" value="'+(p.currentMonth||1)+'"></label><label>Minggu aktif<input id="suiteWeek" type="number" min="1" value="'+(p.currentWeek||1)+'"></label><label>Minimal tugas selesai (%)<input id="suiteCompletion" type="number" min="0" max="100" value="'+(p.completionRequirement||80)+'"></label><label>Minimal kehadiran (%)<input id="suiteAttendance" type="number" min="0" max="100" value="'+(p.attendanceRequirement||80)+'"></label><label>Minimal nilai<input id="suiteQuality" type="number" min="0" max="100" value="'+(p.qualityRequirement||75)+'"></label><label>Nilai kelulusan<input id="suitePass" type="number" min="0" max="100" value="'+(p.passingScore||75)+'"></label></div><p style="font-size:11px;font-weight:800;margin:10px 0 5px">Akses fitur</p><div id="suiteFlags" style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'+Object.keys(flags).map(function(k){return '<label><input type="checkbox" data-flag="'+esc(k)+'" '+(flags[k]?'checked':'')+'> '+esc(k)+'</label>';}).join('')+'</div><button id="suiteSettingsSave" class="ftg-suite-primary">Simpan semua pengaturan</button>',function(box,close){ $('#suitePhase',box).value=p.activePhase||'DEFINE'; $('#suiteSettingsSave',box).addEventListener('click',function(){ var featureFlags={};$all('[data-flag]',box).forEach(function(x){featureFlags[x.getAttribute('data-flag')]=x.checked;});var payload={action:'settings',program_name:$('#suiteName',box).value,current_month:+$('#suiteMonth',box).value,current_week:+$('#suiteWeek',box).value,passing_score:+$('#suitePass',box).value,active_phase:$('#suitePhase',box).value,completion_requirement:+$('#suiteCompletion',box).value,attendance_requirement:+$('#suiteAttendance',box).value,quality_requirement:+$('#suiteQuality',box).value,feature_flags:featureFlags,kpi_weights:p.kpiWeights||{completion:40,quality:35,engagement:25},rubric_templates:p.rubricTemplates||[]};apiRequest('/api/program',{method:'POST',body:JSON.stringify(payload)}).then(function(){close();toast('Pengaturan program tersimpan','✅');location.reload();}).catch(function(e){toast(e.message,'⚠️');}); });});
+  }
+  function openRubricSuite() {
+    var rows=JSON.parse(JSON.stringify((G.programSettings&&G.programSettings.rubricTemplates)||[]));
+    function html(){return '<h3 style="font-weight:800;color:#1e293b">🎯 Template Rubrik Panitia</h3><p style="font-size:11px;color:#64748b">Format setiap kriteria: nama | bobot | nilai maksimum. Total bobot harus 100%.</p><div id="suiteRubricRows">'+rows.map(function(r,i){return '<div style="border:1px solid #e2e8f0;border-radius:11px;padding:9px;margin-top:8px"><input data-rname="'+i+'" value="'+esc(r.name)+'"><textarea data-rcriteria="'+i+'" rows="4">'+esc((r.criteria||[]).map(function(c){return c.label+' | '+c.weight+' | '+(c.max||100);}).join('\n'))+'</textarea><button data-rremove="'+i+'" class="ftg-suite-danger">Hapus</button></div>';}).join('')+'</div><div style="display:flex;gap:7px"><button id="suiteRubricAdd" class="ftg-suite-secondary">+ Rubrik</button><button id="suiteRubricSave" class="ftg-suite-primary">Simpan rubrik</button></div>';}
+    modal(html(),function(box,close){ function collect(){return $all('[data-rname]',box).map(function(n){var i=n.getAttribute('data-rname');return {name:n.value.trim(),criteria:($('[data-rcriteria="'+i+'"]',box).value||'').split(/\r?\n/).map(function(line){var x=line.split('|');return {label:(x[0]||'').trim(),weight:+x[1]||0,max:+x[2]||100};}).filter(function(x){return x.label;})};});} $all('[data-rremove]',box).forEach(function(b){b.addEventListener('click',function(){rows=collect();rows.splice(+b.getAttribute('data-rremove'),1);close();openRubricSuite();});});$('#suiteRubricAdd',box).addEventListener('click',function(){rows=collect();rows.push({name:'Rubrik Baru',criteria:[{label:'Kualitas hasil',weight:100,max:100}]});G.programSettings.rubricTemplates=rows;close();openRubricSuite();});$('#suiteRubricSave',box).addEventListener('click',function(){rows=collect();if(rows.some(function(r){return !r.name||!r.criteria.length||r.criteria.reduce(function(s,c){return s+c.weight;},0)!==100;})){toast('Nama, kriteria, dan total bobot 100% wajib valid','⚠️');return;}G.programSettings.rubricTemplates=rows;apiRequest('/api/program',{method:'POST',body:JSON.stringify({action:'settings',program_name:G.programSettings.programName,current_month:G.programSettings.currentMonth,current_week:G.programSettings.currentWeek,passing_score:G.programSettings.passingScore,active_phase:G.programSettings.activePhase||'DEFINE',completion_requirement:G.programSettings.completionRequirement||80,attendance_requirement:G.programSettings.attendanceRequirement||80,quality_requirement:G.programSettings.qualityRequirement||75,feature_flags:G.programSettings.featureFlags||{},kpi_weights:G.programSettings.kpiWeights||{},rubric_templates:rows})}).then(function(){close();toast('Template rubrik tersimpan','✅');}).catch(function(e){toast(e.message,'⚠️');});});});
+  }
+  function openEventSuite() {
+    apiRequest('/api/operations?resource=events').then(function(data){modal('<h3 style="font-weight:800;color:#1e293b">🗓️ Kalender Program</h3><div style="max-height:180px;overflow:auto">'+((data.events||[]).map(function(e){return '<p style="border-bottom:1px solid #f1f5f9;padding:6px;font-size:11px"><b>'+esc(e.title)+'</b><br><span style="color:#64748b">'+new Date(e.starts_at).toLocaleString('id-ID')+' · '+esc(e.event_type)+'</span></p>';}).join('')||'<p>Belum ada agenda.</p>')+'</div><hr style="margin:10px 0"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><input id="eventTitle" placeholder="Nama kegiatan"><select id="eventType"><option value="workshop">Workshop</option><option value="mentoring">Mentoring</option><option value="opening">Opening</option><option value="closing">Closing</option><option value="other">Lainnya</option></select><input id="eventStart" type="datetime-local"><input id="eventEnd" type="datetime-local"><input id="eventLocation" placeholder="Lokasi / ruang"><input id="eventLink" type="url" placeholder="Link meeting"></div><textarea id="eventDesc" rows="2" placeholder="Keterangan"></textarea><button id="eventSave" class="ftg-suite-primary">Tambahkan ke kalender</button><a href="/api/calendar?public=1" target="_blank" style="display:block;text-align:center;font-size:11px;margin-top:8px">Unduh / sinkronkan kalender (.ics)</a>',function(box,close){$('#eventSave',box).addEventListener('click',function(){apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'event_save',title:$('#eventTitle',box).value,event_type:$('#eventType',box).value,starts_at:$('#eventStart',box).value,ends_at:$('#eventEnd',box).value||null,location:$('#eventLocation',box).value,meeting_link:$('#eventLink',box).value,description:$('#eventDesc',box).value,visibility:'all'})}).then(function(){close();toast('Agenda ditambahkan','✅');}).catch(function(e){toast(e.message,'⚠️');});});});}).catch(function(e){toast(e.message,'⚠️');});
+  }
+  function openAttendanceSuite() {
+    modal('<h3 style="font-weight:800;color:#1e293b">📷 Buat Presensi QR</h3><input id="attTitle" placeholder="Nama kegiatan"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label>Dibuka<input id="attOpen" type="datetime-local"></label><label>Ditutup<input id="attClose" type="datetime-local"></label></div><button id="attCreate" class="ftg-suite-primary">Buat QR presensi</button>',function(box,close){$('#attCreate',box).addEventListener('click',function(){apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'attendance_create',title:$('#attTitle',box).value,opens_at:$('#attOpen',box).value,closes_at:$('#attClose',box).value})}).then(function(data){close();var qr='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(data.check_in_url);modal('<div style="text-align:center"><h3 style="font-weight:800">QR Presensi Siap</h3><img src="'+qr+'" alt="QR presensi" style="width:260px;max-width:100%;margin:12px auto"><p style="font-size:10px;word-break:break-all">'+esc(data.check_in_url)+'</p><button id="copyAttendance" class="ftg-suite-primary">Salin link presensi</button></div>',function(qbox){$('#copyAttendance',qbox).addEventListener('click',function(){navigator.clipboard.writeText(data.check_in_url);toast('Link disalin','✅');});});}).catch(function(e){toast(e.message,'⚠️');});});});
+  }
+  function openCertificateSuite() {
+    apiRequest('/api/operations').then(function(data){var mentees=(data.profiles||[]).filter(function(p){return p.role==='mentee';});modal('<h3 style="font-weight:800;color:#1e293b">🎓 Sertifikat Otomatis</h3><p style="font-size:11px;color:#64748b">Sistem memeriksa tugas, kehadiran, nilai, dan status peserta sebelum menerbitkan.</p><div style="max-height:380px;overflow:auto">'+mentees.map(function(p){return '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding:8px"><span><b style="font-size:11px">'+esc(p.full_name)+'</b><small style="display:block;color:#64748b">'+esc(p.status)+'</small></span><button data-cert="'+p.id+'" class="ftg-suite-secondary">Periksa & Terbitkan</button></div>';}).join('')+'</div>',function(box){$all('[data-cert]',box).forEach(function(b){b.addEventListener('click',function(){b.disabled=true;apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'certificate_issue',mentee_id:b.getAttribute('data-cert')})}).then(function(x){toast('Sertifikat '+x.certificate.certificate_number+' diterbitkan','🎓');b.textContent='Terbit';}).catch(function(e){toast(e.message,'⚠️');b.disabled=false;});});});});}).catch(function(e){toast(e.message,'⚠️');});
+  }
+  function openHealthSuite() {
+    apiRequest('/api/operations').then(function(d){var mentees=(d.profiles||[]).filter(function(p){return p.role==='mentee';}),subs=d.submissions||[],assignments=(d.assignments||[]).filter(function(a){return a.status==='published';}),history=d.review_history||[],now=Date.now();var rows=mentees.map(function(p){var own=subs.filter(function(s){return s.mentee_id===p.id;}),risk=[];if((p.warning_level||0)>0)risk.push('Peringatan '+p.warning_level);if(!p.google_email)risk.push('Drive belum terhubung');if(!p.last_active_at||now-new Date(p.last_active_at).getTime()>7*86400000)risk.push('Tidak aktif >7 hari');var late=assignments.filter(function(a){return a.deadline&&new Date(a.deadline).getTime()<now&&!own.some(function(s){return s.assignment_id===a.id&&s.submitted_at;});}).length;if(late)risk.push(late+' tugas terlambat');if(own.some(function(s){return s.status==='submitted'&&!(s.reviews||[]).length;}))risk.push('Belum direview');var ownIds=new Set(own.map(function(s){return s.id;})),scores=history.filter(function(h){return ownIds.has(h.submission_id)&&h.decision==='approved';}).map(function(h){return +h.score;});if(scores.length>=2&&scores[scores.length-1]<scores[scores.length-2])risk.push('Nilai menurun');return {p:p,risk:risk};});modal('<h3 style="font-weight:800;color:#1e293b">❤️ Kesehatan Program</h3><p style="font-size:10px;color:#64748b">Deteksi otomatis aktivitas, keterlambatan, review, nilai, kehadiran, dan Drive.</p><div style="max-height:420px;overflow:auto">'+rows.map(function(x){return '<div style="border-left:4px solid '+(x.risk.length?'#ef4444':'#22c55e')+';padding:8px;margin:6px 0;background:#f8fafc"><b style="font-size:11px">'+esc(x.p.full_name)+'</b><p style="font-size:10px;color:'+(x.risk.length?'#b91c1c':'#166534')+'">'+(x.risk.join(' · ')||'Kondisi sehat')+'</p></div>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});
+  }
+  function openAuditSuite(){apiRequest('/api/operations?resource=audit').then(function(d){modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Audit Log</h3><div style="max-height:450px;overflow:auto">'+(d.logs||[]).map(function(a){return '<p style="font-size:10px;border-bottom:1px solid #f1f5f9;padding:7px"><b>'+esc(a.action)+'</b> · '+esc((a.profiles&&a.profiles.full_name)||'Sistem')+'<br><span style="color:#94a3b8">'+new Date(a.created_at).toLocaleString('id-ID')+' · '+esc(a.entity_type||'')+'</span></p>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});}
+  function mountMenteeProgramSuite(){if(PAGE.indexOf('mentee-dashboard')!==0||!AUTH.profile)return;var host=$('main > div.px-8'),old=byId('mentee-program-suite');if(!host||old)return;var sec=document.createElement('section');sec.id='mentee-program-suite';sec.className='bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';sec.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="font-size:15px;font-weight:800">🗓️ Agenda, Presensi & Sertifikat</h2><p style="font-size:11px;color:#64748b">Satu tempat untuk kegiatan program dan kelulusanmu.</p></div><div style="display:flex;gap:6px"><a href="/api/calendar?public=1" class="ftg-suite-secondary">Kalender</a><button id="myAttendance" class="ftg-suite-secondary">Presensi</button><button id="myCertificate" class="ftg-suite-primary">Sertifikat</button></div></div>';host.insertBefore(sec,host.firstChild);$('#myAttendance',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=attendance').then(function(d){modal('<h3 style="font-weight:800">Riwayat Kehadiran</h3>'+((d.records||[]).map(function(r){return '<p style="padding:7px;border-bottom:1px solid #f1f5f9;font-size:11px"><b>'+esc((r.attendance_sessions||{}).title||'Kegiatan')+'</b><span style="float:right">'+esc(r.status)+'</span></p>';}).join('')||'<p style="color:#64748b">Belum ada data presensi.</p>'));});});$('#myCertificate',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=certificate').then(function(d){if(d.certificate){var u='certificate.html?code='+encodeURIComponent(d.certificate.verification_code);modal('<div style="text-align:center"><h3 style="font-weight:800">🎓 Sertifikat '+esc(d.certificate.certificate_number)+'</h3><p style="margin:8px">'+esc(d.certificate.recipient_name)+'</p><a href="'+u+'" target="_blank" class="ftg-suite-primary">Lihat & cetak sertifikat</a></div>');}else{var e=d.eligibility||{};modal('<h3 style="font-weight:800">Syarat Sertifikat</h3><p>Tugas: '+(e.completion||0)+'% / '+((e.requirements||{}).completion||80)+'%</p><p>Kehadiran: '+(e.attendance||0)+'% / '+((e.requirements||{}).attendance||80)+'%</p><p>Nilai: '+(e.quality||0)+' / '+((e.requirements||{}).quality||75)+'</p><p style="margin-top:8px;color:#b45309">Sertifikat diterbitkan panitia setelah seluruh syarat terpenuhi.</p>');}});});}
   function mountAdminOperations() {
     if (PAGE.indexOf('admin-') !== 0) return;
     var host = $('main > div.px-8'); if (!host || document.getElementById('admin-operations')) return;
     var total = 0, submitted = 0, reviewed = 0; mentorAssignments().forEach(function (t) { (t.targets || []).forEach(function (id) { total++; var s = taskSubmission(id, t.id); if (s && s.submittedAt) submitted++; if (s && s.review && s.review.decision !== 'revision') reviewed++; }); });
     var sec = document.createElement('section'); sec.id = 'admin-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
-    sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🏛️ Operasional Program</h2><p style="font-size:11px;color:#64748b">Cohort, pairing, tugas global, monitoring, audit, laporan, dan pengaturan.</p></div><div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><button id="adminCohort" style="border:0;background:#0ea5e9;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Cohort & Pairing</button><button id="adminGlobalTask" style="border:0;background:#f97316;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">+ Tugas Global</button><button id="adminExport" style="border:0;background:#8b5cf6;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Export CSV</button><button id="adminSettings" style="border:0;background:#1a5f4f;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Pengaturan</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px"><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#1a5f4f">' + G.cohorts.length + '</b><p style="font-size:9px;color:#64748b">Cohort</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#8b5cf6">' + Object.keys(G.pairings || {}).length + '</b><p style="font-size:9px;color:#64748b">Pairing</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#f97316">' + submitted + '/' + total + '</b><p style="font-size:9px;color:#64748b">Terkumpul</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#16a34a">' + reviewed + '</b><p style="font-size:9px;color:#64748b">Dinilai</p></div></div><details style="margin-top:10px"><summary style="font-size:11px;font-weight:800;color:#334155;cursor:pointer">Audit log terbaru (' + G.auditLog.length + ')</summary><div style="max-height:150px;overflow:auto;margin-top:7px">' + (G.auditLog.length ? G.auditLog.slice(0, 12).map(function (a) { return '<p style="font-size:9px;color:#64748b;border-bottom:1px solid #f1f5f9;padding:5px 0"><b>' + esc(a.actor) + '</b> · ' + esc(a.action) + ' · ' + esc(a.detail) + '<br>' + new Date(a.at).toLocaleString('id-ID') + '</p>'; }).join('') : '<p style="font-size:10px;color:#94a3b8">Belum ada aktivitas tercatat.</p>') + '</div></details>';
-    host.insertBefore(sec, host.firstChild); $('#adminCohort', sec).addEventListener('click', openCohortManager); $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); }); $('#adminExport', sec).addEventListener('click', exportProgramCsv); $('#adminSettings', sec).addEventListener('click', openProgramSettings);
+    sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🏛️ Pusat Operasi Program</h2><p style="font-size:11px;color:#64748b">Semua kendali program, peserta, pembelajaran, kehadiran, dan pelaporan.</p></div><button id="adminGlobalTask" class="ftg-suite-primary">+ Tugas Global</button></div><div class="ftg-suite-grid"><button id="adminCohort">👥<b>Cohort & Pairing</b></button><button id="adminSettings">⚙️<b>Pengaturan</b></button><button id="adminRubrics">🎯<b>Rubrik</b></button><button id="adminCalendar">🗓️<b>Kalender</b></button><button id="adminAttendance">📷<b>Presensi QR</b></button><button id="adminCertificates">🎓<b>Sertifikat</b></button><button id="adminHealth">❤️<b>Kesehatan Program</b></button><button id="adminAudit">🛡️<b>Audit Log</b></button><button id="adminExcel">📊<b>Unduh Excel</b></button><button id="adminPdf">📄<b>Laporan PDF</b></button></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px"><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#1a5f4f">' + G.cohorts.length + '</b><p style="font-size:9px;color:#64748b">Cohort</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#8b5cf6">' + Object.keys(G.pairings || {}).length + '</b><p style="font-size:9px;color:#64748b">Pairing</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#f97316">' + submitted + '/' + total + '</b><p style="font-size:9px;color:#64748b">Terkumpul</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#16a34a">' + reviewed + '</b><p style="font-size:9px;color:#64748b">Dinilai</p></div></div>';
+    host.insertBefore(sec, host.firstChild); $('#adminCohort', sec).addEventListener('click', openCohortManager); $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); }); $('#adminSettings', sec).addEventListener('click', openProgramSettingsSuite); $('#adminRubrics',sec).addEventListener('click',openRubricSuite);$('#adminCalendar',sec).addEventListener('click',openEventSuite);$('#adminAttendance',sec).addEventListener('click',openAttendanceSuite);$('#adminCertificates',sec).addEventListener('click',openCertificateSuite);$('#adminHealth',sec).addEventListener('click',openHealthSuite);$('#adminAudit',sec).addEventListener('click',openAuditSuite);$('#adminExcel',sec).addEventListener('click',function(){downloadProtected('/api/reports?format=xls','laporan-ftg-fellowship.xls');});$('#adminPdf',sec).addEventListener('click',function(){openProtectedReport('/api/reports?format=html');});
   }
 
   function disciplineStatus(status) {
@@ -4201,6 +4305,7 @@
     try { mountMenteeWorkCenter(); } catch (e) { console.warn(e); }
     try { mountMentorOperations(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
+    try { mountMenteeProgramSuite(); } catch (e) { console.warn(e); }
     try { mountAdminDiscipline(); } catch (e) { reportError(e); }
     try { mountSecureAccountAdmin(); } catch (e) { reportError(e); }
     try { mountAdminInsights(); } catch (e) { reportError(e); }

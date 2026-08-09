@@ -10,6 +10,9 @@ window.FTG_CONF = {
        FTG Fellowship 2026 / Mentee / <Nama Mentee> / Minggu <N> / <berkas>
      Selama kosong, berkas hanya dicatat namanya (tidak diunggah). */
   driveClientId: '916717961665-f05tp163cvq5vf04iljr1b29dkumfohh.apps.googleusercontent.com',
+  driveMode: 'central',
+  driveOwnerEmail: 'projectglobalinspire@gmail.com',
+  driveRootFolderId: '1n2zMb6_cCe3yRcPuLVLlvUrME5u1QOs7',
   driveRootFolder: 'FTG Fellowship 2026',
   driveMaxFileSizeMb: 20,
 
