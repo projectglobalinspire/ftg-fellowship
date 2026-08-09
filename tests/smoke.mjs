@@ -64,3 +64,16 @@ test('first-login welcome is personalized for mentees and mentors', async () => 
   assert.match(source, /ftgWelcomeSeen:/);
   assert.match(source, /onboarding_completed:\s*true/);
 });
+
+test('participant discipline requires three absences and admin confirmation', async () => {
+  const app = await text('app.js');
+  const api = await text('api/admin-users.js');
+  const migration = await text('supabase/migrations/20260809_participant_discipline.sql');
+  assert.match(app, /Disiplin & Status Peserta/);
+  assert.match(app, /Tetapkan Gugur/);
+  assert.match(api, /currentAbsences < 3/);
+  assert.match(api, /body\.confirmation !== 'GUGUR'/);
+  assert.match(migration, /absence_count integer not null default 0/);
+  assert.match(migration, /'dropped'/);
+  assert.doesNotMatch(migration, /grant update/i);
+});

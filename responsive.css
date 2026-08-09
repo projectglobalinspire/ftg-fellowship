@@ -377,6 +377,57 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .ftg-welcome-body blockquote { margin: 12px 2px; color: #64748b; font-size: 10px; line-height: 1.55; text-align: center; font-style: italic; }
 .ftg-welcome-start { width: 100%; border: 0; border-radius: 12px; padding: 11px 14px; background: var(--ftg-green); color: #fff; font-size: 11px; font-weight: 900; box-shadow: 0 10px 22px rgba(23,107,87,.22); }
 .ftg-welcome-start i { margin-left: 6px; }
+.ftg-discipline-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.ftg-discipline-head > div { display: flex; align-items: center; gap: 11px; }
+.ftg-discipline-head > div > span { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 13px; display: grid; place-items: center; background: #fff1f2; color: #e11d48; font-size: 16px; }
+.ftg-discipline-head h2 { color: #1e293b; font-size: 15px; font-weight: 900; }
+.ftg-discipline-head p { color: #64748b; font-size: 10px; line-height: 1.5; margin-top: 2px; }
+.ftg-discipline-head > a { color: #176b57; background: #ecfdf5; border-radius: 9px; padding: 8px 10px; font-size: 9px; font-weight: 900; text-decoration: none; white-space: nowrap; }
+.ftg-discipline-head > a i { margin-left: 4px; }
+.ftg-discipline-summary { display: flex; gap: 7px; flex-wrap: wrap; margin: 14px 0 10px; }
+.ftg-discipline-summary > span { display: inline-flex; align-items: baseline; gap: 4px; background: #f8fafc; color: #64748b; border: 1px solid #eef2f7; border-radius: 9px; padding: 6px 9px; font-size: 9px; }
+.ftg-discipline-summary b { color: #334155; font-size: 13px; }
+.ftg-discipline-summary .is-warning { background: #fffbeb; color: #a16207; }
+.ftg-discipline-summary .is-locked { background: #fff1f2; color: #be123c; }
+.ftg-discipline-summary .is-dropped { background: #fee2e2; color: #991b1b; }
+.ftg-discipline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ftg-discipline-card { width: 100%; display: grid; grid-template-columns: 36px minmax(0,1fr) auto auto 12px; align-items: center; gap: 9px; border: 1px solid #edf1f5; background: #fff; border-radius: 13px; padding: 10px; text-align: left; }
+.ftg-discipline-card:hover { border-color: #cbd5e1; box-shadow: 0 8px 24px rgba(15,23,42,.07); transform: translateY(-1px); }
+.ftg-discipline-card-avatar { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 12px; background: linear-gradient(145deg,#f97316,#fb923c); color: #fff; font-size: 10px; font-weight: 900; }
+.ftg-discipline-card-person { min-width: 0; }
+.ftg-discipline-card-person b, .ftg-discipline-card-person small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ftg-discipline-card-person b { color: #334155; font-size: 11px; }
+.ftg-discipline-card-person small { color: #94a3b8; font-size: 8px; margin-top: 2px; }
+.ftg-discipline-absence { text-align: center; color: #15803d; }
+.ftg-discipline-absence b, .ftg-discipline-absence small { display: block; }
+.ftg-discipline-absence b { font-size: 11px; }
+.ftg-discipline-absence small { font-size: 7px; color: #94a3b8; }
+.ftg-discipline-absence.is-warning { color: #d97706; }
+.ftg-discipline-absence.is-critical { color: #dc2626; }
+.ftg-discipline-status { border-radius: 999px; padding: 5px 7px; font-size: 7px; font-weight: 900; white-space: nowrap; }
+.ftg-discipline-card > i { color: #cbd5e1; font-size: 9px; }
+.ftg-discipline-loading { grid-column: 1/-1; text-align: center; color: #94a3b8; padding: 22px; font-size: 11px; }
+.ftg-discipline-person { display: flex; align-items: center; gap: 12px; }
+.ftg-discipline-avatar { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 15px; color: #fff; background: linear-gradient(145deg,#f97316,#fb923c); font-weight: 900; }
+.ftg-discipline-person span { display: inline-block; padding: 4px 7px; border-radius: 999px; font-size: 8px; font-weight: 900; }
+.ftg-discipline-person h3 { color: #1e293b; font-size: 17px; font-weight: 900; margin-top: 4px; }
+.ftg-discipline-person p { color: #94a3b8; font-size: 9px; }
+.ftg-attendance-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 14px; padding: 12px; margin: 14px 0; }
+.ftg-attendance-rule b { color: #334155; font-size: 12px; }
+.ftg-attendance-rule p { color: #718096; font-size: 9px; line-height: 1.45; margin-top: 2px; }
+.ftg-attendance-dots { display: flex; gap: 5px; flex: 0 0 auto; }
+.ftg-attendance-dots span { width: 28px; height: 32px; display: grid; place-items: center; position: relative; border-radius: 9px; background: #dcfce7; color: #15803d; font-size: 10px; }
+.ftg-attendance-dots span.is-absent { background: #fee2e2; color: #dc2626; }
+.ftg-attendance-dots small { position: absolute; right: 3px; bottom: 1px; font-size: 6px; font-weight: 900; opacity: .7; }
+.ftg-discipline-modal > label { display: block; color: #475569; font-size: 10px; font-weight: 900; margin-bottom: 5px; }
+.ftg-discipline-modal textarea { width: 100%; resize: vertical; border: 1px solid #dbe4ec; border-radius: 11px; padding: 9px 10px; color: #334155; font-size: 11px; }
+.ftg-discipline-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-top: 11px; }
+.ftg-discipline-actions button { border: 0; border-radius: 10px; padding: 9px 7px; background: #f1f5f9; color: #475569; font-size: 9px; font-weight: 900; }
+.ftg-discipline-actions button.is-warning { background: #fff7ed; color: #c2410c; }
+.ftg-discipline-actions button.is-danger { background: #fff1f2; color: #be123c; }
+.ftg-discipline-actions button.is-drop { background: #991b1b; color: #fff; }
+.ftg-discipline-actions button.is-success { background: #ecfdf5; color: #047857; }
+.ftg-discipline-help { color: #94a3b8; font-size: 8px; line-height: 1.5; text-align: center; margin-top: 11px; }
 main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35, 55, 80, .055); }
 
 @media (max-width: 767px) {
@@ -389,6 +440,14 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
   .ftg-welcome-hero h3 { font-size: 18px; }
   .ftg-welcome-body { padding-top: 14px; }
   #admin-production-insights, #admin-operations { padding: 16px !important; }
+  #admin-discipline-center { padding: 16px !important; }
+  .ftg-discipline-head { display: block; }
+  .ftg-discipline-head > a { display: inline-block; margin-top: 10px; }
+  .ftg-discipline-grid { grid-template-columns: 1fr; }
+  .ftg-discipline-card { grid-template-columns: 36px minmax(0,1fr) auto 12px; }
+  .ftg-discipline-status { grid-column: 2/4; justify-self: start; }
+  .ftg-discipline-card > i { grid-column: 4; grid-row: 1/3; }
+  .ftg-attendance-rule { align-items: flex-start; flex-direction: column; }
   #admin-production-insights > div:first-child,
   #admin-operations > div:first-child { display: block !important; }
   #admin-production-insights > div:first-child > div:last-child {

@@ -23,13 +23,51 @@ module.exports = async function handler(req, res) {
     const id = body.id || req.query.id;
     if (!id) return send(res, 400, { error: 'ID pengguna wajib ada' });
     if (req.method === 'PATCH') {
+      if (body.action && ['record_absence', 'correct_absence', 'lock', 'unlock', 'drop', 'restore'].includes(body.action)) {
+        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,absence_count,discipline_note`);
+        const participant = rows && rows[0];
+        if (!participant || participant.role !== 'mentee') return send(res, 404, { error: 'Mentee tidak ditemukan' });
+        const currentAbsences = Math.max(0, Number(participant.absence_count || 0));
+        const profilePatch = {
+          discipline_note: String(body.note || participant.discipline_note || '').slice(0, 1000),
+          discipline_updated_at: new Date().toISOString(),
+          discipline_updated_by: auth.user.id,
+          updated_at: new Date().toISOString()
+        };
+        let notification = null;
+        if (body.action === 'record_absence') {
+          profilePatch.absence_count = Math.min(99, currentAbsences + 1);
+          notification = { type: 'attendance_warning', title: 'Peringatan kehadiran', body: `Ketidakhadiran kamu tercatat ${profilePatch.absence_count} dari 3 kali. Hubungi panitia bila ada kekeliruan.`, href: 'mentee-dashboard.html' };
+        } else if (body.action === 'correct_absence') {
+          profilePatch.absence_count = Math.max(0, currentAbsences - 1);
+        } else if (body.action === 'lock') {
+          profilePatch.status = 'suspended';
+          notification = { type: 'account_locked', title: 'Akun dikunci panitia', body: profilePatch.discipline_note || 'Hubungi panitia untuk informasi lebih lanjut.', href: 'login.html' };
+        } else if (body.action === 'unlock' || body.action === 'restore') {
+          profilePatch.status = 'active';
+          notification = { type: 'account_restored', title: 'Akun kembali aktif', body: 'Kamu sudah dapat mengikuti kegiatan fellowship kembali.', href: 'mentee-dashboard.html' };
+        } else if (body.action === 'drop') {
+          if (currentAbsences < 3) return send(res, 400, { error: 'Status gugur hanya dapat diberikan setelah 3 kali tidak hadir' });
+          if (body.confirmation !== 'GUGUR') return send(res, 400, { error: 'Konfirmasi GUGUR tidak valid' });
+          profilePatch.status = 'dropped';
+          notification = { type: 'participant_dropped', title: 'Status kepesertaan: gugur', body: profilePatch.discipline_note || 'Tercatat tidak mengikuti kegiatan sebanyak 3 kali.', href: 'login.html' };
+        }
+        const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
+        if (profilePatch.status) {
+          await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify({ ban_duration: profilePatch.status === 'active' ? 'none' : '876000h' }) });
+        }
+        if (notification) await adminFetch('/rest/v1/notifications', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ user_id: id, delivery: { in_app: 'sent' } }, notification)) });
+        await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: `discipline.${body.action}`, entity_type: 'profile', entity_id: id, detail: profilePatch }) });
+        return send(res, 200, { ok: true, profile: updated && updated[0] });
+      }
       const profilePatch = {};
-      ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
+      ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
+      if (body.status && !['active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       if (Object.keys(profilePatch).length) await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
       const authPatch = {};
       if (body.email) authPatch.email = body.email;
       if (body.password) authPatch.password = body.password;
-      if (body.status) authPatch.ban_duration = body.status === 'suspended' ? '876000h' : 'none';
+      if (body.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(body.status) ? '876000h' : 'none';
       if (Object.keys(authPatch).length) await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(authPatch) });
       await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.update', entity_type: 'profile', entity_id: id, detail: profilePatch }) });
       return send(res, 200, { ok: true });
