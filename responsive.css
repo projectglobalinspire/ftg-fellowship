@@ -358,6 +358,25 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .ftg-insight-grid b { display: block; color: var(--ftg-ink); font-size: 20px; line-height: 1.1; }
 .ftg-insight-grid span { color: #718096; font-size: 9px; }
 .ftg-modal-box { border: 1px solid rgba(255,255,255,.7); }
+.ftg-welcome-hero { margin: -26px -26px 0; padding: 28px 26px 24px; border-radius: 20px 20px 26px 26px; color: #fff; text-align: center; background: linear-gradient(140deg, #176b57, #0f8a6d); position: relative; overflow: hidden; }
+.ftg-welcome-hero.is-mentee { background: linear-gradient(140deg, #ef6c00, #f97316 55%, #fb923c); }
+.ftg-welcome-hero::before, .ftg-welcome-hero::after { content: ''; position: absolute; border-radius: 999px; background: rgba(255,255,255,.11); }
+.ftg-welcome-hero::before { width: 150px; height: 150px; right: -62px; top: -72px; }
+.ftg-welcome-hero::after { width: 90px; height: 90px; left: -48px; bottom: -48px; }
+.ftg-welcome-mark { width: 50px; height: 50px; margin: 0 auto 10px; display: grid; place-items: center; border-radius: 16px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.28); font-size: 21px; box-shadow: 0 12px 28px rgba(15,23,42,.15); }
+.ftg-welcome-role { display: inline-block; font-size: 8px; font-weight: 900; letter-spacing: .14em; background: rgba(255,255,255,.15); border-radius: 999px; padding: 5px 9px; }
+.ftg-welcome-hero h3 { margin-top: 9px; font-size: 20px; line-height: 1.25; font-weight: 900; }
+.ftg-welcome-hero p { margin: 6px auto 0; max-width: 360px; font-size: 11px; line-height: 1.55; color: rgba(255,255,255,.88); }
+.ftg-welcome-body { padding-top: 17px; }
+.ftg-welcome-intro { color: #526579; font-size: 11px; line-height: 1.65; text-align: center; margin: 0 3px 13px; }
+.ftg-welcome-steps { display: grid; gap: 8px; }
+.ftg-welcome-step { display: flex; align-items: flex-start; gap: 11px; background: #f8fafc; border: 1px solid #eef2f7; border-radius: 13px; padding: 10px 11px; }
+.ftg-welcome-step > span { width: 31px; height: 31px; flex: 0 0 31px; display: grid; place-items: center; border-radius: 10px; background: #e8f5f0; color: var(--ftg-green); font-size: 12px; }
+.ftg-welcome-step b { color: #253b4f; font-size: 11px; }
+.ftg-welcome-step p { color: #718096; font-size: 9px; line-height: 1.5; margin-top: 2px; }
+.ftg-welcome-body blockquote { margin: 12px 2px; color: #64748b; font-size: 10px; line-height: 1.55; text-align: center; font-style: italic; }
+.ftg-welcome-start { width: 100%; border: 0; border-radius: 12px; padding: 11px 14px; background: var(--ftg-green); color: #fff; font-size: 11px; font-weight: 900; box-shadow: 0 10px 22px rgba(23,107,87,.22); }
+.ftg-welcome-start i { margin-left: 6px; }
 main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35, 55, 80, .055); }
 
 @media (max-width: 767px) {
@@ -366,6 +385,9 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
   .ftg-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ftg-modal-ov { padding: 10px !important; align-items: flex-end !important; }
   .ftg-modal-box { border-radius: 20px 20px 12px 12px !important; padding: 20px !important; max-height: 91vh !important; }
+  .ftg-welcome-hero { margin: -20px -20px 0; padding: 23px 18px 20px; border-radius: 20px 20px 24px 24px; }
+  .ftg-welcome-hero h3 { font-size: 18px; }
+  .ftg-welcome-body { padding-top: 14px; }
   #admin-production-insights, #admin-operations { padding: 16px !important; }
   #admin-production-insights > div:first-child,
   #admin-operations > div:first-child { display: block !important; }

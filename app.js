@@ -4012,10 +4012,42 @@
     });
   }
   function mountOnboarding() {
-    if (!AUTH.profile || AUTH.profile.onboarding_completed || sessionStorage.getItem('ftgOnboardingSeen')) return;
-    sessionStorage.setItem('ftgOnboardingSeen','1');
-    var content = AUTH.profile.role === 'mentee' ? [['1','Lihat Pusat Kerja','Prioritas dan deadline selalu tampil di dashboard.'],['2','Hubungkan Google Drive','File tugas tersimpan privat dan dibagikan hanya ke mentor.'],['3','Kumpulkan & pantau feedback','Revisi dan nilai muncul di notifikasi.']] : AUTH.profile.role === 'mentor' ? [['1','Berikan tugas','Gunakan checklist, rubrik, dan target mentee.'],['2','Pantau perhatian','Dashboard menandai mentee terlambat atau perlu revisi.'],['3','Review & tindak lanjut','Nilai, minta revisi, lalu catat hasil 1-on-1.']] : [['1','Kelola akun aman','Buat dan nonaktifkan akun dari Supabase Auth.'],['2','Atur program','Kelola cohort, pairing, tugas global, dan reminder.'],['3','Pantau kesehatan','Gunakan analytics, audit, backup, dan status integrasi.']];
-    modal('<div style="text-align:center"><span style="font-size:38px">👋</span><h3 style="font-weight:900;color:#1e293b;font-size:18px">Selamat datang, ' + esc(AUTH.profile.full_name.split(' ')[0]) + '</h3><p style="font-size:11px;color:#64748b;margin:4px 0 14px">Tiga langkah untuk mulai menggunakan platform.</p></div>' + content.map(function (x) { return '<div style="display:flex;gap:10px;background:#f8fafc;border-radius:12px;padding:10px;margin:7px 0"><span style="width:25px;height:25px;border-radius:8px;background:#1a5f4f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900">' + x[0] + '</span><div><b style="font-size:11px;color:#334155">' + x[1] + '</b><p style="font-size:10px;color:#64748b">' + x[2] + '</p></div></div>'; }).join('') + '<button id="onboardingDone" style="width:100%;margin-top:10px;border:0;background:#f97316;color:#fff;border-radius:11px;padding:10px;font-weight:800">Mulai Gunakan Platform</button>', function (box, close) { $('#onboardingDone',box).addEventListener('click',function(){AUTH.profile.onboarding_completed=true;sb.from('profiles').update({onboarding_completed:true,updated_at:new Date().toISOString()}).eq('id',AUTH.user.id);close();}); });
+    if (!AUTH.profile || !AUTH.user || !/^(mentee|mentor)$/.test(AUTH.profile.role) || AUTH.profile.onboarding_completed) return;
+    if ((AUTH.profile.role === 'mentee' && PAGE.indexOf('mentee-dashboard') !== 0) || (AUTH.profile.role === 'mentor' && PAGE.indexOf('mentor-dashboard') !== 0)) return;
+    var seenKey = 'ftgWelcomeSeen:' + AUTH.user.id;
+    if (sessionStorage.getItem(seenKey)) return;
+    sessionStorage.setItem(seenKey, '1');
+    var isMentee = AUTH.profile.role === 'mentee';
+    var name = AUTH.profile.full_name || (isMentee ? 'Future Builder' : 'Mentor');
+    var roleLabel = isMentee ? 'MENTEE · FUTURE BUILDER' : 'MENTOR · GROWTH PARTNER';
+    var greeting = isMentee ? 'Perjalanan hebatmu dimulai dari sini.' : 'Terima kasih sudah hadir untuk menumbuhkan para Future Builder.';
+    var intro = isMentee
+      ? 'Dashboard ini adalah pusat perjalanan fellowship-mu—tempat melihat tugas, mengumpulkan karya, menerima feedback, dan memantau perkembanganmu.'
+      : 'Dashboard mentor membantu Anda memberi arahan yang jelas, memantau perkembangan mentee, dan mengubah setiap tugas menjadi proses belajar yang bermakna.';
+    var quote = isMentee
+      ? 'Berani belajar, berani mencoba, dan bertumbuh satu langkah setiap hari.'
+      : 'Satu feedback yang tepat dapat membuka langkah besar bagi seorang mentee.';
+    var content = isMentee
+      ? [['fa-list-check','Cek prioritasmu','Lihat tugas baru, deadline, dan agenda mentoring dari dashboard.'],['fa-cloud-arrow-up','Hubungkan Google Drive','Unggah karya dengan aman dan bagikan hanya kepada mentor.'],['fa-seedling','Tumbuh dari feedback','Pantau nilai, revisi, badge, dan progres perjalananmu.']]
+      : [['fa-file-circle-plus','Berikan tugas yang jelas','Tentukan target mentee, deadline, checklist, dan rubrik penilaian.'],['fa-chart-line','Pantau perkembangan','Temukan mentee yang membutuhkan perhatian atau tindak lanjut.'],['fa-comments','Dampingi dengan bermakna','Review karya, berikan feedback, dan catat hasil sesi 1-on-1.']];
+    modal('<div class="ftg-welcome-hero ' + (isMentee ? 'is-mentee' : 'is-mentor') + '"><div class="ftg-welcome-mark"><i class="fa-solid ' + (isMentee ? 'fa-rocket' : 'fa-hand-holding-heart') + '"></i></div><span class="ftg-welcome-role">' + roleLabel + '</span><h3>Selamat datang, ' + esc(name) + '! 👋</h3><p>' + greeting + '</p></div><div class="ftg-welcome-body"><p class="ftg-welcome-intro">' + intro + '</p><div class="ftg-welcome-steps">' + content.map(function (x) { return '<div class="ftg-welcome-step"><span><i class="fa-solid ' + x[0] + '"></i></span><div><b>' + x[1] + '</b><p>' + x[2] + '</p></div></div>'; }).join('') + '</div><blockquote>“' + quote + '”</blockquote><button id="onboardingDone" class="ftg-welcome-start">' + (isMentee ? 'Mulai Perjalanan Saya' : 'Mulai Mendampingi Mentee') + ' <i class="fa-solid fa-arrow-right"></i></button></div>', function (box, close) {
+      var done = $('#onboardingDone', box);
+      done.addEventListener('click', function () {
+        done.disabled = true;
+        done.innerHTML = 'Menyiapkan dashboard...';
+        sb.from('profiles').update({ onboarding_completed: true, updated_at: new Date().toISOString() }).eq('id', AUTH.user.id).then(function (result) {
+          if (result.error) throw result.error;
+          AUTH.profile.onboarding_completed = true;
+          close();
+          toast(isMentee ? 'Selamat memulai perjalananmu!' : 'Selamat mendampingi para mentee!', '✨');
+        }).catch(function (error) {
+          sessionStorage.removeItem(seenKey);
+          done.disabled = false;
+          done.innerHTML = (isMentee ? 'Mulai Perjalanan Saya' : 'Mulai Mendampingi Mentee') + ' <i class="fa-solid fa-arrow-right"></i>';
+          toast(error.message || 'Sambutan belum dapat disimpan', '⚠️');
+        });
+      });
+    });
   }
   function mountAdminInsights() {
     if (PAGE.indexOf('admin-dashboard') !== 0 || document.getElementById('admin-production-insights')) return;

@@ -56,3 +56,11 @@ test('inline page scripts parse without syntax errors', async () => {
     }
   }
 });
+
+test('first-login welcome is personalized for mentees and mentors', async () => {
+  const source = await text('app.js');
+  assert.match(source, /Mulai Perjalanan Saya/);
+  assert.match(source, /Mulai Mendampingi Mentee/);
+  assert.match(source, /ftgWelcomeSeen:/);
+  assert.match(source, /onboarding_completed:\s*true/);
+});
