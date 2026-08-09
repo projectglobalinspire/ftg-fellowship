@@ -1416,9 +1416,21 @@
   function secureLogout() {
     clearGoogleSession();
     try { localStorage.removeItem('ftgSession'); } catch (e) {}
-    function finishLogout() { location.replace('login.html'); }
-    if (sb) sb.auth.signOut().then(finishLogout).catch(finishLogout);
-    else finishLogout();
+    var finished = false;
+    function finishLogout() {
+      if (finished) return;
+      finished = true;
+      try {
+        Object.keys(localStorage).forEach(function (key) {
+          if (/^sb-.*-auth-token$/.test(key)) localStorage.removeItem(key);
+        });
+      } catch (e) {}
+      location.replace('login.html');
+    }
+    if (sb) {
+      var fallback = setTimeout(finishLogout, 1200);
+      sb.auth.signOut({ scope: 'local' }).then(function () { clearTimeout(fallback); finishLogout(); }).catch(function () { clearTimeout(fallback); finishLogout(); });
+    } else finishLogout();
   }
   function ensureSecureSession() {
     if (!sb || !IS_APP_PAGE) return Promise.resolve(!IS_APP_PAGE);
