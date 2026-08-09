@@ -100,6 +100,7 @@
   var IS_APP_PAGE = PAGE.indexOf('index') !== 0 && PAGE.indexOf('login') !== 0 && PAGE !== '';
 
   var sb = null, lastAppliedAt = 0, pushTimer = null, pollStarted = false;
+  var AUTH = { user: null, profile: null, accessToken: '', profilesByNumber: {}, profilesById: {} };
 
   function mySession() {
     try { return JSON.parse(localStorage.getItem('ftgSession') || 'null'); } catch (e) { return null; }
@@ -214,7 +215,10 @@
   function persistLocal() { try { localStorage.setItem('ftgStateV2', JSON.stringify(G)); } catch (e) {} }
 
   function applyRemote(data) {
+    var privateJournals = {};
+    try { Object.keys(G.mentees || {}).forEach(function (k) { privateJournals[k] = G.mentees[k].journal || []; }); } catch (e) {}
     G = normalizeG(data);
+    Object.keys(privateJournals).forEach(function (k) { if (G.mentees[k]) G.mentees[k].journal = privateJournals[k]; });
     bindS();
     persistLocal();
   }
@@ -227,7 +231,9 @@
     G.updatedBy = myTag();
     lastAppliedAt = G.updatedAt;
     persistLocal();
-    sb.from('ftg_state').update({ data: G, updated_at: new Date().toISOString() }).eq('id', 1)
+    var serverData = JSON.parse(JSON.stringify(G));
+    Object.keys(serverData.mentees || {}).forEach(function (k) { serverData.mentees[k].journal = []; });
+    sb.from('ftg_state').update({ data: serverData, updated_at: new Date().toISOString() }).eq('id', 1)
       .then(function (res) { if (res.error) console.warn('FTG sync:', res.error.message); });
   }
 
@@ -368,7 +374,9 @@
           var st = mstate(target);
           st.session1on1 = { date: dt, time: tm, note: $('#ssNote', box).value.trim(), by: 'Pak Faris', at: new Date().toISOString() };
           st.sessions = st.sessions || [];
-          st.sessions.unshift({ id: 'session-' + Date.now(), date: dt, time: tm, note: $('#ssNote', box).value.trim(), status: 'scheduled', by: 'Pak Faris', at: new Date().toISOString() });
+          var scheduledSession = { id: 'session-' + Date.now(), date: dt, time: tm, note: $('#ssNote', box).value.trim(), status: 'scheduled', by: 'Pak Faris', at: new Date().toISOString() };
+          st.sessions.unshift(scheduledSession);
+          structuredSessionSchedule(target, scheduledSession);
           var label = new Date(dt + 'T' + tm).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' }) + ' ' + tm + ' WIB';
           pushEventTo(target, '🗓', 'Pak Faris menjadwalkan sesi 1-on-1: ' + label, 'mentee');
           addAudit('session.schedule', label, target);
@@ -1128,9 +1136,7 @@
         out.innerHTML = '<i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Keluar';
         out.addEventListener('click', function (e) {
           e.preventDefault();
-          localStorage.removeItem('ftgSession');
-          clearGoogleSession();
-          location.replace('login.html');
+          secureLogout();
         });
         nav.appendChild(out);
       }
@@ -1264,9 +1270,7 @@
           a.setAttribute('data-ftg-logout', '1');
           a.addEventListener('click', function (e) {
             e.preventDefault();
-            localStorage.removeItem('ftgSession');
-            clearGoogleSession();
-            location.replace('login.html');
+            secureLogout();
           });
         }
         return;
@@ -1315,9 +1319,7 @@
       out.setAttribute('data-ftg-logout', '1');
       out.addEventListener('click', function (e) {
         e.preventDefault();
-        localStorage.removeItem('ftgSession');
-        clearGoogleSession();
-        location.replace('login.html');
+        secureLogout();
       });
       nav.appendChild(out);
     }
@@ -1440,6 +1442,117 @@
     if (s < 86400) return Math.floor(s / 3600) + ' jam lalu';
     return Math.floor(s / 86400) + ' hari lalu';
   }
+  function secureLogout() {
+    clearGoogleSession();
+    try { localStorage.removeItem('ftgSession'); } catch (e) {}
+    if (sb) sb.auth.signOut().catch(function () {});
+    location.replace('login.html');
+  }
+  function ensureSecureSession() {
+    if (!sb || !IS_APP_PAGE) return Promise.resolve(!IS_APP_PAGE);
+    return sb.auth.getSession().then(function (result) {
+      var session = result.data && result.data.session;
+      if (!session) throw new Error('Sesi login sudah berakhir');
+      AUTH.user = session.user; AUTH.accessToken = session.access_token;
+      return sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+    }).then(function (result) {
+      if (result.error || !result.data || result.data.status !== 'active') throw new Error('Profil tidak aktif');
+      AUTH.profile = result.data;
+      var expectedRole = PAGE.indexOf('admin-') === 0 ? 'admin' : (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) ? 'mentor' : (/^(mentee-dashboard|design-thinking|assignment-submission|progress-tracker|mentor-feedback|workshop-library|jurnal)/.test(PAGE) ? 'mentee' : ''));
+      if (expectedRole && AUTH.profile.role !== expectedRole) {
+        var safeHome = AUTH.profile.role === 'admin' ? 'admin-dashboard.html' : (AUTH.profile.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html');
+        location.replace(safeHome); return false;
+      }
+      var local = mySession();
+      if (!local || local.id !== AUTH.user.id || local.role !== AUTH.profile.role) {
+        localStorage.setItem('ftgSession', JSON.stringify({ id: AUTH.user.id, email: AUTH.user.email, name: AUTH.profile.full_name, role: AUTH.profile.role, initials: AUTH.profile.initials, path: AUTH.profile.path, menteeId: AUTH.profile.mentee_number, cohortId: AUTH.profile.cohort_id, mentorId: AUTH.profile.mentor_id, at: new Date().toISOString() }));
+      }
+      return loadStructuredData().then(function () { return true; });
+    }).catch(function (error) {
+      console.warn('FTG auth:', error.message); secureLogout(); return false;
+    });
+  }
+
+  function loadStructuredData() {
+    if (!sb || !AUTH.profile) return Promise.resolve(false);
+    return Promise.all([
+      sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status'),
+      sb.from('program_settings').select('*').eq('id', 1).maybeSingle(),
+      sb.from('cohorts').select('*').order('created_at', { ascending: false })
+    ]).then(function (results) {
+      var p = results[0], settings = results[1] && results[1].data, cohorts = results[2] && results[2].data;
+      if (settings) Object.assign(G.programSettings, { programName: settings.program_name, currentMonth: settings.current_month, currentWeek: settings.current_week, passingScore: settings.passing_score });
+      if (cohorts && cohorts.length) G.cohorts = cohorts.map(function (c) { return { id:c.id, name:c.name, status:c.status, startDate:c.start_date || '', endDate:c.end_date || '' }; });
+      (p.data || []).forEach(function (x) { AUTH.profilesById[x.id] = x; if (x.mentee_number) AUTH.profilesByNumber[x.mentee_number] = x; });
+      if (AUTH.profile.mentee_number) AUTH.profilesByNumber[AUTH.profile.mentee_number] = AUTH.profile;
+      var taskQuery = AUTH.profile.role === 'mentee'
+        ? sb.from('assignment_targets').select('assignment_id,assignments(*)').eq('mentee_id', AUTH.user.id)
+        : sb.from('assignments').select('*,assignment_targets(mentee_id)').eq('is_template', false);
+      return taskQuery;
+    }).then(function (tasksResult) {
+      if (tasksResult.error) return false;
+      var rows = AUTH.profile.role === 'mentee' ? (tasksResult.data || []).map(function (r) { var a = r.assignments; if (a) a.assignment_targets = [{ mentee_id: AUTH.user.id }]; return a; }).filter(Boolean) : (tasksResult.data || []);
+      rows.forEach(function (a) {
+        var targets = (a.assignment_targets || []).map(function (t) { var p = AUTH.profilesById[t.mentee_id]; return p && p.mentee_number; }).filter(Boolean);
+        var task = assignmentFor(a.id);
+        if (!task) { task = { id: a.id }; mentorAssignments().push(task); }
+        Object.assign(task, { title: a.title, description: a.description, deadline: a.deadline ? String(a.deadline).slice(0, 10) : '', points: a.points, referenceLink: a.reference_link || '', checklist: a.checklist || [], rubric: a.rubric || [], targets: targets.length ? targets : (AUTH.profile.mentee_number ? [AUTH.profile.mentee_number] : []), active: a.status !== 'archived', createdAt: a.created_at, updatedAt: a.updated_at, structured: true });
+      });
+      return sb.from('submissions').select('*,reviews(*),task_discussions(*)');
+    }).then(function (subResult) {
+      if (!subResult || subResult.error) return false;
+      (subResult.data || []).forEach(function (row) {
+        var p = AUTH.profilesById[row.mentee_id]; if (!p || !p.mentee_number) return;
+        var review = row.reviews && row.reviews[0];
+        mstate(p.mentee_number).assignmentSubmissions[row.assignment_id] = { text: row.text_content || '', link: row.link_url || '', files: row.files || [], checks: row.checklist_state || {}, submittedAt: row.submitted_at, status: row.status, discussion: (row.task_discussions || []).map(function (d) { var author = AUTH.profilesById[d.author_id]; return { from: author ? author.full_name : 'Pengguna', role: author ? author.role : '', text: d.message, at: d.created_at }; }), review: review ? { score: review.score, text: review.feedback, decision: review.decision, rubricScores: review.rubric_scores || [], at: review.updated_at, by: 'Mentor' } : null };
+      });
+      persistLocal(); return true;
+    });
+  }
+
+  function structuredAssignmentSave(task) {
+    if (!sb || !AUTH.user || !['mentor', 'admin'].includes(AUTH.profile.role)) return Promise.resolve();
+    return sb.from('assignments').upsert({ id: task.id, cohort_id: AUTH.profile.cohort_id || null, title: task.title, description: task.description, deadline: task.deadline ? task.deadline + 'T23:59:59+08:00' : null, points: task.points || 0, reference_link: task.referenceLink || null, checklist: task.checklist || [], rubric: task.rubric || [], status: task.active === false ? 'archived' : 'published', is_template: false, created_by: AUTH.user.id, updated_at: new Date().toISOString() }).then(function (r) {
+      if (r.error) throw r.error;
+      var ids = (task.targets || []).map(function (n) { return AUTH.profilesByNumber[n] && AUTH.profilesByNumber[n].id; }).filter(Boolean);
+      return sb.from('assignment_targets').delete().eq('assignment_id', task.id).then(function () { return ids.length ? sb.from('assignment_targets').insert(ids.map(function (id) { return { assignment_id: task.id, mentee_id: id }; })) : null; });
+    }).then(function () {
+      var notices = (task.targets || []).map(function (n) { var p = AUTH.profilesByNumber[n]; return p && { user_id: p.id, type: 'assignment', title: 'Tugas baru', body: task.title, href: 'mentee-dashboard.html#tugas', delivery: { in_app: 'sent' } }; }).filter(Boolean);
+      return notices.length ? apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ notifications:notices }) }) : null;
+    }).catch(reportError);
+  }
+  function structuredSubmissionSave(task, sub, createVersion) {
+    if (!sb || !AUTH.user || AUTH.profile.role !== 'mentee') return Promise.resolve();
+    var id = task.id + ':' + AUTH.user.id;
+    return sb.from('submissions').upsert({ id: id, assignment_id: task.id, mentee_id: AUTH.user.id, text_content: sub.text || '', link_url: sub.link || null, files: sub.files || [], checklist_state: sub.checks || {}, status: sub.submittedAt ? 'submitted' : 'draft', submitted_at: sub.submittedAt || null, updated_at: new Date().toISOString() }).then(function (r) {
+      if (r.error) throw r.error;
+      if (createVersion && sub.submittedAt) return sb.from('submission_versions').upsert({ submission_id: id, version_number: Math.max(1, (sub.versions || []).length), text_content: sub.text || '', link_url: sub.link || null, files: sub.files || [] }, { onConflict: 'submission_id,version_number' });
+    }).catch(reportError);
+  }
+  function structuredReviewSave(menteeId, task, sub) {
+    if (!sb || !AUTH.user || !sub.review) return Promise.resolve();
+    var p = AUTH.profilesByNumber[menteeId]; if (!p) return Promise.resolve();
+    var sid = task.id + ':' + p.id;
+    return sb.from('reviews').upsert({ submission_id: sid, reviewer_id: AUTH.user.id, score: sub.review.score, decision: sub.review.decision || 'approved', feedback: sub.review.text, rubric_scores: sub.review.rubricScores || [], updated_at: new Date().toISOString() }, { onConflict: 'submission_id' }).then(function (r) { if (r.error) throw r.error; return sb.from('submissions').update({ status: sub.review.decision === 'revision' ? 'revision' : 'approved' }).eq('id', sid); }).then(function () { return apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ user_id:p.id, type:'review', title:sub.review.decision === 'revision' ? 'Tugas perlu direvisi' : 'Tugas sudah dinilai', body:task.title, href:'mentee-dashboard.html#tugas' }) }); }).catch(reportError);
+  }
+  function structuredDiscussionSave(menteeId, task, text) {
+    if (!sb || !AUTH.user) return Promise.resolve();
+    var p = AUTH.profilesByNumber[menteeId]; if (!p) return Promise.resolve();
+    return sb.from('task_discussions').insert({ submission_id: task.id + ':' + p.id, author_id: AUTH.user.id, message: text }).then(function (r) { if (r.error) throw r.error; }).catch(reportError);
+  }
+  function structuredSessionSchedule(menteeNumber, session) {
+    if (!sb || !AUTH.user) return Promise.resolve(); var p=AUTH.profilesByNumber[menteeNumber]; if(!p)return Promise.resolve();
+    return sb.from('mentor_sessions').insert({mentor_id:AUTH.user.id,mentee_id:p.id,scheduled_at:session.date+'T'+session.time+':00+08:00',topic:session.note||'',status:'scheduled'}).select('id').maybeSingle().then(function(r){if(r.error)throw r.error;if(r.data)session.dbId=r.data.id;return apiRequest('/api/notifications',{method:'POST',body:JSON.stringify({user_id:p.id,type:'session',title:'Undangan sesi 1-on-1',body:session.date+' '+session.time,href:'mentee-dashboard.html'})});}).catch(reportError);
+  }
+  function structuredSessionUpdate(menteeNumber, session) {
+    if(!sb||!session||!session.dbId)return Promise.resolve();
+    return sb.from('mentor_sessions').update({status:session.status,shared_summary:session.outcome||null,action_items:session.actionItems||[],attendance:session.attendance||{},completed_at:session.completedAt||null,updated_at:new Date().toISOString()}).eq('id',session.dbId).then(function(r){if(r.error)throw r.error;}).catch(reportError);
+  }
+  function reportError(error) {
+    console.error(error);
+    var payload = { level: 'error', source: PAGE, message: error && error.message || String(error), context: { role: myRole() } };
+    fetch('/api/errors', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {}), body: JSON.stringify(payload) }).catch(function () {});
+  }
   function addAudit(action, detail, target) {
     G.auditLog = Array.isArray(G.auditLog) ? G.auditLog : [];
     var me = mySession() || {};
@@ -1486,6 +1599,18 @@
     if (role === 'mentor' || role === 'admin') return allEvents(role === 'admin' ? null : 'mentor');
     return S.events.filter(function (e) { return e.forRole === role || e.forRole === 'all'; });
   }
+  function openNotificationCenter() {
+    var role = myRole(), source = myEvents();
+    function show(items) {
+      modal('<div style="display:flex;justify-content:space-between;align-items:center"><div><h3 style="font-weight:800;color:#1e293b">🔔 Pusat Notifikasi</h3><p style="font-size:10px;color:#64748b">Tugas, deadline, feedback, dan sesi dalam satu tempat.</p></div><select id="notifFilter" style="border:1px solid #cbd5e1;border-radius:9px;padding:7px;background:#fff;font-size:10px"><option value="">Semua</option><option value="assignment">Tugas</option><option value="deadline">Deadline</option><option value="review">Feedback</option><option value="session">Sesi</option></select></div><div id="notifCenterRows" style="max-height:430px;overflow:auto;margin-top:12px"></div><label style="display:flex;gap:7px;align-items:center;font-size:10px;color:#64748b;margin-top:10px"><input id="notifDeadlinePref" type="checkbox" ' + ((AUTH.profile && AUTH.profile.notification_preferences && AUTH.profile.notification_preferences.deadline !== false) ? 'checked' : '') + '> Ingatkan deadline tugas</label>', function (box) {
+        function render(filter) { var rows = items.filter(function (n) { return !filter || String(n.type || '').indexOf(filter) > -1; }); $('#notifCenterRows', box).innerHTML = rows.length ? rows.map(function (n) { return '<a href="' + esc(n.href || '#') + '" style="display:flex;gap:10px;padding:10px;border-bottom:1px solid #f1f5f9;text-decoration:none"><span>' + esc(n.icon || '🔔') + '</span><div><p style="font-size:11px;font-weight:800;color:#334155">' + esc(n.title || n.text || 'Notifikasi') + '</p><p style="font-size:10px;color:#64748b">' + esc(n.body || n.text || '') + '</p><p style="font-size:9px;color:#94a3b8">' + timeAgo(n.created_at || n.at) + '</p></div></a>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:11px">Tidak ada notifikasi pada kategori ini.</p>'; }
+        render(''); $('#notifFilter', box).addEventListener('change', function () { render(this.value); });
+        $('#notifDeadlinePref', box).addEventListener('change', function () { if (!AUTH.profile) return; var prefs = Object.assign({}, AUTH.profile.notification_preferences || {}, { deadline: this.checked }); AUTH.profile.notification_preferences = prefs; sb.from('profiles').update({ notification_preferences: prefs, updated_at: new Date().toISOString() }).eq('id', AUTH.user.id); });
+      });
+    }
+    if (sb && AUTH.user && role !== 'mentor') sb.from('notifications').select('*').eq('user_id', AUTH.user.id).order('created_at', { ascending: false }).limit(100).then(function (r) { show((r.data || []).length ? r.data : source); });
+    else show(source);
+  }
   function wireBell() {
     var btn = byId('btn-notif') || byId('btn-mentor-notif');
     if (!btn) return;
@@ -1506,9 +1631,10 @@
       dd.innerHTML = '<p style="padding:12px 16px;font-weight:700;font-size:13px;color:#2c3e50;border-bottom:1px solid #f1f5f9">Notifikasi</p>' +
         (evs.length ? evs.slice(0, 6).map(function (n) {
           return '<div data-notif-href="' + esc(n.href || '') + '" style="padding:10px 16px;display:flex;gap:10px;border-bottom:1px solid #f8fafc;' + (n.read ? 'opacity:.6;' : '') + (n.href ? 'cursor:pointer;' : '') + '"><span>' + n.icon + '</span><div><p style="font-size:12px;color:#2c3e50;font-weight:600">' + esc(n.text) + '</p><p style="font-size:10px;color:#94a3b8">' + timeAgo(n.at) + (n.href ? ' · buka' : '') + '</p></div></div>';
-        }).join('') : '<p style="padding:16px;font-size:12px;color:#94a3b8;text-align:center">Belum ada notifikasi baru</p>');
+        }).join('') : '<p style="padding:16px;font-size:12px;color:#94a3b8;text-align:center">Belum ada notifikasi baru</p>') + '<button id="open-notification-center" style="width:100%;border:0;background:#f8fafc;color:#1a5f4f;padding:10px;font-size:10px;font-weight:800;cursor:pointer">Lihat semua & atur preferensi</button>';
       btn.parentElement.style.position = 'relative';
       btn.parentElement.appendChild(dd);
+      $('#open-notification-center', dd).addEventListener('click', function (event) { event.stopPropagation(); dd.remove(); dd = null; openNotificationCenter(); });
       $all('[data-notif-href]', dd).forEach(function (row) {
         row.addEventListener('click', function () {
           var href = row.getAttribute('data-notif-href');
@@ -1895,10 +2021,10 @@
       };
       sessionStorage.setItem('ftgGoogleProfile', JSON.stringify(DRIVE.profile));
       if (sb && s.email) {
-        return sb.from('ftg_users').update({
+        return sb.from('profiles').update({
           google_email: DRIVE.profile.email,
           google_connected_at: DRIVE.profile.connectedAt
-        }).eq('email', s.email).then(function () { return DRIVE.profile; });
+        }).eq('id', AUTH.user.id).then(function () { return DRIVE.profile; });
       }
       return DRIVE.profile;
     });
@@ -1944,9 +2070,7 @@
     document.body.appendChild(gate);
     var connect = document.getElementById('btn-google-gate');
     document.getElementById('btn-google-logout').addEventListener('click', function () {
-      localStorage.removeItem('ftgSession');
-      clearGoogleSession();
-      location.replace('login.html');
+      secureLogout();
     });
     connect.addEventListener('click', function () {
       connect.disabled = true;
@@ -2032,8 +2156,8 @@
     var fixed = window.FTG_CONF && FTG_CONF.mentorGoogleEmail;
     if (fixed) return Promise.resolve(fixed);
     if (!sb) return Promise.resolve('');
-    return sb.from('ftg_users').select('google_email').eq('email', 'faris@ftg.id').maybeSingle()
-      .then(function (res) { return (res.data && res.data.google_email) || ''; })
+    return sb.rpc('my_mentor_google_email')
+      .then(function (res) { return res.data || ''; })
       .catch(function () { return ''; });
   }
 
@@ -2324,6 +2448,7 @@
           clearTimeout(draftTimer); draftTimer = setTimeout(function () {
             sub.text = $('#customTaskText', box).value; sub.link = $('#customTaskLink', box).value.trim(); sub.draftAt = new Date().toISOString();
             S.assignmentSubmissions[task.id] = sub; saveState();
+            structuredSubmissionSave(task, sub);
             var saved = $('#customTaskSaved', box); if (saved) saved.textContent = '✓ Draft tersimpan otomatis';
           }, 650);
         }
@@ -2334,7 +2459,9 @@
           sub.discussion.push({ from: (mySession() || {}).name || MENTEES[MID].name, role: 'mentee', text: q, at: new Date().toISOString() });
           S.assignmentSubmissions[task.id] = sub;
           pushEvent('💬', MENTEES[MID].name + ' bertanya tentang "' + task.title + '"', 'mentor', 'mentor-review.html');
-          addAudit('assignment.question', task.title, task.id); saveState(); close(); toast('Pertanyaan dikirim ke mentor', '💬');
+          addAudit('assignment.question', task.title, task.id); saveState();
+          structuredSubmissionSave(task, sub).then(function () { structuredDiscussionSave(MID, task, q); });
+          close(); toast('Pertanyaan dikirim ke mentor', '💬');
           if (onDone) onDone();
         });
         wireCustomAssignmentFile($('#customTaskFile', box), task, sub, renderCustomFiles);
@@ -2351,7 +2478,7 @@
           S.portfolio.unshift({ taskId: task.id, title: task.title, link: link, files: (sub.files || []).slice(), submittedAt: now });
           addAudit('assignment.submit', task.title, task.id);
           pushEvent('📥', ((mySession() || {}).name || MENTEES[MID].name) + ' mengumpulkan tugas "' + task.title + '"', 'mentor');
-          saveState(); close(); toast('Tugas berhasil dikumpulkan ke mentor', '✅'); confetti();
+          saveState(); structuredSubmissionSave(task, sub, true); close(); toast('Tugas berhasil dikumpulkan ke mentor', '✅'); confetti();
           if (onDone) onDone();
         });
       }
@@ -2698,6 +2825,7 @@
           }
           addAudit(isNew ? 'assignment.create' : 'assignment.update', title, targets.join(','));
           saveState();
+          structuredAssignmentSave(task);
           if (onSaved) onSaved();
         });
       }
@@ -2728,7 +2856,7 @@
         var task = assignmentFor(b.getAttribute('data-toggle-assignment')); if (!task) return;
         task.active = task.active === false; task.updatedAt = new Date().toISOString();
         (task.targets || []).forEach(function (id) { pushEventTo(id, task.active ? '📚' : '📦', 'Tugas "' + task.title + '" ' + (task.active ? 'diaktifkan kembali' : 'diarsipkan') + ' oleh mentor', 'mentee'); });
-        saveState(); mountMentorAssignmentManager(); toast(task.active ? 'Tugas diaktifkan kembali' : 'Tugas diarsipkan', '✅');
+        saveState(); structuredAssignmentSave(task); mountMentorAssignmentManager(); toast(task.active ? 'Tugas diaktifkan kembali' : 'Tugas diarsipkan', '✅');
       });
     });
   }
@@ -2778,7 +2906,7 @@
         var link = typeof meta.link === 'string' ? meta.link : '';
         var download = meta.downloadLink || (meta.driveId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(meta.driveId) : '');
         if (link && meta.sharedWithMentor !== false) return '<span title="' + esc(meta.folder || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#e8f5ef;color:#166534;font-size:11px;font-weight:700;padding:5px 8px 5px 12px;border-radius:12px;margin:0 6px 6px 0">📄 ' + esc(nm) +
-          '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="background:#1a5f4f;color:#fff;border-radius:8px;padding:5px 8px;text-decoration:none">Lihat</a>' +
+          '<button type="button" data-drive-preview="' + esc(link) + '" data-drive-name="' + esc(nm) + '" data-drive-download="' + esc(download) + '" style="border:0;background:#1a5f4f;color:#fff;border-radius:8px;padding:5px 8px">Preview</button>' +
           (download ? '<a href="' + esc(download) + '" target="_blank" rel="noopener" style="background:#fff;color:#1a5f4f;border:1px solid #86efac;border-radius:8px;padding:4px 8px;text-decoration:none">Unduh</a>' : '') + '</span>';
         if (link && meta.sharedWithMentor === false) return '<span title="' + esc(meta.shareReason || '') + '" style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;color:#c2410c;font-size:11px;font-weight:700;padding:7px 11px;border-radius:10px;margin:0 6px 6px 0">📄 ' + esc(nm) + ' · akses mentor tertunda</span>';
         return '<span title="' + esc((meta.folder || '') + (meta.pendingReason ? ' — ' + meta.pendingReason : '')) + '" style="display:inline-flex;align-items:center;gap:6px;background:#94a3b8;color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;margin:0 6px 6px 0">📎 ' + esc(nm) + ' · belum diunggah</span>';
@@ -2827,7 +2955,7 @@
           st.assignmentSubmissions[task.id] = sub;
           addAudit(decision === 'revision' ? 'assignment.revision_requested' : 'assignment.approved', task.title, menteeId);
           pushEventTo(menteeId, '⭐', 'Tugas "' + task.title + '" dinilai ' + range.value + '/100 oleh Pak Faris', 'mentee');
-          saveState(); close(); toast('Penilaian ' + name + ' tersimpan', '⭐'); confetti();
+          saveState(); structuredReviewSave(menteeId, task, sub); close(); toast('Penilaian ' + name + ' tersimpan', '⭐'); confetti();
           if (onDone) onDone();
         });
       }
@@ -3821,7 +3949,11 @@
     modal('<h3 style="font-weight:800;color:#1e293b">🕘 Timeline ' + esc(MENTEES[id].name) + '</h3><div style="max-height:430px;overflow:auto;margin-top:10px">' + (items.length ? items.slice(0, 30).map(function (x) { return '<div style="border-left:2px solid #8b5cf6;padding:0 0 12px 10px"><p style="font-size:11px;color:#334155"><b>' + x.icon + '</b> ' + esc(x.text) + '</p><p style="font-size:9px;color:#94a3b8">' + (x.at ? new Date(x.at).toLocaleString('id-ID') : '') + '</p></div>'; }).join('') : '<p style="font-size:12px;color:#94a3b8">Belum ada aktivitas.</p>') + '</div>');
   }
   function completeMentorSession(id) {
-    modal('<h3 style="font-weight:800;color:#1e293b">✅ Catat Hasil 1-on-1</h3><p style="font-size:11px;color:#64748b;margin-bottom:8px">Ringkasan ini masuk ke timeline mentoring ' + esc(MENTEES[id].name) + '.</p><textarea id="sessionOutcome" rows="4" placeholder="Topik, insight, keputusan, dan tindak lanjut..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-size:12px"></textarea><button id="sessionDone" style="width:100%;margin-top:9px;border:0;background:#16a34a;color:#fff;border-radius:10px;padding:10px;font-weight:800">Tandai Selesai</button>', function (box, close) { $('#sessionDone', box).addEventListener('click', function () { var text = $('#sessionOutcome', box).value.trim(); if (!text) { toast('Isi hasil sesi terlebih dahulu', '⚠️'); return; } var st = mstate(id), s = (st.sessions || [])[0]; if (s) { s.status = 'completed'; s.outcome = text; s.completedAt = new Date().toISOString(); } st.session1on1 = null; pushEventTo(id, '✅', 'Sesi 1-on-1 selesai. Tindak lanjut: ' + text, 'mentee', 'mentee-dashboard.html'); addAudit('session.complete', text, id); saveState(); close(); toast('Hasil sesi tersimpan di timeline', '✅'); }); });
+    modal('<h3 style="font-weight:800;color:#1e293b">✅ Catat Hasil 1-on-1</h3><p style="font-size:11px;color:#64748b;margin-bottom:8px">Ringkasan ini masuk ke timeline mentoring ' + esc(MENTEES[id].name) + '.</p><textarea id="sessionOutcome" rows="4" placeholder="Topik, insight, keputusan, dan tindak lanjut..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-size:12px"></textarea><input id="sessionActions" placeholder="Action items (pisahkan dengan koma)" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;font-size:11px;margin-top:7px"><select id="sessionAttendance" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;font-size:11px;background:#fff;margin-top:7px"><option value="present">Mentor & mentee hadir</option><option value="mentee_no_show">Mentee tidak hadir</option><option value="mentor_no_show">Mentor tidak hadir</option></select><button id="sessionDone" style="width:100%;margin-top:9px;border:0;background:#16a34a;color:#fff;border-radius:10px;padding:10px;font-weight:800">Tandai Selesai</button>', function (box, close) { $('#sessionDone', box).addEventListener('click', function () { var text = $('#sessionOutcome', box).value.trim(); if (!text) { toast('Isi hasil sesi terlebih dahulu', '⚠️'); return; } var st = mstate(id), s = (st.sessions || [])[0]; if (s) { s.status = 'completed'; s.outcome = text; s.actionItems = $('#sessionActions',box).value.split(',').map(function(x){return x.trim();}).filter(Boolean); s.attendance = {status:$('#sessionAttendance',box).value}; s.completedAt = new Date().toISOString(); structuredSessionUpdate(id,s); } st.session1on1 = null; pushEventTo(id, '✅', 'Sesi 1-on-1 selesai. Tindak lanjut: ' + text, 'mentee', 'mentee-dashboard.html'); addAudit('session.complete', text, id); saveState(); close(); toast('Hasil sesi tersimpan di timeline', '✅'); }); });
+  }
+  function manageMentorSession(id) {
+    var st=mstate(id),s=(st.sessions||[])[0];
+    modal('<h3 style="font-weight:800;color:#1e293b">🗓 Kelola Sesi ' + esc(MENTEES[id].name) + '</h3><p style="font-size:11px;color:#64748b;margin:5px 0 12px">' + esc(st.session1on1 ? st.session1on1.date+' · '+st.session1on1.time : 'Agenda aktif') + '</p><div style="display:grid;gap:7px"><button id="msComplete" class="ftg-action-primary" style="padding:10px">Selesaikan & catat hasil</button><button id="msReschedule" class="ftg-action-secondary" style="padding:10px">Jadwalkan ulang</button><button id="msCancel" style="border:1px solid #fecaca;background:#fef2f2;color:#b91c1c;border-radius:9px;padding:10px;font-size:10px;font-weight:800">Batalkan sesi</button></div>',function(box,close){$('#msComplete',box).addEventListener('click',function(){close();completeMentorSession(id);});$('#msReschedule',box).addEventListener('click',function(){if(s){s.status='cancelled';structuredSessionUpdate(id,s);}st.session1on1=null;saveState();close();scheduleModal();});$('#msCancel',box).addEventListener('click',function(){if(s){s.status='cancelled';structuredSessionUpdate(id,s);}st.session1on1=null;pushEventTo(id,'🗓','Sesi 1-on-1 dibatalkan oleh mentor','mentee','mentee-dashboard.html');addAudit('session.cancel','Sesi dibatalkan',id);saveState();close();toast('Sesi dibatalkan','✅');});});
   }
   function mountMentorOperations() {
     if (!/^(mentor-dashboard|mentor-review|mentor-mentee)/.test(PAGE)) return;
@@ -3830,7 +3962,7 @@
     var sessions = []; menteeIds().forEach(function (id) { var st = mstate(id); if (st.session1on1) sessions.push({ id: id, data: st.session1on1 }); });
     var sec = document.createElement('section'); sec.id = 'mentor-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
     sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🧭 Pusat Kendali Mentor</h2><p style="font-size:11px;color:#64748b">Mentee perlu perhatian, agenda, broadcast, dan timeline lengkap.</p></div><div style="display:flex;gap:6px"><button id="mentorSchedule" style="border:0;background:#8b5cf6;color:#fff;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800">+ Agenda</button><button id="mentorBroadcast" style="border:0;background:#f97316;color:#fff;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800">Broadcast</button></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px"><div style="background:#fef2f2;border-radius:12px;padding:10px"><p style="font-size:11px;font-weight:800;color:#b91c1c">Perlu perhatian (' + attention.length + ')</p>' + (attention.length ? attention.map(function (x) { return '<button data-mentor-timeline="' + x.id + '" style="display:block;width:100%;text-align:left;border:0;background:#fff;border-radius:8px;padding:7px;margin-top:6px;font-size:10px;color:#475569">' + esc(MENTEES[x.id].name) + ' · ' + x.count + ' isu →</button>'; }).join('') : '<p style="font-size:10px;color:#64748b;margin-top:6px">Semua mentee dalam jalur.</p>') + '</div><div style="background:#eff6ff;border-radius:12px;padding:10px"><p style="font-size:11px;font-weight:800;color:#1d4ed8">Agenda 1-on-1 (' + sessions.length + ')</p>' + (sessions.length ? sessions.map(function (s) { return '<button data-mentor-timeline="' + s.id + '" style="display:block;width:100%;text-align:left;border:0;background:#fff;border-radius:8px;padding:7px;margin-top:6px;font-size:10px;color:#475569">' + esc(MENTEES[s.id].name) + ' · ' + esc(s.data.date) + ' ' + esc(s.data.time) + '</button>'; }).join('') : '<p style="font-size:10px;color:#64748b;margin-top:6px">Belum ada agenda.</p>') + '</div></div>';
-    host.insertBefore(sec, host.firstChild); $('#mentorSchedule', sec).addEventListener('click', scheduleModal); $('#mentorBroadcast', sec).addEventListener('click', openBroadcastModal); $all('[data-mentor-timeline]', sec).forEach(function (b) { b.addEventListener('click', function () { var id = +b.getAttribute('data-mentor-timeline'); if ((b.parentElement.getAttribute('style') || '').indexOf('#eff6ff') > -1) completeMentorSession(id); else openMenteeTimeline(id); }); });
+    host.insertBefore(sec, host.firstChild); $('#mentorSchedule', sec).addEventListener('click', scheduleModal); $('#mentorBroadcast', sec).addEventListener('click', openBroadcastModal); $all('[data-mentor-timeline]', sec).forEach(function (b) { b.addEventListener('click', function () { var id = +b.getAttribute('data-mentor-timeline'); if ((b.parentElement.getAttribute('style') || '').indexOf('#eff6ff') > -1) manageMentorSession(id); else openMenteeTimeline(id); }); });
   }
 
   function exportProgramCsv() {
@@ -3839,15 +3971,46 @@
     var csv = rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = 'rekap-ftg-fellowship.csv'; a.click(); URL.revokeObjectURL(a.href); addAudit('report.export', 'Rekap program CSV'); saveState();
   }
+  function apiRequest(path, options) {
+    options = options || {}; options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
+    return fetch(path, options).then(function (r) { return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || 'Permintaan gagal'); return data; }); });
+  }
+  function mountSecureAccountAdmin() {
+    if (PAGE.indexOf('admin-akun') !== 0 || !AUTH.profile || AUTH.profile.role !== 'admin') return;
+    var wrap = $('#accountRows'); if (!wrap) return;
+    var oldMentee = $('#btnAddMentee'), oldMentor = $('#btnAddMentor');
+    function replaceButton(old, role) { if (!old) return; var fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old); fresh.addEventListener('click', function () { secureAccountModal(role, load); }); }
+    replaceButton(oldMentee, 'mentee'); replaceButton(oldMentor, 'mentor');
+    var toolbar = document.createElement('div'); toolbar.className = 'px-5 py-3 border-b border-slate-100'; toolbar.innerHTML = '<div style="display:flex;gap:8px"><input id="accountSearch" placeholder="Cari nama atau email..." style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:8px 11px;font-size:11px"><select id="accountRoleFilter" style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;font-size:11px;background:#fff"><option value="">Semua role</option><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Panitia</option></select></div><p id="accountSecureStatus" style="font-size:9px;color:#16a34a;margin-top:5px">🔒 Dikelola melalui Supabase Auth · password tidak dapat dilihat panitia</p>';
+    wrap.parentElement.insertBefore(toolbar, wrap);
+    var profiles = [];
+    function render() {
+      var q = ($('#accountSearch').value || '').toLowerCase(), role = $('#accountRoleFilter').value;
+      var rows = profiles.filter(function (p) { return (!q || (p.full_name + ' ' + p.email).toLowerCase().indexOf(q) > -1) && (!role || p.role === role); });
+      var count = $('#accountCount'); if (count) count.textContent = rows.length + ' akun ditemukan';
+      wrap.innerHTML = rows.length ? rows.map(function (p) { var active = p.status === 'active'; return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50"><div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[10px]" style="background:' + (p.role === 'mentor' ? '#1a5f4f' : p.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(p.initials || initialsOf(p.full_name)) + '</div><div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(p.full_name) + '</p><p class="text-slate-400 text-[10px] truncate">' + esc(p.email) + ' · ' + esc(p.path || '') + '</p></div>' + roleChip(p.role) + '<span style="font-size:9px;font-weight:800;color:' + (active ? '#16a34a' : '#ef4444') + '">' + (active ? 'AKTIF' : esc(p.status.toUpperCase())) + '</span><button data-account-edit="' + p.id + '" style="border:0;background:#f1f5f9;color:#475569;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:800">Kelola</button></div>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">Tidak ada akun yang cocok.</p>';
+      $all('[data-account-edit]', wrap).forEach(function (b) { b.addEventListener('click', function () { secureAccountManage(profiles.filter(function (p) { return p.id === b.getAttribute('data-account-edit'); })[0], load); }); });
+    }
+    function load() { wrap.innerHTML = '<p style="padding:24px;text-align:center;color:#64748b;font-size:12px">Memuat akun aman...</p>'; apiRequest('/api/admin-users').then(function (data) { profiles = data.profiles || []; render(); }).catch(function (e) { wrap.innerHTML = '<p style="padding:18px;color:#dc2626;font-size:11px">' + esc(e.message) + '</p>'; }); }
+    $('#accountSearch').addEventListener('input', render); $('#accountRoleFilter').addEventListener('change', render); load();
+  }
+  function secureAccountModal(role, done) {
+    var isMentee = role === 'mentee';
+    modal('<h3 style="font-weight:800;color:#1e293b">' + (isMentee ? '🎓 Tambah Mentee' : '🧑‍🏫 Tambah Mentor') + '</h3><p style="font-size:11px;color:#64748b;margin:4px 0 12px">Akun dibuat di Supabase Auth. Password sementara hanya ditampilkan satu kali.</p><input id="suName" placeholder="Nama lengkap" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px"><input id="suEmail" type="email" placeholder="email@ftg.id" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px"><input id="suPassword" type="password" placeholder="Password sementara (kosongkan untuk otomatis)" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px">' + (isMentee ? '<select id="suPath" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;background:#fff"><option>Career Path</option><option>Entrepreneur Path</option></select>' : '') + '<button id="suSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Buat Akun Aman</button>', function (box, close) { $('#suSave', box).addEventListener('click', function () { var name=$('#suName',box).value.trim(),email=$('#suEmail',box).value.trim(),password=$('#suPassword',box).value; if(!name||!/^[^@]+@[^@]+\.[^@]+$/.test(email)){toast('Nama dan email valid wajib diisi','⚠️');return;} var payload={full_name:name,email:email,role:role,initials:initialsOf(name),path:isMentee?$('#suPath',box).value:'Senior Mentor'}; if(password) payload.password=password; apiRequest('/api/admin-users',{method:'POST',body:JSON.stringify(payload)}).then(function(data){close(); if(data.temporary_password) modal('<h3 style="font-weight:800;color:#1e293b">Akun berhasil dibuat</h3><p style="font-size:11px;color:#64748b;margin:8px 0">Salin password sementara ini dan kirim melalui kanal pribadi.</p><code style="display:block;background:#0f172a;color:#fff;padding:12px;border-radius:10px;font-size:14px">'+esc(data.temporary_password)+'</code>'); toast('Akun Supabase Auth berhasil dibuat','✅'); done();}).catch(function(e){toast(e.message,'⚠️');}); }); });
+  }
+  function secureAccountManage(profile, done) {
+    if (!profile) return;
+    modal('<h3 style="font-weight:800;color:#1e293b">Kelola ' + esc(profile.full_name) + '</h3><p style="font-size:10px;color:#64748b;margin:4px 0 10px">' + esc(profile.email) + '</p><label style="font-size:10px;font-weight:800">Role</label><select id="smRole" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Panitia</option></select><label style="font-size:10px;font-weight:800">Status</label><select id="smStatus" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="active">Aktif</option><option value="suspended">Dinonaktifkan</option><option value="graduated">Lulus</option></select><label style="font-size:10px;font-weight:800">Reset password sementara</label><input id="smPassword" type="password" placeholder="Kosongkan bila tidak diubah" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;margin-top:4px"><button id="smSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Perubahan</button>', function(box,close){$('#smRole',box).value=profile.role;$('#smStatus',box).value=profile.status;$('#smSave',box).addEventListener('click',function(){var payload={id:profile.id,role:$('#smRole',box).value,status:$('#smStatus',box).value};var pw=$('#smPassword',box).value;if(pw)payload.password=pw;apiRequest('/api/admin-users',{method:'PATCH',body:JSON.stringify(payload)}).then(function(){close();toast('Akun diperbarui','✅');done();}).catch(function(e){toast(e.message,'⚠️');});});});
+  }
   function openProgramSettings() {
     var p = G.programSettings;
-    modal('<h3 style="font-weight:800;color:#1e293b">⚙️ Pengaturan Program</h3><label style="display:block;font-size:11px;font-weight:800;margin:10px 0 4px">Nama program</label><input id="psName" value="' + esc(p.programName) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Bulan aktif</label><input id="psMonth" type="number" min="1" value="' + p.currentMonth + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"></div><div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Minggu aktif</label><input id="psWeek" type="number" min="1" value="' + p.currentWeek + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"></div></div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Nilai kelulusan</label><input id="psPass" type="number" min="0" max="100" value="' + p.passingScore + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"><button id="psSave" style="width:100%;margin-top:12px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Pengaturan</button>', function (box, close) { $('#psSave', box).addEventListener('click', function () { p.programName = $('#psName', box).value.trim() || p.programName; p.currentMonth = +$('#psMonth', box).value || 1; p.currentWeek = +$('#psWeek', box).value || 1; p.passingScore = +$('#psPass', box).value || 75; addAudit('settings.update', p.programName); saveState(); close(); toast('Pengaturan program tersimpan', '⚙️'); }); });
+    modal('<h3 style="font-weight:800;color:#1e293b">⚙️ Pengaturan Program</h3><label style="display:block;font-size:11px;font-weight:800;margin:10px 0 4px">Nama program</label><input id="psName" value="' + esc(p.programName) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Bulan aktif</label><input id="psMonth" type="number" min="1" value="' + p.currentMonth + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"></div><div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Minggu aktif</label><input id="psWeek" type="number" min="1" value="' + p.currentWeek + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"></div></div><label style="display:block;font-size:11px;font-weight:800;margin:9px 0 4px">Nilai kelulusan</label><input id="psPass" type="number" min="0" max="100" value="' + p.passingScore + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"><button id="psSave" style="width:100%;margin-top:12px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Pengaturan</button>', function (box, close) { $('#psSave', box).addEventListener('click', function () { p.programName = $('#psName', box).value.trim() || p.programName; p.currentMonth = +$('#psMonth', box).value || 1; p.currentWeek = +$('#psWeek', box).value || 1; p.passingScore = +$('#psPass', box).value || 75; addAudit('settings.update', p.programName); saveState(); if (sb) sb.from('program_settings').upsert({ id:1, program_name:p.programName, current_month:p.currentMonth, current_week:p.currentWeek, passing_score:p.passingScore, updated_at:new Date().toISOString() }).then(function(r){if(r.error)reportError(r.error);}); close(); toast('Pengaturan program tersimpan', '⚙️'); }); });
   }
   function openCohortManager() {
     var active = G.cohorts[0] || {};
     modal('<h3 style="font-weight:800;color:#1e293b">👥 Cohort & Pairing Mentor</h3><label style="display:block;font-size:11px;font-weight:800;margin:10px 0 4px">Nama cohort</label><input id="cohortName" value="' + esc(active.name || '') + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><div><label style="display:block;font-size:10px;font-weight:800;margin:8px 0 3px">Mulai</label><input id="cohortStart" type="date" value="' + esc(active.startDate || '') + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:7px"></div><div><label style="display:block;font-size:10px;font-weight:800;margin:8px 0 3px">Selesai</label><input id="cohortEnd" type="date" value="' + esc(active.endDate || '') + '" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:7px"></div></div><p style="font-size:11px;font-weight:800;color:#334155;margin:10px 0 5px">Pairing mentee</p>' + menteeIds().map(function (id) { return '<label style="display:grid;grid-template-columns:1fr 1fr;gap:7px;align-items:center;margin:5px 0;font-size:10px;color:#475569"><span>' + esc(MENTEES[id].name) + '</span><select data-pairing="' + id + '" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px;background:#fff"><option value="faris">Pak Faris</option><option value="unassigned">Belum ditentukan</option></select></label>'; }).join('') + '<button id="cohortSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Cohort & Pairing</button>', function (box, close) {
       $all('[data-pairing]', box).forEach(function (s) { s.value = G.pairings[s.getAttribute('data-pairing')] || 'faris'; });
-      $('#cohortSave', box).addEventListener('click', function () { active.name = $('#cohortName', box).value.trim() || 'Cohort FTG'; active.startDate = $('#cohortStart', box).value; active.endDate = $('#cohortEnd', box).value; active.status = 'active'; if (!G.cohorts.length) G.cohorts.push(active); $all('[data-pairing]', box).forEach(function (s) { G.pairings[s.getAttribute('data-pairing')] = s.value; }); addAudit('cohort.update', active.name); saveState(); close(); toast('Cohort dan pairing tersimpan', '👥'); });
+      $('#cohortSave', box).addEventListener('click', function () { active.name = $('#cohortName', box).value.trim() || 'Cohort FTG'; active.startDate = $('#cohortStart', box).value; active.endDate = $('#cohortEnd', box).value; active.status = 'active'; if (!G.cohorts.length) G.cohorts.push(active); $all('[data-pairing]', box).forEach(function (s) { G.pairings[s.getAttribute('data-pairing')] = s.value; }); addAudit('cohort.update', active.name); saveState(); var pairings=$all('[data-pairing]',box).map(function(s){return {mentee_number:+s.getAttribute('data-pairing'),mentor_email:s.value==='faris'?'faris@ftg.id':null};}); apiRequest('/api/program',{method:'POST',body:JSON.stringify({action:'cohort',id:active.id,name:active.name,start_date:active.startDate,end_date:active.endDate,pairings:pairings})}).catch(reportError); close(); toast('Cohort dan pairing tersimpan', '👥'); });
     });
   }
   function mountAdminOperations() {
@@ -3857,6 +4020,44 @@
     var sec = document.createElement('section'); sec.id = 'admin-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
     sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🏛️ Operasional Program</h2><p style="font-size:11px;color:#64748b">Cohort, pairing, tugas global, monitoring, audit, laporan, dan pengaturan.</p></div><div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><button id="adminCohort" style="border:0;background:#0ea5e9;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Cohort & Pairing</button><button id="adminGlobalTask" style="border:0;background:#f97316;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">+ Tugas Global</button><button id="adminExport" style="border:0;background:#8b5cf6;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Export CSV</button><button id="adminSettings" style="border:0;background:#1a5f4f;color:#fff;border-radius:8px;padding:7px 9px;font-size:9px;font-weight:800">Pengaturan</button></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px"><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#1a5f4f">' + G.cohorts.length + '</b><p style="font-size:9px;color:#64748b">Cohort</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#8b5cf6">' + Object.keys(G.pairings || {}).length + '</b><p style="font-size:9px;color:#64748b">Pairing</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#f97316">' + submitted + '/' + total + '</b><p style="font-size:9px;color:#64748b">Terkumpul</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#16a34a">' + reviewed + '</b><p style="font-size:9px;color:#64748b">Dinilai</p></div></div><details style="margin-top:10px"><summary style="font-size:11px;font-weight:800;color:#334155;cursor:pointer">Audit log terbaru (' + G.auditLog.length + ')</summary><div style="max-height:150px;overflow:auto;margin-top:7px">' + (G.auditLog.length ? G.auditLog.slice(0, 12).map(function (a) { return '<p style="font-size:9px;color:#64748b;border-bottom:1px solid #f1f5f9;padding:5px 0"><b>' + esc(a.actor) + '</b> · ' + esc(a.action) + ' · ' + esc(a.detail) + '<br>' + new Date(a.at).toLocaleString('id-ID') + '</p>'; }).join('') : '<p style="font-size:10px;color:#94a3b8">Belum ada aktivitas tercatat.</p>') + '</div></details>';
     host.insertBefore(sec, host.firstChild); $('#adminCohort', sec).addEventListener('click', openCohortManager); $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); }); $('#adminExport', sec).addEventListener('click', exportProgramCsv); $('#adminSettings', sec).addEventListener('click', openProgramSettings);
+  }
+
+  function openDrivePreview(link, name, download) {
+    var preview = link;
+    if (/drive\.google\.com\/file\/d\//.test(link)) preview = link.replace(/\/view.*$/, '/preview');
+    modal('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px"><div><h3 style="font-weight:800;color:#1e293b">📄 ' + esc(name || 'Preview berkas') + '</h3><p style="font-size:10px;color:#64748b">Akses tetap privat sesuai akun Google mentor.</p></div>' + (download ? '<a href="' + esc(download) + '" target="_blank" rel="noopener" style="background:#1a5f4f;color:#fff;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:800;text-decoration:none">Unduh</a>' : '') + '</div><iframe src="' + esc(preview) + '" title="Preview ' + esc(name || 'berkas') + '" style="width:100%;height:58vh;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc"></iframe><a href="' + esc(link) + '" target="_blank" rel="noopener" style="display:block;text-align:center;font-size:10px;color:#8b5cf6;margin-top:8px">Buka langsung di Google Drive ↗</a>');
+  }
+  function globalSearchModal() {
+    var pages = myRole() === 'mentee' ? [['Dashboard','mentee-dashboard.html'],['Tugas Saya','assignment-submission.html'],['Progress Saya','progress-tracker.html'],['Jurnal Pribadi','jurnal.html'],['Feedback Mentor','mentor-feedback.html'],['Workshop','workshop-library.html']] : myRole() === 'mentor' ? [['Dashboard Mentor','mentor-dashboard.html'],['Tugas & Review','mentor-review.html'],['Mentee Saya','mentor-mentee.html'],['Feedback','mentor-feedback.html'],['Leaderboard','kpi-leaderboard.html']] : [['Dashboard Panitia','admin-dashboard.html'],['Kelola Akun','admin-akun.html'],['Tugas Global','admin-dashboard.html']];
+    modal('<h3 style="font-weight:800;color:#1e293b">🔎 Cari di FTG Fellowship</h3><input id="globalSearchInput" autofocus placeholder="Cari halaman, tugas, atau mentee..." style="width:100%;border:1px solid #cbd5e1;border-radius:11px;padding:10px;margin:10px 0"><div id="globalSearchRows"></div>', function (box) {
+      var items = pages.map(function (p) { return { title:p[0],meta:'Halaman',href:p[1] }; }).concat(mentorAssignments().map(function (t) { return { title:t.title,meta:'Tugas · '+dueLabel(t.deadline),href:myRole()==='mentee'?'mentee-dashboard.html#tugas':'mentor-review.html' }; })).concat(myRole() !== 'mentee' ? menteeIds().map(function (id) { return { title:MENTEES[id].name,meta:'Mentee · '+MENTEES[id].path,href:'mentor-mentee.html' }; }) : []);
+      function render(q) { q=(q||'').toLowerCase(); var rows=items.filter(function(i){return !q||(i.title+' '+i.meta).toLowerCase().indexOf(q)>-1;}).slice(0,12); $('#globalSearchRows',box).innerHTML=rows.map(function(i){return '<a href="'+esc(i.href)+'" style="display:block;padding:9px;border-bottom:1px solid #f1f5f9;text-decoration:none"><b style="font-size:11px;color:#334155">'+esc(i.title)+'</b><p style="font-size:9px;color:#94a3b8">'+esc(i.meta)+'</p></a>';}).join('')||'<p style="padding:18px;text-align:center;color:#94a3b8;font-size:11px">Tidak ditemukan.</p>'; }
+      render(''); $('#globalSearchInput',box).addEventListener('input',function(){render(this.value);});
+    });
+  }
+  function mountOnboarding() {
+    if (!AUTH.profile || AUTH.profile.onboarding_completed || sessionStorage.getItem('ftgOnboardingSeen')) return;
+    sessionStorage.setItem('ftgOnboardingSeen','1');
+    var content = AUTH.profile.role === 'mentee' ? [['1','Lihat Pusat Kerja','Prioritas dan deadline selalu tampil di dashboard.'],['2','Hubungkan Google Drive','File tugas tersimpan privat dan dibagikan hanya ke mentor.'],['3','Kumpulkan & pantau feedback','Revisi dan nilai muncul di notifikasi.']] : AUTH.profile.role === 'mentor' ? [['1','Berikan tugas','Gunakan checklist, rubrik, dan target mentee.'],['2','Pantau perhatian','Dashboard menandai mentee terlambat atau perlu revisi.'],['3','Review & tindak lanjut','Nilai, minta revisi, lalu catat hasil 1-on-1.']] : [['1','Kelola akun aman','Buat dan nonaktifkan akun dari Supabase Auth.'],['2','Atur program','Kelola cohort, pairing, tugas global, dan reminder.'],['3','Pantau kesehatan','Gunakan analytics, audit, backup, dan status integrasi.']];
+    modal('<div style="text-align:center"><span style="font-size:38px">👋</span><h3 style="font-weight:900;color:#1e293b;font-size:18px">Selamat datang, ' + esc(AUTH.profile.full_name.split(' ')[0]) + '</h3><p style="font-size:11px;color:#64748b;margin:4px 0 14px">Tiga langkah untuk mulai menggunakan platform.</p></div>' + content.map(function (x) { return '<div style="display:flex;gap:10px;background:#f8fafc;border-radius:12px;padding:10px;margin:7px 0"><span style="width:25px;height:25px;border-radius:8px;background:#1a5f4f;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900">' + x[0] + '</span><div><b style="font-size:11px;color:#334155">' + x[1] + '</b><p style="font-size:10px;color:#64748b">' + x[2] + '</p></div></div>'; }).join('') + '<button id="onboardingDone" style="width:100%;margin-top:10px;border:0;background:#f97316;color:#fff;border-radius:11px;padding:10px;font-weight:800">Mulai Gunakan Platform</button>', function (box, close) { $('#onboardingDone',box).addEventListener('click',function(){AUTH.profile.onboarding_completed=true;sb.from('profiles').update({onboarding_completed:true,updated_at:new Date().toISOString()}).eq('id',AUTH.user.id);close();}); });
+  }
+  function mountAdminInsights() {
+    if (PAGE.indexOf('admin-dashboard') !== 0 || document.getElementById('admin-production-insights')) return;
+    var host=$('main > div.px-8');if(!host)return;var late=0,driveIssues=0,scores=[],submitted=0,reviewed=0;
+    mentorAssignments().forEach(function(t){(t.targets||[]).forEach(function(id){var s=taskSubmission(id,t.id),life=assignmentStatus(t,s);if(life.key==='late'||life.key==='revision')late++;if(s&&s.submittedAt)submitted++;if(s&&s.review&&s.review.decision!=='revision'){reviewed++;scores.push(s.review.score);}(s&&s.files||[]).forEach(function(f){if(f.sharedWithMentor===false||!f.link)driveIssues++;});});});
+    var sec=document.createElement('section');sec.id='admin-production-insights';sec.className='bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';sec.innerHTML='<div style="display:flex;justify-content:space-between;gap:10px"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">📈 Quality & Health Center</h2><p style="font-size:10px;color:#64748b">Risiko program, kualitas review, Drive, backup, dan status layanan.</p></div><div style="display:flex;gap:6px"><button id="adminHealthCheck" class="ftg-action-secondary">Cek Status</button><button id="adminBackupCreate" class="ftg-action-primary">Buat Backup</button></div></div><div class="ftg-insight-grid"><div><b>'+late+'</b><span>Perlu perhatian</span></div><div><b>'+submitted+'</b><span>Submission</span></div><div><b>'+reviewed+'</b><span>Review selesai</span></div><div><b>'+(scores.length?Math.round(scores.reduce(function(a,b){return a+b;},0)/scores.length):'—')+'</b><span>Rata-rata nilai</span></div><div><b style="color:'+(driveIssues?'#ef4444':'#16a34a')+'">'+driveIssues+'</b><span>Masalah Drive</span></div></div><div id="adminHealthResult" style="font-size:10px;color:#64748b;margin-top:9px"></div>';
+    host.insertBefore(sec,host.firstChild);$('#adminHealthCheck',sec).addEventListener('click',function(){var out=$('#adminHealthResult',sec);out.textContent='Memeriksa layanan...';fetch('/api/health').then(function(r){return r.json();}).then(function(d){out.innerHTML='Database: <b>'+esc(d.database)+'</b> · Reminder: <b>'+esc(d.reminders)+'</b> · '+new Date(d.checked_at).toLocaleString('id-ID');}).catch(function(e){out.textContent=e.message;});});$('#adminBackupCreate',sec).addEventListener('click',function(){apiRequest('/api/backups',{method:'POST',body:JSON.stringify({action:'create',label:'Backup manual '+new Date().toLocaleString('id-ID')})}).then(function(){toast('Backup aman berhasil dibuat','✅');}).catch(function(e){toast(e.message,'⚠️');});});
+    var backupManage=document.createElement('button');backupManage.id='adminBackupManage';backupManage.className='ftg-action-secondary';backupManage.textContent='Kelola Backup';$('#adminBackupCreate',sec).parentNode.appendChild(backupManage);backupManage.addEventListener('click',openBackupManager);
+  }
+  function openBackupManager() {
+    apiRequest('/api/backups').then(function(data){var rows=data.backups||[];modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Backup & Pemulihan</h3><p style="font-size:10px;color:#64748b;margin:4px 0 10px">Restore melakukan merge aman dan selalu membuat safety backup lebih dahulu.</p><div id="backupRows">'+(rows.length?rows.map(function(b){return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid #e2e8f0;border-radius:10px;padding:9px;margin:6px 0"><div><b style="font-size:11px;color:#334155">'+esc(b.label)+'</b><p style="font-size:9px;color:#94a3b8">'+new Date(b.created_at).toLocaleString('id-ID')+'</p></div><button data-restore-backup="'+esc(b.id)+'" class="ftg-action-secondary">Preview</button></div>';}).join(''):'<p style="font-size:11px;color:#94a3b8">Belum ada backup.</p>')+'</div>',function(box,close){$all('[data-restore-backup]',box).forEach(function(btn){btn.addEventListener('click',function(){var id=btn.getAttribute('data-restore-backup');apiRequest('/api/backups',{method:'POST',body:JSON.stringify({action:'preview',id:id})}).then(function(preview){var total=Object.keys(preview.counts||{}).reduce(function(n,k){return n+preview.counts[k];},0);if(!confirm('Pulihkan '+total+' record dari "'+preview.backup.label+'"?\n\nSafety backup akan dibuat otomatis.'))return;var phrase=prompt('Ketik PULIHKAN untuk melanjutkan');if(phrase!=='PULIHKAN')return;return apiRequest('/api/backups',{method:'POST',body:JSON.stringify({action:'restore',id:id,confirmation:phrase})}).then(function(){close();toast('Data berhasil dipulihkan dengan safety backup','✅');location.reload();});}).catch(function(e){toast(e.message,'⚠️');});});});});}).catch(function(e){toast(e.message,'⚠️');});
+  }
+  function wireGlobalUX() {
+    if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');
+    var skip=document.createElement('a');skip.href='#main-content';skip.className='ftg-skip-link';skip.textContent='Lewati ke konten utama';document.body.insertBefore(skip,document.body.firstChild);var main=$('main');if(main)main.id='main-content';
+    document.addEventListener('click',function(e){var p=e.target.closest&&e.target.closest('[data-drive-preview]');if(p){e.preventDefault();openDrivePreview(p.getAttribute('data-drive-preview'),p.getAttribute('data-drive-name'),p.getAttribute('data-drive-download'));}});
+    var header=$('main header');if(header&&!$('#ftgGlobalSearch',header)){var b=document.createElement('button');b.id='ftgGlobalSearch';b.type='button';b.className='ftg-global-search';b.setAttribute('aria-label','Cari di platform');b.innerHTML='<i class="fa-solid fa-magnifying-glass"></i><span>Cari</span><kbd>Ctrl K</kbd>';b.addEventListener('click',globalSearchModal);header.appendChild(b);}
+    document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();globalSearchModal();}});
   }
 
   /* ---------- Boot ---------- */
@@ -3892,6 +4093,9 @@
     try { mountMenteeWorkCenter(); } catch (e) { console.warn(e); }
     try { mountMentorOperations(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
+    try { mountSecureAccountAdmin(); } catch (e) { reportError(e); }
+    try { mountAdminInsights(); } catch (e) { reportError(e); }
+    try { wireGlobalUX(); mountOnboarding(); } catch (e) { reportError(e); }
     try { if (PAGE.indexOf('assignment-submission') === 0) insertAssignmentSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentor-feedback') === 0) insertFeedbackSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); insertTargetsCard(); } } catch (e) { console.warn(e); }
@@ -3968,6 +4172,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     if (!guardSession()) return;
     initSupabase();
+    var authReady = false;
     bindS();
     document.body.classList.add('ftg-anim');
     // lepas kelas animasi setelah selesai — animation-fill "both" meninggalkan
@@ -3990,7 +4195,7 @@
 
     var rendered = false;
     function renderOnce() {
-      if (rendered) return;
+      if (rendered || !authReady) return;
       rendered = true;
       if (loadbar) setTimeout(function () { loadbar.remove(); }, 250);
       bindS();
@@ -4004,5 +4209,10 @@
     }
     var t = setTimeout(renderOnce, 900);
     remoteLoad().then(function () { clearTimeout(t); renderOnce(); });
+    ensureSecureSession().then(function (allowed) {
+      if (!allowed) return;
+      authReady = true;
+      renderOnce();
+    });
   });
 })();

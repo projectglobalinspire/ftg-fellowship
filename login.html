@@ -11,8 +11,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="responsive.css?v=19">
-  <script src="ftg-config.js?v=19"></script>
+  <link rel="stylesheet" href="responsive.css?v=21">
+  <script src="ftg-config.js?v=21"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -68,12 +68,27 @@
             class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-11 pr-11 py-3 text-sm text-[#2c3e50] outline-none">
           <button type="button" id="togglePw" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"><i class="fa-regular fa-eye"></i></button>
         </div>
+        <button type="button" id="forgotPw" class="text-[#1a5f4f] text-xs font-semibold mb-3 hover:underline">Lupa password?</button>
         <p id="errMsg" class="text-[#ef4444] text-xs font-semibold mb-3 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i><span></span></p>
 
         <button type="submit" id="btnLogin"
           class="w-full bg-[#1a5f4f] hover:bg-[#155242] text-white text-sm font-bold py-3.5 rounded-xl mt-2 flex items-center justify-center gap-2">
           <span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>
         </button>
+      </form>
+
+      <form id="resetForm" class="hidden" autocomplete="off">
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3 mb-4 text-xs text-emerald-800">
+          Buat password baru untuk akunmu. Gunakan minimal 8 karakter.
+        </div>
+        <label class="text-slate-600 text-xs font-semibold block mb-1.5">Password baru</label>
+        <input id="newPassword" type="password" minlength="8" required placeholder="Minimal 8 karakter"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-[#2c3e50] outline-none mb-3">
+        <label class="text-slate-600 text-xs font-semibold block mb-1.5">Ulangi password baru</label>
+        <input id="confirmPassword" type="password" minlength="8" required placeholder="Ulangi password"
+          class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-[#2c3e50] outline-none mb-3">
+        <p id="resetMsg" class="text-xs font-semibold mb-3 hidden"></p>
+        <button type="submit" id="btnReset" class="w-full bg-[#1a5f4f] text-white text-sm font-bold py-3.5 rounded-xl">Simpan Password Baru</button>
       </form>
 
     </div>
@@ -85,32 +100,23 @@
     (function () {
       var params = new URLSearchParams(location.search);
       var role = params.get('role') || location.hash.replace('#', '') || 'mentee';
-      /* Fallback offline — kredensial tidak disimpan sebagai teks polos */
-      var USERS_FALLBACK = {
-        'arya@ftg.id':    { pw: 'YXJ5YTIwMjY=',     name: 'Arya Ramadhan',  role: 'mentee', initials: 'AR', path: 'Career Path',       menteeId: 1 },
-        'siti@ftg.id':    { pw: 'c2l0aTIwMjY=',     name: 'Siti Aisyah',    role: 'mentee', initials: 'SA', path: 'Entrepreneur Path', menteeId: 2 },
-        'rizky@ftg.id':   { pw: 'cml6a3kyMDI2',     name: 'Muhammad Rizky', role: 'mentee', initials: 'MR', path: 'Career Path',       menteeId: 3 },
-        'dina@ftg.id':    { pw: 'ZGluYTIwMjY=',     name: 'Dina Fitriani',  role: 'mentee', initials: 'DF', path: 'Entrepreneur Path', menteeId: 4 },
-        'bagas@ftg.id':   { pw: 'YmFnYXMyMDI2',     name: 'Bagas Nugroho',  role: 'mentee', initials: 'BN', path: 'Career Path',       menteeId: 5 },
-        'faris@ftg.id':   { pw: 'ZmFyaXMyMDI2',     name: 'Bapak Faris',    role: 'mentor', initials: 'BF', path: 'Senior Mentor' },
-        'panitia@ftg.id': { pw: 'cGFuaXRpYTIwMjY=', name: 'Panitia FTG',    role: 'admin',  initials: 'PF', path: 'Committee' }
-      };
-      var MENTEE_IDS = { 'arya@ftg.id': 1, 'siti@ftg.id': 2, 'rizky@ftg.id': 3, 'dina@ftg.id': 4, 'bagas@ftg.id': 5 };
       var sb = null;
       try {
         if (window.supabase && window.FTG_CONF && window.FTG_CONF.anonKey) {
           sb = window.supabase.createClient(window.FTG_CONF.url, window.FTG_CONF.anonKey);
         }
       } catch (e) {}
-      document.getElementById('connBadge').textContent = sb ? '● Terhubung ke server' : '○ Mode offline (fallback lokal)';
+      document.getElementById('connBadge').textContent = sb ? '● Login aman Supabase Auth' : '○ Layanan login tidak tersedia';
 
       function homeFor(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
 
-      // sudah login? langsung masuk
-      try {
-        var ses = JSON.parse(localStorage.getItem('ftgSession') || 'null');
-        if (ses && ses.role) location.replace(homeFor(ses.role));
-      } catch (e) {}
+      // Sesi hanya dianggap sah bila token Supabase masih aktif.
+      if (sb) sb.auth.getSession().then(function (result) {
+        if (!result.data.session) return;
+        return sb.from('profiles').select('*').eq('id', result.data.session.user.id).maybeSingle().then(function (p) {
+          if (p.data && p.data.status === 'active') success(p.data, result.data.session.user);
+        });
+      });
 
       var email = document.getElementById('email');
       var password = document.getElementById('password');
@@ -120,6 +126,32 @@
       var tabMentor = document.getElementById('tabMentor');
       var roleTabs = document.getElementById('roleTabs');
       var errMsg = document.getElementById('errMsg');
+
+      function showPasswordRecovery() {
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('resetForm').classList.remove('hidden');
+        document.getElementById('roleTabs').classList.add('hidden');
+        badge.textContent = 'RESET PASSWORD';
+        desc.textContent = 'Amankan kembali akun fellowship kamu.';
+      }
+      if (params.get('reset') === '1') showPasswordRecovery();
+      if (sb) sb.auth.onAuthStateChange(function (event) { if (event === 'PASSWORD_RECOVERY') showPasswordRecovery(); });
+
+      document.getElementById('resetForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var next = document.getElementById('newPassword').value;
+        var confirm = document.getElementById('confirmPassword').value;
+        var msg = document.getElementById('resetMsg');
+        msg.classList.remove('hidden', 'text-[#ef4444]', 'text-[#16a34a]');
+        if (next.length < 8 || next !== confirm) { msg.classList.add('text-[#ef4444]'); msg.textContent = next !== confirm ? 'Konfirmasi password belum sama.' : 'Password minimal 8 karakter.'; return; }
+        var button = document.getElementById('btnReset'); button.disabled = true; button.textContent = 'Menyimpan...';
+        sb.auth.updateUser({ password: next }).then(function (result) {
+          if (result.error) throw result.error;
+          msg.classList.add('text-[#16a34a]'); msg.textContent = 'Password berhasil diperbarui. Mengarahkan ke dashboard...';
+          return sb.from('profiles').select('*').eq('id', result.data.user.id).maybeSingle();
+        }).then(function (profileResult) { if (profileResult && profileResult.data) success(profileResult.data, profileResult.data); else location.href = 'login.html'; })
+          .catch(function (error) { msg.classList.add('text-[#ef4444]'); msg.textContent = error.message; button.disabled = false; button.textContent = 'Simpan Password Baru'; });
+      });
 
       var ROLE_UI = {
         mentee: { label: 'MENTEE', cls: 'bg-[#f97316]/10 text-[#f97316]', desc: 'Masuk untuk melanjutkan perjalanan fellowship-mu.' },
@@ -163,13 +195,14 @@
         btn.innerHTML = b ? '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Memeriksa...</span>'
                           : '<span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>';
       }
-      function success(user) {
+      function success(profile, authUser) {
         localStorage.setItem('ftgSession', JSON.stringify({
-          email: user.email, name: user.name, role: user.role, initials: user.initials, path: user.path,
-          menteeId: user.menteeId || user.mentee_id || MENTEE_IDS[user.email] || null,
+          id: authUser.id, email: authUser.email, name: profile.full_name, role: profile.role,
+          initials: profile.initials, path: profile.path, menteeId: profile.mentee_number || null,
+          cohortId: profile.cohort_id || null, mentorId: profile.mentor_id || null,
           at: new Date().toISOString()
         }));
-        location.href = homeFor(user.role);
+        location.href = homeFor(profile.role);
       }
 
       document.getElementById('loginForm').addEventListener('submit', function (e) {
@@ -179,31 +212,26 @@
         var em = email.value.trim().toLowerCase();
         var pw = password.value;
 
-        function fallbackAuth() {
-          var u = USERS_FALLBACK[em];
-          if (u && btoa(pw) === u.pw) { success(Object.assign({ email: em }, u)); return; }
-          // akun buatan panitia (tersimpan di dokumen state server)
-          if (sb) {
-            sb.from('ftg_state').select('data').eq('id', 1).maybeSingle()
-              .then(function (res) {
-                var ex = res.data && res.data.data && res.data.data.extraUsers;
-                var eu = ex && ex[em];
-                if (eu && btoa(pw) === eu.pw) success(Object.assign({ email: em }, eu));
-                else fail('Email atau password salah. Coba lagi ya.');
-              })
-              .catch(function () { fail('Email atau password salah. Coba lagi ya.'); });
-          } else fail('Email atau password salah. Coba lagi ya.');
-        }
-
-        if (sb) {
-          sb.from('ftg_users').select('*').eq('email', em).eq('password', pw).maybeSingle()
-            .then(function (res) {
-              if (res.error) { fallbackAuth(); return; }
-              if (res.data) success(res.data);
-              else fallbackAuth(); // akun mungkin belum tersinkron ke server
-            })
-            .catch(fallbackAuth);
-        } else fallbackAuth();
+        if (!sb) { fail('Layanan login sedang tidak tersedia. Coba beberapa saat lagi.'); return; }
+        sb.auth.signInWithPassword({ email: em, password: pw }).then(function (result) {
+          if (result.error || !result.data.user) throw result.error || new Error('Login gagal');
+          return sb.from('profiles').select('*').eq('id', result.data.user.id).maybeSingle().then(function (profileResult) {
+            if (profileResult.error || !profileResult.data) throw new Error('Profil akun belum disiapkan panitia.');
+            if (profileResult.data.status !== 'active') throw new Error('Akun sedang dinonaktifkan. Hubungi panitia.');
+            if (profileResult.data.role !== role) throw new Error('Akun ini terdaftar sebagai ' + profileResult.data.role + '. Pilih peran yang sesuai.');
+            success(profileResult.data, result.data.user);
+          });
+        }).catch(function (error) { fail(error.message === 'Invalid login credentials' ? 'Email atau password salah.' : error.message); });
+      });
+      document.getElementById('forgotPw').addEventListener('click', function () {
+        var em = email.value.trim().toLowerCase();
+        if (!em) { fail('Isi email terlebih dahulu untuk menerima tautan reset.'); return; }
+        if (!sb) { fail('Layanan reset password sedang tidak tersedia.'); return; }
+        sb.auth.resetPasswordForEmail(em, { redirectTo: location.origin + '/login.html?reset=1' }).then(function (result) {
+          if (result.error) throw result.error;
+          errMsg.classList.remove('hidden'); errMsg.className = 'text-[#16a34a] text-xs font-semibold mb-3';
+          errMsg.querySelector('span').textContent = 'Tautan reset sudah dikirim. Periksa email kamu.';
+        }).catch(function (error) { fail(error.message); });
       });
     })();
   </script>

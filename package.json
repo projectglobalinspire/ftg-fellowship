@@ -1,0 +1,10 @@
+{
+  "name": "ftg-fellowship",
+  "version": "2.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/smoke.mjs",
+    "check": "node --check app.js && node --test tests/smoke.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
