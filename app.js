@@ -2046,6 +2046,9 @@
     var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
       (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE));
     if (!needsGate || document.getElementById('ftg-google-gate')) return;
+    // Pada login pertama, sambutan peran selalu tampil lebih dahulu. Gate
+    // Google dibuka setelah pengguna menyelesaikan sambutan tersebut.
+    if (AUTH.profile && /^(mentee|mentor)$/.test(role) && !AUTH.profile.onboarding_completed) return;
     var existing = googleProfile();
     if (existing) { googleStatusBadge(existing); return; }
     var mentor = role === 'mentor';
@@ -4063,6 +4066,7 @@
           AUTH.profile.onboarding_completed = true;
           close();
           toast(isMentee ? 'Selamat memulai perjalananmu!' : 'Selamat mendampingi para mentee!', '✨');
+          setTimeout(mountGoogleGate, 220);
         }).catch(function (error) {
           sessionStorage.removeItem(seenKey);
           done.disabled = false;
