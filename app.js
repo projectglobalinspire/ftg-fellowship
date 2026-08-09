@@ -1231,6 +1231,24 @@
   };
   var IS_MENTOR_PAGE = /^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE);
 
+  // Beri tautan navigasi tujuan nyata secepat DOM siap. Fungsi ini hanya
+  // mengisi href, sehingga tidak menggandakan aksi modal di wireNav().
+  function primeNavHrefs() {
+    var ses = mySession();
+    var role = ses && ses.role;
+    $all('a[href="#"]').forEach(function (a) {
+      var txt = a.textContent.replace(/\s+/g, ' ').trim();
+      var target = '';
+      if (txt === 'Dashboard') target = role === 'mentor' || IS_MENTOR_PAGE ? 'mentor-dashboard.html' : (role === 'admin' ? 'admin-dashboard.html' : 'mentee-dashboard.html');
+      else if (MENTEE_ROUTES[txt]) target = MENTEE_ROUTES[txt];
+      else if (/^Buka Canvas/.test(txt) || txt === 'Lanjut Belajar' || txt === 'Mulai') target = 'design-thinking-module.html';
+      else if (/^Lihat semua badge/.test(txt)) target = 'progress-tracker.html';
+      else if (txt === 'Kumpulkan Sekarang') target = 'assignment-submission.html';
+      else if (txt === '' && PAGE.indexOf('design-thinking') === 0) target = 'mentee-dashboard.html';
+      if (target) a.href = target;
+    });
+  }
+
   function wireNav() {
     if (!document.body.getAttribute('data-ftg-logout-wire')) {
       document.body.setAttribute('data-ftg-logout-wire', '1');
@@ -4273,6 +4291,7 @@
     // identitas sidebar & menu peran diganti SEKETIKA — tidak ada kilasan "Arya"
     try { personalize(); } catch (e) { console.warn(e); }
     finally { document.documentElement.classList.add('ftg-role-ready'); }
+    try { primeNavHrefs(); } catch (e) { console.warn(e); }
 
     /* Hybrid render: beri server maks. 900ms untuk data segar (tanpa kedip
        reload), lebih dari itu render data lokal — tombol tetap cepat aktif. */

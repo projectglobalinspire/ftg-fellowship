@@ -77,3 +77,27 @@ test('participant discipline requires three absences and admin confirmation', as
   assert.match(migration, /'dropped'/);
   assert.doesNotMatch(migration, /grant update/i);
 });
+
+test('mentee dashboard primary navigation never relies on dummy links', async () => {
+  const source = await text('mentee-dashboard.html');
+  const labels = ['Lanjut Belajar', 'Buka Canvas', 'Mulai', 'Lihat semua badge'];
+  for (const label of labels) {
+    const anchor = [...source.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)]
+      .find(match => match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').includes(label));
+    assert.ok(anchor, `mentee-dashboard.html: ${label} missing`);
+    assert.doesNotMatch(anchor[1], /href="#"/, `mentee-dashboard.html: ${label} still uses a dummy link`);
+  }
+});
+
+test('every designed button is connected to application or page code', async () => {
+  const app = await text('app.js');
+  for (const file of htmlFiles) {
+    const source = await text(file);
+    const searchable = `${app}\n${source}`;
+    for (const match of source.matchAll(/<button\b[^>]*data-design-id="([^"]+)"[^>]*>/gi)) {
+      const raw = match[1].replace(/-[a-z0-9]{6}$/i, '');
+      const candidates = [raw, raw.replace(/-\d+$/, '-'), raw.replace(/^(btn-locked-).*$/, '$1')];
+      assert.ok(candidates.some(id => searchable.includes(id)), `${file}: ${raw} has no handler`);
+    }
+  }
+});
