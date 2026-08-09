@@ -1232,6 +1232,16 @@
   var IS_MENTOR_PAGE = /^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE);
 
   function wireNav() {
+    if (!document.body.getAttribute('data-ftg-logout-wire')) {
+      document.body.setAttribute('data-ftg-logout-wire', '1');
+      document.addEventListener('click', function (e) {
+        var logoutLink = e.target.closest && e.target.closest('[data-ftg-logout="1"]');
+        if (!logoutLink) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        secureLogout();
+      }, true);
+    }
     $all('a').forEach(function (a) {
       var txt = a.textContent.replace(/\s+/g, ' ').trim();
       var href = a.getAttribute('href');
