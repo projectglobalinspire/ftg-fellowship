@@ -1483,7 +1483,7 @@
       var p = results[0], settings = results[1] && results[1].data, cohorts = results[2] && results[2].data;
       if (settings) Object.assign(G.programSettings, { programName: settings.program_name, currentMonth: settings.current_month, currentWeek: settings.current_week, passingScore: settings.passing_score });
       if (cohorts && cohorts.length) G.cohorts = cohorts.map(function (c) { return { id:c.id, name:c.name, status:c.status, startDate:c.start_date || '', endDate:c.end_date || '' }; });
-      (p.data || []).forEach(function (x) { AUTH.profilesById[x.id] = x; if (x.mentee_number) AUTH.profilesByNumber[x.mentee_number] = x; });
+      (p.data || []).forEach(function (x) { AUTH.profilesById[x.id] = x; if (x.mentee_number) { AUTH.profilesByNumber[x.mentee_number] = x; if (x.mentor_id) G.pairings[x.mentee_number] = x.mentor_id; } });
       if (AUTH.profile.mentee_number) AUTH.profilesByNumber[AUTH.profile.mentee_number] = AUTH.profile;
       var taskQuery = AUTH.profile.role === 'mentee'
         ? sb.from('assignment_targets').select('assignment_id,assignments(*)').eq('mentee_id', AUTH.user.id)

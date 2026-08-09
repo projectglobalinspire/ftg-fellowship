@@ -11,8 +11,8 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="responsive.css?v=21">
-  <script src="ftg-config.js?v=21"></script>
+  <link rel="stylesheet" href="responsive.css?v=22">
+  <script src="ftg-config.js?v=22"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -218,7 +218,7 @@
           return sb.from('profiles').select('*').eq('id', result.data.user.id).maybeSingle().then(function (profileResult) {
             if (profileResult.error || !profileResult.data) throw new Error('Profil akun belum disiapkan panitia.');
             if (profileResult.data.status !== 'active') throw new Error('Akun sedang dinonaktifkan. Hubungi panitia.');
-            if (profileResult.data.role !== role) throw new Error('Akun ini terdaftar sebagai ' + profileResult.data.role + '. Pilih peran yang sesuai.');
+            if (profileResult.data.role !== role) return sb.auth.signOut().then(function () { throw new Error('Akun ini terdaftar sebagai ' + profileResult.data.role + '. Pilih peran yang sesuai.'); });
             success(profileResult.data, result.data.user);
           });
         }).catch(function (error) { fail(error.message === 'Invalid login credentials' ? 'Email atau password salah.' : error.message); });
