@@ -101,3 +101,19 @@ test('every designed button is connected to application or page code', async () 
     }
   }
 });
+
+test('every remaining dummy anchor is an intentional wired action', async () => {
+  const wired = [
+    /^Dashboard$/, /^Design Thinking$/, /^Workshop Library$/, /^Tugas Saya$/,
+    /^Progress Saya$/, /^Feedback Mentor$/, /^Leaderboard$/,
+    /^Opening Ceremony$/, /^Closing Ceremony$/, /^Berikan Feedback$/,
+    /^Progress Grup$/, /^Kirim Pesan Grup$/, /^Kumpulkan Sekarang$/
+  ];
+  for (const file of htmlFiles) {
+    const source = await text(file);
+    for (const match of source.matchAll(/<a\b[^>]*href="#"[^>]*>([\s\S]*?)<\/a>/gi)) {
+      const label = match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      assert.ok(wired.some(pattern => pattern.test(label)), `${file}: unhandled dummy link "${label}"`);
+    }
+  }
+});
