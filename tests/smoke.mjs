@@ -215,6 +215,16 @@ test('sidebar footer status never overlaps logout or content', async () => {
   assert.doesNotMatch(app, /b\.style\.cssText = 'position:fixed;bottom:10px;left:12px/);
 });
 
+test('header notification and profile controls stay grouped on the right', async () => {
+  const app = await text('app.js');
+  const responsive = await text('responsive.css');
+  assert.match(app, /querySelector\('\[data-design-id\*="notif"\], \.fa-bell'\)/);
+  assert.match(app, /actions\.classList\.add\('ftg-header-actions'\)/);
+  assert.match(app, /actions\.insertBefore\(b,actions\.firstChild\)/);
+  assert.match(responsive, /\.ftg-header-actions\s*\{[^}]*margin-left:\s*auto/);
+  assert.match(responsive, /\.ftg-header-actions \.ftg-global-search\s*\{[^}]*margin-left:\s*0/);
+});
+
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {
   const app = await text('app.js');
   const migration = await text('supabase/migrations/20260810_program_suite.sql');
