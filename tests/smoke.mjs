@@ -19,7 +19,7 @@ test('all application pages have responsive metadata and valid local links', asy
 });
 
 test('protected pages use the shared engine or a dedicated authenticated flow', async () => {
-  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html']);
+  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
     assert.ok(/app\.js\?v=\d+/.test(source) || (['attendance.html', 'profile-setup.html'].includes(file) && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
