@@ -21,6 +21,12 @@
     .fade-up { animation: fadeUp .5s ease both; }
     @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
     .shake { animation: shake .4s ease; }
+    @keyframes authSpin { to { transform: rotate(360deg); } }
+    @keyframes authPulse { 0%,100% { transform:scale(.82); opacity:.45 } 50% { transform:scale(1); opacity:1 } }
+    .auth-spinner { width:58px; height:58px; border:4px solid #dcefe8; border-top-color:#1a5f4f; border-radius:999px; animation:authSpin .8s linear infinite; }
+    .auth-dot { width:7px; height:7px; border-radius:999px; background:#1a5f4f; animation:authPulse 1.15s ease-in-out infinite; }
+    .auth-dot:nth-child(2) { animation-delay:.15s; }.auth-dot:nth-child(3) { animation-delay:.3s; }
+    @media (prefers-reduced-motion: reduce) { .auth-spinner,.auth-dot { animation-duration:2s; } }
     input:focus { border-color: #f97316 !important; }
   </style>
 </head>
@@ -114,6 +120,19 @@
     </nav>
   </div>
 
+  <div id="authLoading" class="hidden fixed inset-0 z-[100] bg-[#203548]/90 backdrop-blur-md items-center justify-center px-5" role="status" aria-live="polite" aria-hidden="true">
+    <section class="w-full max-w-sm rounded-3xl bg-white px-8 py-9 text-center shadow-2xl">
+      <div class="relative mx-auto mb-5 w-[70px] h-[70px] flex items-center justify-center">
+        <div id="authSpinner" class="auth-spinner absolute inset-[6px]"></div>
+        <img id="authLoadingLogo" src="assets/icon-192.png" alt="" class="w-8 h-8 rounded-lg relative z-10">
+      </div>
+      <h2 id="authLoadingTitle" class="text-[#2c3e50] text-lg font-extrabold">Sedang masuk...</h2>
+      <p id="authLoadingText" class="text-slate-500 text-xs leading-relaxed mt-2 min-h-[38px]">Memeriksa akun dan menyiapkan dashboard.</p>
+      <div id="authLoadingDots" class="flex justify-center gap-2 mt-5" aria-hidden="true"><span class="auth-dot"></span><span class="auth-dot"></span><span class="auth-dot"></span></div>
+      <p class="text-[10px] text-slate-400 mt-5">Jangan tutup halaman ini. Biasanya selesai dalam beberapa detik.</p>
+    </section>
+  </div>
+
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
@@ -129,13 +148,56 @@
       } catch (e) {}
       document.getElementById('connBadge').textContent = sb ? '● Login aman Supabase Auth' : '○ Layanan login tidak tersedia';
 
+      var authLoadingTimer = null;
+      var authLoadingSteps = null;
+      function showAuthLoading(title, steps) {
+        var overlay = document.getElementById('authLoading');
+        var messages = steps && steps.length ? steps : ['Memeriksa akun...', 'Menyiapkan sesi aman...', 'Membuka dashboard...'];
+        var index = 0;
+        clearInterval(authLoadingSteps); clearTimeout(authLoadingTimer);
+        document.getElementById('authLoadingTitle').textContent = title || 'Sedang masuk...';
+        document.getElementById('authLoadingText').textContent = messages[0];
+        document.getElementById('authSpinner').style.display = '';
+        document.getElementById('authLoadingDots').style.display = 'flex';
+        overlay.classList.remove('hidden'); overlay.classList.add('flex'); overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        authLoadingSteps = setInterval(function () {
+          index = Math.min(index + 1, messages.length - 1);
+          document.getElementById('authLoadingText').textContent = messages[index];
+        }, 1500);
+        authLoadingTimer = setTimeout(function () {
+          hideAuthLoading();
+          fail('Proses login terlalu lama. Periksa koneksi lalu coba kembali.');
+        }, 25000);
+      }
+      function updateAuthLoading(message) {
+        if (message) document.getElementById('authLoadingText').textContent = message;
+      }
+      function hideAuthLoading() {
+        clearInterval(authLoadingSteps); clearTimeout(authLoadingTimer);
+        var overlay = document.getElementById('authLoading');
+        overlay.classList.add('hidden'); overlay.classList.remove('flex'); overlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      }
+      function finishAuthLoading(url, message) {
+        clearInterval(authLoadingSteps); clearTimeout(authLoadingTimer);
+        var overlay = document.getElementById('authLoading');
+        overlay.classList.remove('hidden'); overlay.classList.add('flex'); overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        document.getElementById('authLoadingTitle').textContent = 'Berhasil masuk';
+        document.getElementById('authLoadingText').textContent = message || 'Dashboard siap dibuka.';
+        document.getElementById('authSpinner').style.display = 'none';
+        document.getElementById('authLoadingDots').style.display = 'none';
+        setTimeout(function () { location.replace(url); }, 220);
+      }
+
       function homeFor(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
 
       function routeSupabaseSession(session) {
         if (!session || !session.user) return Promise.resolve();
         return sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(function (p) {
           if (!p.data) return;
-          if (p.data.status === 'invited') { location.replace('profile-setup.html'); return; }
+          if (p.data.status === 'invited') { finishAuthLoading('profile-setup.html', 'Silakan lengkapi profil untuk diverifikasi Fasil.'); return; }
           if (p.data.status === 'active') success(p.data, session.user);
         });
       }
@@ -143,6 +205,7 @@
       // Token hash diverifikasi langsung di domain FTG. Jangan mengikuti
       // action_link Supabase karena konfigurasi Site URL lama bisa menuju localhost.
       if (sb && hashParams.get('google_token')) {
+        showAuthLoading('Memverifikasi Google', ['Memeriksa token Google...', 'Membuat sesi aman...', 'Membuka dashboard...']);
         document.getElementById('connBadge').textContent = '● Memverifikasi login Google...';
         document.getElementById('loginForm').style.opacity = '.45';
         document.getElementById('loginForm').style.pointerEvents = 'none';
@@ -234,6 +297,7 @@
       });
 
       function fail(msg) {
+        hideAuthLoading();
         errMsg.querySelector('span').textContent = msg;
         errMsg.classList.remove('hidden');
         var card = document.getElementById('loginCard');
@@ -245,6 +309,7 @@
         btn.disabled = b;
         btn.innerHTML = b ? '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Memeriksa...</span>'
                           : '<span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>';
+        if (b) showAuthLoading('Sedang masuk', ['Memeriksa email dan password...', 'Menyiapkan sesi aman...', 'Membuka dashboard...']);
       }
       function success(profile, authUser) {
         localStorage.setItem('ftgSession', JSON.stringify({
@@ -253,7 +318,7 @@
           cohortId: profile.cohort_id || null, mentorId: profile.mentor_id || null,
           at: new Date().toISOString()
         }));
-        location.href = homeFor(profile.role);
+        finishAuthLoading(homeFor(profile.role), 'Selamat datang, ' + (profile.full_name || 'peserta') + '.');
       }
 
       function handleGoogleCredential(response) {
@@ -262,6 +327,7 @@
         var googleHost = document.getElementById('googleLoginButton');
         googleHost.style.opacity = '.55';
         googleHost.style.pointerEvents = 'none';
+        showAuthLoading('Menghubungkan Google', ['Memverifikasi identitas Google...', 'Membuat sesi FTG yang aman...', 'Menyiapkan profil dan dashboard...']);
         fetch('/api/program', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -269,9 +335,11 @@
         }).then(function (result) {
           return result.json().catch(function () { return {}; }).then(function (body) {
             if (!result.ok || !body.session || !body.session.access_token || !body.session.refresh_token) throw new Error(body.error || 'Login Google belum dapat diproses.');
+            updateAuthLoading('Identitas valid. Menyiapkan sesi FTG...');
             return sb.auth.setSession({ access_token: body.session.access_token, refresh_token: body.session.refresh_token }).then(function (sessionResult) {
               if (sessionResult.error || !sessionResult.data.session) throw sessionResult.error || new Error('Sesi Google gagal disimpan');
-              if (body.status === 'invited') { location.replace('profile-setup.html'); return; }
+              if (body.status === 'invited') { finishAuthLoading('profile-setup.html', 'Login berhasil. Silakan lengkapi profil.'); return; }
+              updateAuthLoading('Sesi tersimpan. Membuka dashboard...');
               return routeSupabaseSession(sessionResult.data.session);
             });
           });

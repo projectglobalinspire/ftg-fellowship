@@ -194,6 +194,17 @@ test('Fasil approval labels and one-week mentor deadlines are complete', async (
   assert.match(app, /deadlineDate\(task\.deadline\)\.toISOString\(\)/);
 });
 
+test('login shows progress animation and never looks frozen', async () => {
+  const login = await text('login.html');
+  assert.match(login, /id="authLoading"/);
+  assert.match(login, /@keyframes authSpin/);
+  assert.match(login, /function showAuthLoading/);
+  assert.match(login, /Menghubungkan Google/);
+  assert.match(login, /Memeriksa email dan password/);
+  assert.match(login, /function finishAuthLoading/);
+  assert.match(login, /Proses login terlalu lama/);
+});
+
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {
   const app = await text('app.js');
   const migration = await text('supabase/migrations/20260810_program_suite.sql');
