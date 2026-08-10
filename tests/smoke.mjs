@@ -250,6 +250,19 @@ test('program suite covers durable revisions, flexible rubrics and operations', 
   assert.match(operations, /certificate_issue/);
 });
 
+test('mentor assignments open in the same rich inline mentee workspace', async () => {
+  const app = await text('app.js');
+  const responsive = await text('responsive.css');
+  assert.match(app, /function mountInlineTaskSubmission/);
+  assert.match(app, /ftg-inline-task-workspace/);
+  assert.match(app, /TUGAS DARI MENTOR/);
+  assert.match(app, /byId\('assignment-brief'\), byId\('submission-form'\)/);
+  assert.match(app, /view\.box\.classList\.add\('ftg-inline-task-box'\)/);
+  assert.match(app, /workspace\.scrollIntoView/);
+  assert.match(responsive, /\.ftg-inline-task-toolbar/);
+  assert.match(responsive, /\.ftg-inline-task-box/);
+});
+
 test('real notifications, calendar, reports and health monitoring have server endpoints', async () => {
   const email = await text('api/_email.js');
   const reminders = await text('api/cron-reminders.js');

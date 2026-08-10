@@ -1213,12 +1213,12 @@
       ov.style.opacity = '0';
       box.style.transform = 'scale(.95) translateY(6px)';
       box.style.opacity = '0';
-      setTimeout(function () { ov.remove(); }, 190);
+      setTimeout(function () { box.remove(); ov.remove(); }, 190);
     }
     ov.addEventListener('click', function (e) { if (e.target === ov) shut(); });
     document.body.appendChild(ov);
     if (onMount) onMount(box, shut);
-    return { close: shut, box: box };
+    return { close: shut, box: box, overlay: ov };
   }
 
   /* ---------- Sidebar navigation wiring ---------- */
@@ -2541,12 +2541,12 @@
     sub.files = sub.files || []; sub.checks = sub.checks || {}; sub.discussion = sub.discussion || []; sub.versions = sub.versions || [];
     var historyHtml = assignmentHistoryHtml(sub);
     if (sub.review && sub.review.decision !== 'revision') {
-      modal('<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:4px">✅ ' + esc(task.title) + '</h3>' +
+      return modal('<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:4px">✅ ' + esc(task.title) + '</h3>' +
         '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Tugas sudah dinilai oleh mentor.</p>' +
         '<div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:14px"><b style="color:#166534">Skor ' + sub.review.score + '/100</b><p style="font-size:12px;color:#475569;margin-top:6px">' + esc(sub.review.text) + '</p></div>' + historyHtml);
       return;
     }
-    modal(
+    return modal(
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">📝 ' + esc(task.title) + '</h3>' +
       '<p style="font-size:11px;color:#f97316;font-weight:700;margin-bottom:10px">' + esc(dueLabel(task.deadline)) + ' · +' + (+task.points || 0) + ' poin</p>' +
       '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:11px;margin-bottom:12px;font-size:12px;color:#475569;white-space:pre-line">' + esc(task.description || 'Ikuti arahan mentor.') + '</div>' +
@@ -2617,6 +2617,36 @@
       }
     );
   }
+  function mountInlineTaskSubmission(view, task, onClose) {
+    if (!view || PAGE.indexOf('assignment-submission') !== 0) return false;
+    var left = $('main > div.px-8 > div.grid > div.col-span-2');
+    if (!left) return false;
+    var previous = document.getElementById('ftg-inline-task-workspace');
+    if (previous) previous.remove();
+    var builtIn = [byId('assignment-brief'), byId('submission-form')].filter(Boolean);
+    builtIn.forEach(function (section) { section.style.display = 'none'; });
+    var workspace = document.createElement('section');
+    workspace.id = 'ftg-inline-task-workspace';
+    workspace.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm mb-5 overflow-hidden';
+    var toolbar = document.createElement('div');
+    toolbar.className = 'ftg-inline-task-toolbar';
+    toolbar.innerHTML = '<div><span>TUGAS DARI MENTOR</span><p>' + esc(task.title) + '</p></div><button type="button" aria-label="Tutup tugas">×</button>';
+    workspace.appendChild(toolbar);
+    view.box.classList.remove('ftg-modal-box');
+    view.box.classList.add('ftg-inline-task-box');
+    view.box.removeAttribute('style');
+    workspace.appendChild(view.box);
+    if (view.overlay) view.overlay.remove();
+    left.insertBefore(workspace, left.firstChild);
+    function restore() {
+      builtIn.forEach(function (section) { section.style.display = ''; });
+      workspace.remove();
+      if (onClose) onClose();
+    }
+    toolbar.querySelector('button').addEventListener('click', function () { view.close(); restore(); });
+    setTimeout(function () { workspace.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+    return true;
+  }
   function mountMenteeAssignments() {
     if (!/^(mentee-dashboard|assignment-submission)/.test(PAGE)) return;
     var old = document.getElementById('ftg-assigned-tasks'); if (old) old.remove();
@@ -2639,7 +2669,16 @@
     $all('[data-open-mentor-task]', panel).forEach(function (b) {
       b.addEventListener('click', function () {
         var task = assignmentFor(b.getAttribute('data-open-mentor-task'));
-        if (task) openTaskSubmission(task, mountMenteeAssignments);
+        if (task) {
+          var inlineWorkspace = null;
+          function done() {
+            if (inlineWorkspace) inlineWorkspace.remove();
+            [byId('assignment-brief'), byId('submission-form')].filter(Boolean).forEach(function (section) { section.style.display = ''; });
+            mountMenteeAssignments();
+          }
+          var view = openTaskSubmission(task, done);
+          if (view && mountInlineTaskSubmission(view, task, mountMenteeAssignments)) inlineWorkspace = document.getElementById('ftg-inline-task-workspace');
+        }
       });
     });
   }
