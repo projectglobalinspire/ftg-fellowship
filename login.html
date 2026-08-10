@@ -110,7 +110,10 @@
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
-      var role = params.get('role') || location.hash.replace('#', '') || 'mentee';
+      var hashText = location.hash.replace(/^#/, '');
+      var hashParams = new URLSearchParams(hashText);
+      var legacyHashRole = /^(mentee|mentor|admin)$/.test(hashText) ? hashText : '';
+      var role = params.get('role') || hashParams.get('role') || legacyHashRole || 'mentee';
       var sb = null;
       try {
         if (window.supabase && window.FTG_CONF && window.FTG_CONF.anonKey) {
@@ -121,15 +124,26 @@
 
       function homeFor(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
 
-      // Sesi hanya dianggap sah bila token Supabase masih aktif.
-      if (sb) sb.auth.getSession().then(function (result) {
-        if (!result.data.session) return;
-        return sb.from('profiles').select('*').eq('id', result.data.session.user.id).maybeSingle().then(function (p) {
+      function routeSupabaseSession(session) {
+        if (!session || !session.user) return Promise.resolve();
+        return sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle().then(function (p) {
           if (!p.data) return;
           if (p.data.status === 'invited') { location.replace('profile-setup.html'); return; }
-          if (p.data.status === 'active') success(p.data, result.data.session.user);
+          if (p.data.status === 'active') success(p.data, session.user);
         });
-      });
+      }
+
+      // Token hash diverifikasi langsung di domain FTG. Jangan mengikuti
+      // action_link Supabase karena konfigurasi Site URL lama bisa menuju localhost.
+      if (sb && hashParams.get('google_token')) {
+        sb.auth.verifyOtp({ token_hash: hashParams.get('google_token'), type: hashParams.get('type') || 'magiclink' }).then(function (result) {
+          if (result.error || !result.data.session) throw result.error || new Error('Sesi Google tidak dapat dibuat');
+          history.replaceState(null, '', 'login.html?role=' + encodeURIComponent(role));
+          return routeSupabaseSession(result.data.session);
+        }).catch(function (error) { fail(error.message || 'Login Google gagal diverifikasi. Silakan coba lagi.'); });
+      } else if (sb) {
+        sb.auth.getSession().then(function (result) { return routeSupabaseSession(result.data.session); });
+      }
 
       var email = document.getElementById('email');
       var password = document.getElementById('password');
@@ -232,8 +246,8 @@
           body: JSON.stringify({ action: 'google_login', credential: response.credential, role: role })
         }).then(function (result) {
           return result.json().catch(function () { return {}; }).then(function (body) {
-            if (!result.ok || !body.action_link) throw new Error(body.error || 'Login Google belum dapat diproses.');
-            location.href = body.action_link;
+            if (!result.ok || !body.verify_path) throw new Error(body.error || 'Login Google belum dapat diproses.');
+            location.href = body.verify_path;
           });
         }).catch(function (error) {
           googleHost.style.opacity = '';

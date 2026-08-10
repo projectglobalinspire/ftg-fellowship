@@ -143,6 +143,9 @@ test('Google login securely authenticates existing mentee, mentor and admin prof
   assert.match(googleLogin, /\['mentee', 'mentor', 'admin'\]/);
   assert.match(googleLogin, /google_email=ilike/);
   assert.match(googleLogin, /auth\/v1\/admin\/generate_link/);
+  assert.match(googleLogin, /properties\.hashed_token/);
+  assert.match(login, /auth\.verifyOtp/);
+  assert.doesNotMatch(googleLogin, /return send\(res, 200, \{ action_link/);
   assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
   assert.match(program, /body\.action === 'google_login'/);
   assert.match(app, /role === 'admin'.*admin-dashboard/);
