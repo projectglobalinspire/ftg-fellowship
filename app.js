@@ -2091,6 +2091,10 @@
 
   function mountGoogleGate() {
     var role = myRole();
+    // Drive pusat memakai kredensial layanan di server. Pengguna tidak perlu
+    // memberikan izin OAuth Drive pribadi, sehingga tidak ada consent screen
+    // sensitif atau peringatan aplikasi belum diverifikasi di dashboard.
+    if (centralDriveEnabled()) return;
     // Mentor dan mentee wajib menghubungkan Google pada alur utama. Dengan
     // begitu akses Drive sudah siap sebelum proses unggah/review dimulai.
     var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
@@ -2381,7 +2385,7 @@
       toast('Mengunggah "' + f.name + '" ke Google Drive...', '☁️');
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
-      driveAuth()
+      (centralDriveEnabled() ? Promise.resolve() : driveAuth())
         .then(function () { return uploadToConfiguredDrive(f, menteeName, week); })
         .then(function (result) {
           var res = result.file, sharing = result.sharing;
@@ -2461,7 +2465,7 @@
       btn.disabled = true;
       btn.textContent = 'Mengunggah...';
       var menteeName = (mySession() || {}).name || MENTEES[MID].name;
-      driveAuth()
+      (centralDriveEnabled() ? Promise.resolve() : driveAuth())
         .then(function () { return uploadToConfiguredDrive(f, menteeName, 'Tugas Mentor - ' + task.title); })
         .then(function (result) {
           var uploaded = result.file;

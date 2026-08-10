@@ -123,6 +123,8 @@ test('central Drive uploads keep credentials server-side', async () => {
   const config = await text('ftg-config.js');
   const driveApi = await text('api/drive.js');
   assert.match(config, /driveMode:\s*'central'/);
+  assert.match(app, /if \(centralDriveEnabled\(\)\) return;/);
+  assert.match(app, /centralDriveEnabled\(\) \? Promise\.resolve\(\) : driveAuth\(\)/);
   assert.match(config, /projectglobalinspire@gmail\.com/);
   assert.match(app, /centralDriveUpload/);
   assert.match(app, /\/api\/drive/);

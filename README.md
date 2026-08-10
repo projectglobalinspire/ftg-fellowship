@@ -60,7 +60,7 @@ Lampiran tidak disimpan sebagai blob/base64 di Supabase. Database hanya menyimpa
    - `http://localhost:4173`
 5. Isi Client ID di `ftg-config.js` pada `driveClientId`.
 
-Scope yang diminta hanya `drive.file`, sehingga aplikasi hanya dapat mengelola file/folder yang dibuat atau dipilih melalui aplikasi. Token akses berumur pendek dan hanya disimpan di memori tab, bukan di database atau `localStorage`.
+Pada mode produksi `central`, peserta dan mentor tidak diminta memberikan izin Google Drive pribadi. Berkas diunggah oleh API server ke Drive pusat FTG; browser hanya mengirim berkas bersama sesi FTG yang sah. OAuth pengguna hanya dipakai untuk login identitas dasar. Mode lama `drive.file` tetap tersedia sebagai fallback pengembangan, dengan token berumur pendek yang hanya disimpan di memori tab.
 
 Struktur folder otomatis:
 
