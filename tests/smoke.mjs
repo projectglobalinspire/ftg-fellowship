@@ -123,6 +123,7 @@ test('central Drive uploads keep credentials server-side', async () => {
   const config = await text('ftg-config.js');
   const deploymentConfig = await text('vercel.json');
   const driveApi = await text('api/drive.js');
+  const driveChunkApi = await text('api/drive-chunk.js');
   assert.match(config, /driveMode:\s*'central'/);
   assert.match(app, /if \(centralDriveEnabled\(\)\) return;/);
   assert.match(app, /centralDriveEnabled\(\) \? Promise\.resolve\(\) : driveAuth\(\)/);
@@ -134,9 +135,15 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.match(driveApi, /requireRole\(req, res, \['mentee', 'mentor', 'admin'\]\)/);
   assert.doesNotMatch([app, config].join('\n'), /GOOGLE_DRIVE_CLIENT_SECRET|GOOGLE_DRIVE_REFRESH_TOKEN/);
   assert.match(app, /function putCentralDriveFile/);
-  assert.match(app, /new XMLHttpRequest\(\)/);
-  assert.match(app, /xhr\.upload\.onprogress/);
-  assert.match(app, /xhr\.timeout = 180000/);
+  assert.match(app, /fetch\('\/api\/drive-chunk'/);
+  assert.match(app, /file\.slice\(start, end\)/);
+  assert.match(app, /3 \* 1024 \* 1024/);
+  assert.doesNotMatch(app, /new XMLHttpRequest\(\)/);
+  assert.match(driveChunkApi, /bodyParser: false/);
+  assert.match(driveChunkApi, /requireRole\(req, res, \['mentee'\]\)/);
+  assert.match(driveChunkApi, /hostname !== 'www\.googleapis\.com'/);
+  assert.match(driveChunkApi, /Content-Range/);
+  assert.match(driveChunkApi, /response\.status === 308/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleapis\.com/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleusercontent\.com/);
   assert.doesNotMatch(app, /Silakan hubungkan Drive lalu coba lagi/);

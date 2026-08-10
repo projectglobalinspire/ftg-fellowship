@@ -2306,30 +2306,34 @@
   }
 
   /* Mode pusat: refresh token akun FTG hanya berada di server. Browser
-     menerima URL resumable sekali pakai untuk mengirim isi berkas langsung
-     ke Google tanpa melewati batas ukuran Vercel Function. */
+     mengirim potongan kecil melalui endpoint satu origin. Respons final
+     resumable Google tidak selalu menyertakan header CORS, sehingga unggahan
+     sebenarnya dapat selesai tetapi browser melaporkannya sebagai gagal. */
   function putCentralDriveFile(uploadUrl, file, onProgress) {
-    return new Promise(function (resolve, reject) {
-      var xhr = new XMLHttpRequest();
-      xhr.open('PUT', uploadUrl, true);
-      xhr.timeout = 180000;
-      xhr.withCredentials = false;
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-      xhr.upload.onprogress = function (event) {
-        if (event.lengthComputable && onProgress) onProgress(Math.max(1, Math.round(event.loaded / event.total * 100)));
-      };
-      xhr.onload = function () {
-        var data = null;
-        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (_) {}
-        if (xhr.status >= 200 && xhr.status < 300 && data && data.id) { resolve(data); return; }
-        var message = data && data.error && data.error.message;
-        reject(new Error(message || ('Google Drive menolak unggahan (' + xhr.status + ')')));
-      };
-      xhr.onerror = function () { reject(new Error('Koneksi unggah ke Google Drive terputus. Periksa internet lalu coba kembali.')); };
-      xhr.ontimeout = function () { reject(new Error('Unggahan melewati batas waktu. Gunakan koneksi yang lebih stabil lalu coba kembali.')); };
-      xhr.onabort = function () { reject(new Error('Unggahan dibatalkan.')); };
-      xhr.send(file);
-    });
+    var chunkSize = 3 * 1024 * 1024; // kelipatan 256 KiB dan aman di bawah limit Vercel
+    function sendChunk(start) {
+      var end = Math.min(start + chunkSize, file.size);
+      return fetch('/api/drive-chunk', {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + AUTH.accessToken,
+          'Content-Type': 'application/octet-stream',
+          'X-FTG-Upload-URL': uploadUrl,
+          'X-FTG-File-Type': file.type || 'application/octet-stream',
+          'X-FTG-Content-Range': 'bytes ' + start + '-' + (end - 1) + '/' + file.size
+        },
+        body: file.slice(start, end)
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          if (!response.ok) throw new Error(data.error || ('Pengiriman berkas gagal (' + response.status + ')'));
+          if (onProgress) onProgress(Math.max(1, Math.round(end / file.size * 100)));
+          if (data.complete && data.file && data.file.id) return data.file;
+          if (end >= file.size) throw new Error('Google Drive belum mengonfirmasi berkas selesai');
+          return sendChunk(end);
+        });
+      });
+    }
+    return sendChunk(0);
   }
   function centralDriveUpload(file, folderLabel) {
     var lastReportedProgress = 0;
