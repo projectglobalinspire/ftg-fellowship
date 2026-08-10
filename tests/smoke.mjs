@@ -121,6 +121,7 @@ test('every remaining dummy anchor is an intentional wired action', async () => 
 test('central Drive uploads keep credentials server-side', async () => {
   const app = await text('app.js');
   const config = await text('ftg-config.js');
+  const deploymentConfig = await text('vercel.json');
   const driveApi = await text('api/drive.js');
   assert.match(config, /driveMode:\s*'central'/);
   assert.match(app, /if \(centralDriveEnabled\(\)\) return;/);
@@ -132,6 +133,13 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.match(driveApi, /uploadType=resumable/);
   assert.match(driveApi, /requireRole\(req, res, \['mentee', 'mentor', 'admin'\]\)/);
   assert.doesNotMatch([app, config].join('\n'), /GOOGLE_DRIVE_CLIENT_SECRET|GOOGLE_DRIVE_REFRESH_TOKEN/);
+  assert.match(app, /function putCentralDriveFile/);
+  assert.match(app, /new XMLHttpRequest\(\)/);
+  assert.match(app, /xhr\.upload\.onprogress/);
+  assert.match(app, /xhr\.timeout = 180000/);
+  assert.match(deploymentConfig, /https:\/\/\*\.googleapis\.com/);
+  assert.match(deploymentConfig, /https:\/\/\*\.googleusercontent\.com/);
+  assert.doesNotMatch(app, /Silakan hubungkan Drive lalu coba lagi/);
 });
 
 test('Google login securely authenticates existing mentee, mentor and admin profiles', async () => {

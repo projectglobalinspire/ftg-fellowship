@@ -2308,7 +2308,31 @@
   /* Mode pusat: refresh token akun FTG hanya berada di server. Browser
      menerima URL resumable sekali pakai untuk mengirim isi berkas langsung
      ke Google tanpa melewati batas ukuran Vercel Function. */
+  function putCentralDriveFile(uploadUrl, file, onProgress) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl, true);
+      xhr.timeout = 180000;
+      xhr.withCredentials = false;
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable && onProgress) onProgress(Math.max(1, Math.round(event.loaded / event.total * 100)));
+      };
+      xhr.onload = function () {
+        var data = null;
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300 && data && data.id) { resolve(data); return; }
+        var message = data && data.error && data.error.message;
+        reject(new Error(message || ('Google Drive menolak unggahan (' + xhr.status + ')')));
+      };
+      xhr.onerror = function () { reject(new Error('Koneksi unggah ke Google Drive terputus. Periksa internet lalu coba kembali.')); };
+      xhr.ontimeout = function () { reject(new Error('Unggahan melewati batas waktu. Gunakan koneksi yang lebih stabil lalu coba kembali.')); };
+      xhr.onabort = function () { reject(new Error('Unggahan dibatalkan.')); };
+      xhr.send(file);
+    });
+  }
   function centralDriveUpload(file, folderLabel) {
+    var lastReportedProgress = 0;
     return apiRequest('/api/drive', {
       method: 'POST',
       body: JSON.stringify({
@@ -2317,13 +2341,11 @@
         size: file.size, folder_label: folderLabel
       })
     }).then(function (session) {
-      return fetch(session.upload_url, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file
-      }).then(function (response) {
-        if (!response.ok) return driveFailure(response);
-        return response.json();
+      return putCentralDriveFile(session.upload_url, file, function (percent) {
+        if (percent === 100 || percent >= lastReportedProgress + 20) {
+          lastReportedProgress = percent;
+          toast('Mengunggah ke Drive pusat... ' + percent + '%', '☁️');
+        }
       });
     }).then(function (uploaded) {
       return apiRequest('/api/drive', {
@@ -2413,7 +2435,7 @@
         .catch(function (err) {
           // Jangan mencatat lampiran semu: tanpa upload berhasil, mentor tidak
           // memiliki berkas yang bisa dibuka atau diunduh.
-          toast('Berkas belum terunggah: ' + err.message + '. Silakan hubungkan Drive lalu coba lagi.', '⚠️');
+          toast('Berkas belum terunggah: ' + err.message, '⚠️');
         })
         .then(function () {
           inp.value = '';
