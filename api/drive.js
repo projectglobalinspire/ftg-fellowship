@@ -6,7 +6,66 @@ const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 const OWNER_EMAIL = process.env.GOOGLE_DRIVE_OWNER_EMAIL || 'projectglobalinspire@gmail.com';
 const MAX_BYTES = 20 * 1024 * 1024;
+const MAX_CHUNK_BYTES = 3 * 1024 * 1024;
 let tokenCache = { value: '', expiresAt: 0 };
+
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => {
+    const parts = [];
+    let length = 0;
+    req.on('data', part => {
+      length += part.length;
+      if (length > limit) {
+        reject(new Error('Payload terlalu besar'));
+        req.destroy();
+        return;
+      }
+      parts.push(part);
+    });
+    req.on('end', () => resolve(Buffer.concat(parts)));
+    req.on('error', reject);
+  });
+}
+
+function uploadTarget(value) {
+  let target;
+  try { target = new URL(String(value || '')); } catch (_) { return null; }
+  if (target.protocol !== 'https:' || target.hostname !== 'www.googleapis.com') return null;
+  if (target.pathname !== '/upload/drive/v3/files') return null;
+  if (target.searchParams.get('uploadType') !== 'resumable' || !target.searchParams.get('upload_id')) return null;
+  return target.toString();
+}
+
+async function uploadChunk(req, res) {
+  const target = uploadTarget(req.headers['x-ftg-upload-url']);
+  if (!target) return send(res, 400, { error: 'Sesi unggah Drive tidak valid' });
+  const range = String(req.headers['x-ftg-content-range'] || '');
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(range);
+  if (!match) return send(res, 400, { error: 'Rentang unggahan tidak valid' });
+  const start = Number(match[1]), end = Number(match[2]), total = Number(match[3]);
+  if (total < 1 || total > MAX_BYTES || end < start || end >= total || end - start + 1 > MAX_CHUNK_BYTES) {
+    return send(res, 400, { error: 'Ukuran atau rentang unggahan tidak valid' });
+  }
+  const chunk = await readRaw(req, MAX_CHUNK_BYTES);
+  if (chunk.length !== end - start + 1) return send(res, 400, { error: 'Isi potongan berkas tidak lengkap' });
+  const response = await fetch(target, {
+    method: 'PUT', redirect: 'manual',
+    headers: {
+      'Content-Type': String(req.headers['x-ftg-file-type'] || 'application/octet-stream'),
+      'Content-Length': String(chunk.length), 'Content-Range': range
+    },
+    body: chunk
+  });
+  if (response.status === 308) return send(res, 200, { complete: false, received: response.headers.get('Range') || `bytes=0-${end}` });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (_) {}
+  if (!response.ok || !data || !data.id) {
+    const message = data && data.error && data.error.message;
+    return send(res, response.status >= 400 ? response.status : 502, { error: message || `Google Drive menolak unggahan (${response.status})` });
+  }
+  return send(res, 200, { complete: true, file: data });
+}
 
 function configured() {
   return !!(ROOT_ID && CLIENT_ID && CLIENT_SECRET && REFRESH_TOKEN);
@@ -101,16 +160,23 @@ async function shareReader(fileId, email) {
 }
 
 module.exports = async function handler(req, res) {
-  if (!method(req, res, ['GET', 'POST'])) return;
+  if (!method(req, res, ['GET', 'POST', 'PUT'])) return;
   try {
     const auth = await requireRole(req, res, ['mentee', 'mentor', 'admin']);
     if (!auth) return;
+    if (req.method === 'PUT') {
+      if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
+      return uploadChunk(req, res);
+    }
     if (req.method === 'GET') {
       return send(res, 200, { configured: configured(), owner: OWNER_EMAIL, root_folder_id: configured() ? ROOT_ID : null });
     }
     if (!configured()) return send(res, 503, { error: 'Drive pusat belum selesai diotorisasi panitia' });
     if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
-    const body = req.body || {};
+    const rawBody = await readRaw(req, 64 * 1024);
+    let body = {};
+    try { body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {}; }
+    catch (_) { return send(res, 400, { error: 'Payload JSON tidak valid' }); }
     const profiles = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(auth.user.id)}&select=id,email,full_name,google_email,mentor_id,status`);
     const profile = profiles && profiles[0];
     if (!profile || profile.status !== 'active') return send(res, 403, { error: 'Akun mentee tidak aktif' });
@@ -165,3 +231,4 @@ module.exports = async function handler(req, res) {
     return send(res, 500, { error: error.message });
   }
 };
+module.exports.config = { api: { bodyParser: false } };

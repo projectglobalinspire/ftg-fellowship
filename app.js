@@ -2313,7 +2313,7 @@
     var chunkSize = 3 * 1024 * 1024; // kelipatan 256 KiB dan aman di bawah limit Vercel
     function sendChunk(start) {
       var end = Math.min(start + chunkSize, file.size);
-      return fetch('/api/drive-chunk', {
+      return fetch('/api/drive?chunk=1', {
         method: 'PUT',
         headers: {
           'Authorization': 'Bearer ' + AUTH.accessToken,
