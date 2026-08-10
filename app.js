@@ -2094,7 +2094,8 @@
     // Mentor dan mentee wajib menghubungkan Google pada alur utama. Dengan
     // begitu akses Drive sudah siap sebelum proses unggah/review dimulai.
     var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
-      (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE));
+      (role === 'mentee' && /^(mentee-dashboard|assignment-submission)/.test(PAGE)) ||
+      (role === 'admin' && PAGE.indexOf('admin-dashboard') === 0);
     if (!needsGate || document.getElementById('ftg-google-gate')) return;
     // Pada login pertama, sambutan peran selalu tampil lebih dahulu. Gate
     // Google dibuka setelah pengguna menyelesaikan sambutan tersebut.
@@ -2102,6 +2103,7 @@
     var existing = googleProfile();
     if (existing) { googleStatusBadge(existing); return; }
     var mentor = role === 'mentor';
+    var admin = role === 'admin';
     var gate = document.createElement('div');
     gate.id = 'ftg-google-gate';
     gate.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(15,23,42,.72);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -2109,7 +2111,7 @@
       '<div style="width:58px;height:58px;margin:0 auto 14px;border-radius:18px;background:#e8f5ef;color:#1a5f4f;display:grid;place-items:center;font-size:28px"><i class="fa-brands fa-google-drive"></i></div>' +
       '<h2 id="ftg-google-title" style="font-size:20px;font-weight:800;color:#1e293b;margin-bottom:8px">Hubungkan akun Google</h2>' +
       '<p style="font-size:13px;line-height:1.6;color:#64748b;margin-bottom:18px">' +
-      (mentor ? 'Wajib untuk membuka dan mengunduh berkas tugas dari Drive pusat FTG. Pastikan memakai akun Google mentor.' : 'Akun Google diperlukan untuk identitas pengumpulan. Berkas disimpan di Drive pusat FTG, bukan Drive pribadimu.') +
+      (mentor ? 'Wajib untuk membuka dan mengunduh berkas tugas dari Drive pusat FTG. Pastikan memakai akun Google mentor.' : admin ? 'Hubungkan akun Google panitia agar berikutnya kamu dapat masuk dengan Google dan mengelola integrasi program.' : 'Akun Google diperlukan untuk identitas pengumpulan. Berkas disimpan di Drive pusat FTG, bukan Drive pribadimu.') +
       '</p><div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;margin-bottom:16px;font-size:11px;color:#475569">File tidak dibuat publik. Pemilik berkas: <b>' + esc((window.FTG_CONF && FTG_CONF.driveOwnerEmail) || 'projectglobalinspire@gmail.com') + '</b>; akses baca diberikan kepada mentee dan mentor terkait.</div>' +
       '<button id="btn-google-gate" type="button" style="width:100%;border:0;border-radius:12px;background:#1a5f4f;color:#fff;padding:12px 16px;font-size:13px;font-weight:800;cursor:pointer"><i class="fa-brands fa-google mr-2"></i> Lanjutkan dengan Google</button>' +
       '<button id="btn-google-logout" type="button" style="margin-top:9px;width:100%;border:1px solid #e2e8f0;border-radius:12px;background:#fff;color:#64748b;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer">Keluar / ganti akun FTG</button>' +

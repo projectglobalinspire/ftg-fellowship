@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="responsive.css?v=31">
   <script src="ftg-config.js?v=30"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     body { font-family: 'Inter', sans-serif; }
     @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -75,6 +76,16 @@
           class="w-full bg-[#1a5f4f] hover:bg-[#155242] text-white text-sm font-bold py-3.5 rounded-xl mt-2 flex items-center justify-center gap-2">
           <span>Masuk</span> <i class="fa-solid fa-arrow-right text-xs"></i>
         </button>
+
+        <div class="flex items-center gap-3 my-4" aria-hidden="true">
+          <span class="h-px bg-slate-200 flex-1"></span>
+          <span class="text-[10px] font-bold tracking-wider text-slate-400">ATAU</span>
+          <span class="h-px bg-slate-200 flex-1"></span>
+        </div>
+        <div id="googleLoginButton" class="min-h-[44px] flex justify-center"></div>
+        <p id="googleLoginHelp" class="text-center text-[10px] leading-relaxed text-slate-400 mt-2">
+          Gunakan akun Google yang sudah dihubungkan ke profil FTG.
+        </p>
       </form>
 
       <form id="resetForm" class="hidden" autocomplete="off">
@@ -126,6 +137,7 @@
       var tabMentor = document.getElementById('tabMentor');
       var roleTabs = document.getElementById('roleTabs');
       var errMsg = document.getElementById('errMsg');
+      var googleButtonRendered = false;
 
       function showPasswordRecovery() {
         document.getElementById('loginForm').classList.add('hidden');
@@ -171,6 +183,7 @@
         });
         email.value = '';
         password.value = '';
+        document.getElementById('googleLoginHelp').textContent = 'Masuk sebagai ' + ui.label.toLowerCase() + ' menggunakan akun Google yang sudah dihubungkan.';
       }
       tabMentee.addEventListener('click', function () { setRole('mentee'); });
       tabMentor.addEventListener('click', function () { setRole('mentor'); });
@@ -204,6 +217,49 @@
         }));
         location.href = homeFor(profile.role);
       }
+
+      function handleGoogleCredential(response) {
+        if (!response || !response.credential) { fail('Google tidak mengirim identitas yang valid. Silakan coba lagi.'); return; }
+        errMsg.classList.add('hidden');
+        var googleHost = document.getElementById('googleLoginButton');
+        googleHost.style.opacity = '.55';
+        googleHost.style.pointerEvents = 'none';
+        fetch('/api/google-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: response.credential, role: role })
+        }).then(function (result) {
+          return result.json().catch(function () { return {}; }).then(function (body) {
+            if (!result.ok || !body.action_link) throw new Error(body.error || 'Login Google belum dapat diproses.');
+            location.href = body.action_link;
+          });
+        }).catch(function (error) {
+          googleHost.style.opacity = '';
+          googleHost.style.pointerEvents = '';
+          fail(error.message);
+        });
+      }
+
+      function renderGoogleLogin() {
+        if (googleButtonRendered || !window.google || !google.accounts || !google.accounts.id || !window.FTG_CONF || !FTG_CONF.driveClientId) return false;
+        google.accounts.id.initialize({
+          client_id: FTG_CONF.driveClientId,
+          callback: handleGoogleCredential,
+          auto_select: false,
+          cancel_on_tap_outside: true
+        });
+        google.accounts.id.renderButton(document.getElementById('googleLoginButton'), {
+          type: 'standard', theme: 'outline', size: 'large', shape: 'rectangular',
+          text: 'continue_with', logo_alignment: 'left', width: 360
+        });
+        googleButtonRendered = true;
+        return true;
+      }
+      var googleReadyTimer = setInterval(function () { if (renderGoogleLogin()) clearInterval(googleReadyTimer); }, 200);
+      setTimeout(function () {
+        clearInterval(googleReadyTimer);
+        if (!googleButtonRendered) document.getElementById('googleLoginHelp').textContent = 'Login Google belum dapat dimuat. Gunakan email dan password untuk sementara.';
+      }, 8000);
 
       document.getElementById('loginForm').addEventListener('submit', function (e) {
         e.preventDefault();

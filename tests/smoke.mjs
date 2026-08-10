@@ -132,6 +132,20 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.doesNotMatch([app, config].join('\n'), /GOOGLE_DRIVE_CLIENT_SECRET|GOOGLE_DRIVE_REFRESH_TOKEN/);
 });
 
+test('Google login is available for mentee, mentor and admin without creating duplicate profiles', async () => {
+  const login = await text('login.html');
+  const app = await text('app.js');
+  const googleLogin = await text('api/google-login.js');
+  assert.match(login, /accounts\.google\.com\/gsi\/client/);
+  assert.match(login, /googleLoginButton/);
+  assert.match(login, /credential:\s*response\.credential/);
+  assert.match(googleLogin, /\['mentee', 'mentor', 'admin'\]/);
+  assert.match(googleLogin, /google_email=ilike/);
+  assert.match(googleLogin, /auth\/v1\/admin\/generate_link/);
+  assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
+  assert.match(app, /role === 'admin'.*admin-dashboard/);
+});
+
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {
   const app = await text('app.js');
   const migration = await text('supabase/migrations/20260810_program_suite.sql');
