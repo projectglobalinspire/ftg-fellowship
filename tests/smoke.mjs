@@ -198,6 +198,9 @@ test('Fasil approval labels and one-week mentor deadlines are complete', async (
   assert.match(app, /data-deadline-days="3"/);
   assert.match(app, /data-deadline-days="7"/);
   assert.match(app, /data-deadline-days="14"/);
+  assert.match(app, /classList\.toggle\('is-active', active\)/);
+  assert.match(app, /setAttribute\('aria-pressed', active \? 'true' : 'false'\)/);
+  assert.match(app, /mentorTaskDeadline[\s\S]*addEventListener\('input'/);
   assert.match(app, /Deadline harus berada setelah waktu sekarang/);
   assert.match(app, /deadlineDate\(task\.deadline\)\.toISOString\(\)/);
 });

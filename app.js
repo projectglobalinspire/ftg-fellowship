@@ -2905,7 +2905,7 @@
       '<textarea id="mentorTaskDesc" rows="4" placeholder="Tuliskan tujuan, langkah pengerjaan, dan output yang diharapkan..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical;margin-bottom:10px">' + esc(task ? task.description : '') + '</textarea>' +
       '<div style="display:grid;grid-template-columns:1fr 110px;gap:9px"><div><label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Tanggal &amp; jam deadline *</label><input id="mentorTaskDeadline" type="datetime-local" min="' + esc(minimumDeadline) + '" value="' + esc(task ? localDateTimeValue(task.deadline) : defaultDeadline) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12px"></div>' +
       '<div><label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Poin</label><input id="mentorTaskPoints" type="number" min="0" max="500" value="' + (task ? (+task.points || 0) : 50) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12px"></div></div>' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span style="font-size:10px;color:#64748b">Atur cepat:</span><button type="button" data-deadline-days="3" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 8px;font-size:10px;cursor:pointer">3 hari</button><button type="button" data-deadline-days="7" style="border:0;background:#e8f5ef;color:#166534;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer">1 minggu</button><button type="button" data-deadline-days="14" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 8px;font-size:10px;cursor:pointer">2 minggu</button></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span style="font-size:10px;color:#64748b">Atur cepat:</span><button type="button" class="ftg-deadline-preset" data-deadline-days="3" aria-pressed="false">3 hari</button><button type="button" class="ftg-deadline-preset' + (task ? '' : ' is-active') + '" data-deadline-days="7" aria-pressed="' + (task ? 'false' : 'true') + '">1 minggu</button><button type="button" class="ftg-deadline-preset" data-deadline-days="14" aria-pressed="false">2 minggu</button></div>' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Link materi/referensi (opsional)</label>' +
       '<input id="mentorTaskLink" type="url" value="' + esc(task ? (task.referenceLink || '') : '') + '" placeholder="https://..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px">' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Checklist pengerjaan (satu langkah per baris)</label>' +
@@ -2934,6 +2934,16 @@
         $all('[data-deadline-days]', box).forEach(function (button) {
           button.addEventListener('click', function () {
             $('#mentorTaskDeadline', box).value = localDateTimeValue(defaultAssignmentDeadline(+button.getAttribute('data-deadline-days')));
+            $all('[data-deadline-days]', box).forEach(function (item) {
+              var active = item === button;
+              item.classList.toggle('is-active', active);
+              item.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          });
+        });
+        $('#mentorTaskDeadline', box).addEventListener('input', function () {
+          $all('[data-deadline-days]', box).forEach(function (item) {
+            item.classList.remove('is-active'); item.setAttribute('aria-pressed', 'false');
           });
         });
         $('#mentorTaskSave', box).addEventListener('click', function () {
