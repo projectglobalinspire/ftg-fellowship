@@ -1,8 +1,10 @@
 const { send, adminFetch, requireRole, method } = require('./_lib');
+const googleLogin = require('./_google-login');
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
+    if (req.body && req.body.action === 'google_login') return googleLogin(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};

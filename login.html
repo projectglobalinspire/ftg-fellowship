@@ -224,10 +224,10 @@
         var googleHost = document.getElementById('googleLoginButton');
         googleHost.style.opacity = '.55';
         googleHost.style.pointerEvents = 'none';
-        fetch('/api/google-login', {
+        fetch('/api/program', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ credential: response.credential, role: role })
+          body: JSON.stringify({ action: 'google_login', credential: response.credential, role: role })
         }).then(function (result) {
           return result.json().catch(function () { return {}; }).then(function (body) {
             if (!result.ok || !body.action_link) throw new Error(body.error || 'Login Google belum dapat diproses.');

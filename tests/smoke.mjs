@@ -135,7 +135,8 @@ test('central Drive uploads keep credentials server-side', async () => {
 test('Google login is available for mentee, mentor and admin without creating duplicate profiles', async () => {
   const login = await text('login.html');
   const app = await text('app.js');
-  const googleLogin = await text('api/google-login.js');
+  const googleLogin = await text('api/_google-login.js');
+  const program = await text('api/program.js');
   assert.match(login, /accounts\.google\.com\/gsi\/client/);
   assert.match(login, /googleLoginButton/);
   assert.match(login, /credential:\s*response\.credential/);
@@ -143,6 +144,7 @@ test('Google login is available for mentee, mentor and admin without creating du
   assert.match(googleLogin, /google_email=ilike/);
   assert.match(googleLogin, /auth\/v1\/admin\/generate_link/);
   assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
+  assert.match(program, /body\.action === 'google_login'/);
   assert.match(app, /role === 'admin'.*admin-dashboard/);
 });
 

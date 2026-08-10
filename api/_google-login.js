@@ -1,4 +1,4 @@
-const { send, adminFetch, method } = require('./_lib');
+const { send, adminFetch } = require('./_lib');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID;
 const VALID_ROLES = ['mentee', 'mentor', 'admin'];
@@ -23,15 +23,11 @@ async function googleIdentity(credential) {
 async function profileForGoogle(email, role) {
   const googleMatches = await adminFetch(`/rest/v1/profiles?google_email=ilike.${encodeURIComponent(email)}&role=eq.${encodeURIComponent(role)}&select=id,email,full_name,role,status,google_email&limit=2`);
   if (googleMatches && googleMatches.length === 1) return googleMatches[0];
-
-  // Akun yang memang memakai alamat Gmail yang sama dapat langsung login;
-  // akun FTG lama tetap wajib menghubungkan Google sekali dari dashboard.
   const emailMatches = await adminFetch(`/rest/v1/profiles?email=ilike.${encodeURIComponent(email)}&role=eq.${encodeURIComponent(role)}&select=id,email,full_name,role,status,google_email&limit=2`);
   return emailMatches && emailMatches.length === 1 ? emailMatches[0] : null;
 }
 
-module.exports = async function handler(req, res) {
-  if (!method(req, res, ['POST'])) return;
+module.exports = async function googleLogin(req, res) {
   try {
     if (!GOOGLE_CLIENT_ID) return send(res, 503, { error: 'Login Google belum dikonfigurasi panitia' });
     const body = req.body || {};
