@@ -172,14 +172,26 @@ module.exports = async function handler(req, res) {
       return send(res, 200, { configured: configured(), owner: OWNER_EMAIL, root_folder_id: configured() ? ROOT_ID : null });
     }
     if (!configured()) return send(res, 503, { error: 'Drive pusat belum selesai diotorisasi panitia' });
-    if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
     const rawBody = await readRaw(req, 64 * 1024);
     let body = {};
     try { body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {}; }
     catch (_) { return send(res, 400, { error: 'Payload JSON tidak valid' }); }
     const profiles = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(auth.user.id)}&select=id,email,full_name,google_email,mentor_id,status`);
     const profile = profiles && profiles[0];
-    if (!profile || profile.status !== 'active') return send(res, 403, { error: 'Akun mentee tidak aktif' });
+    if (!profile || profile.status !== 'active') return send(res, 403, { error: 'Akun tidak aktif' });
+
+    if (body.action === 'mentor-share') {
+      if (auth.profile.role !== 'mentor') return send(res, 403, { error: 'Hanya mentor yang dapat memperbarui akses mentor' });
+      if (!profile.google_email) return send(res, 400, { error: 'Hubungkan akun Google mentor terlebih dahulu' });
+      if (!body.file_id || !(await isInsideRoot(body.file_id))) return send(res, 400, { error: 'Berkas bukan bagian dari Drive pusat FTG' });
+      await shareReader(body.file_id, profile.google_email);
+      await adminFetch('/rest/v1/audit_logs', {
+        method: 'POST', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ actor_id: auth.user.id, action: 'drive.mentor_share', entity_type: 'drive_file', entity_id: body.file_id, detail: { mentor_email: profile.google_email } })
+      });
+      return send(res, 200, { shared: true, email: profile.google_email, file_id: body.file_id });
+    }
+    if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
 
     if (body.action === 'session') {
       const size = Number(body.size || 0);

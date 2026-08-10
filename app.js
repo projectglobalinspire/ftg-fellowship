@@ -2070,11 +2070,18 @@
         connectedAt: new Date().toISOString()
       };
       sessionStorage.setItem('ftgGoogleProfile', JSON.stringify(DRIVE.profile));
+      if (AUTH.profile) {
+        AUTH.profile.google_email = DRIVE.profile.email;
+        AUTH.profile.google_connected_at = DRIVE.profile.connectedAt;
+      }
       if (sb && s.email) {
         return sb.from('profiles').update({
           google_email: DRIVE.profile.email,
           google_connected_at: DRIVE.profile.connectedAt
-        }).eq('id', AUTH.user.id).then(function () { return DRIVE.profile; });
+        }).eq('id', AUTH.user.id).then(function (result) {
+          if (result.error) throw result.error;
+          return DRIVE.profile;
+        });
       }
       return DRIVE.profile;
     });
@@ -2100,7 +2107,7 @@
     // Drive pusat memakai kredensial layanan di server. Pengguna tidak perlu
     // memberikan izin OAuth Drive pribadi, sehingga tidak ada consent screen
     // sensitif atau peringatan aplikasi belum diverifikasi di dashboard.
-    if (centralDriveEnabled()) return;
+    if (centralDriveEnabled() && role !== 'mentor') return;
     // Mentor dan mentee wajib menghubungkan Google pada alur utama. Dengan
     // begitu akses Drive sudah siap sebelum proses unggah/review dimulai.
     var needsGate = (role === 'mentor' && IS_MENTOR_PAGE) ||
@@ -2138,7 +2145,10 @@
         .then(function () {
           googleStatusBadge(DRIVE.profile);
           gate.remove();
-          toast('Google terhubung sebagai ' + DRIVE.profile.email, '✅');
+          mountMentorGooglePanel(true);
+          backfillMentorDriveAccess().then(function (count) {
+            toast('Google terhubung sebagai ' + DRIVE.profile.email + (count ? ' · ' + count + ' akses berkas diperbarui' : ''), '✅');
+          });
         })
         .catch(function (err) {
           var msg = document.getElementById('ftg-google-error');
@@ -2179,6 +2189,74 @@
         else reject(new Error('Jendela izin Drive gagal dibuka'));
       };
       DRIVE.tc.requestAccessToken({ prompt: DRIVE.token ? '' : 'consent' });
+    });
+  }
+
+  function mentorDriveFileIds() {
+    var found = {};
+    Object.keys(G.mentees || {}).forEach(function (key) {
+      var state = G.mentees[key] || {};
+      (state.files || []).forEach(function (file) { if (file && file.driveId) found[file.driveId] = true; });
+      Object.keys(state.assignmentSubmissions || {}).forEach(function (taskId) {
+        ((state.assignmentSubmissions[taskId] || {}).files || []).forEach(function (file) { if (file && file.driveId) found[file.driveId] = true; });
+      });
+    });
+    return Object.keys(found);
+  }
+
+  function markMentorDriveShared(fileId) {
+    Object.keys(G.mentees || {}).forEach(function (key) {
+      var state = G.mentees[key] || {};
+      (state.files || []).forEach(function (file) { if (file && file.driveId === fileId) { file.sharedWithMentor = true; file.shareReason = ''; } });
+      Object.keys(state.assignmentSubmissions || {}).forEach(function (taskId) {
+        ((state.assignmentSubmissions[taskId] || {}).files || []).forEach(function (file) { if (file && file.driveId === fileId) { file.sharedWithMentor = true; file.shareReason = ''; } });
+      });
+    });
+  }
+
+  function backfillMentorDriveAccess() {
+    if (myRole() !== 'mentor' || !AUTH.accessToken) return Promise.resolve(0);
+    var ids = mentorDriveFileIds();
+    var updated = 0;
+    return Promise.all(ids.map(function (id) {
+      return apiRequest('/api/drive', { method: 'POST', body: JSON.stringify({ action: 'mentor-share', file_id: id }) })
+        .then(function () { markMentorDriveShared(id); updated++; })
+        .catch(function () { /* satu berkas lama tidak boleh menggagalkan koneksi */ });
+    })).then(function () { if (updated) saveState(); return updated; });
+  }
+
+  function mountMentorGooglePanel(refresh) {
+    if (myRole() !== 'mentor' || !IS_MENTOR_PAGE) return;
+    var old = document.getElementById('mentor-google-access');
+    if (old && !refresh) return;
+    if (old) old.remove();
+    var host = $('main > div.px-8');
+    if (!host) return;
+    var active = googleProfile();
+    var savedEmail = (AUTH.profile && AUTH.profile.google_email) || '';
+    var email = active ? active.email : savedEmail;
+    var panel = document.createElement('section');
+    panel.id = 'mentor-google-access';
+    panel.className = 'ftg-mentor-google-access';
+    panel.innerHTML = '<div class="ftg-mentor-google-icon"><i class="fa-brands fa-google-drive"></i></div><div class="ftg-mentor-google-copy"><h2>Akses Google Mentor</h2><p>' +
+      (active ? 'Sesi aktif sebagai <b>' + esc(email) + '</b>. Berkas mentee dapat dibuka dan diunduh.' : savedEmail ? 'Akun <b>' + esc(savedEmail) + '</b> sudah tercatat. Aktifkan sesi Google pada browser ini untuk membuka berkas.' : 'Hubungkan akun Google mentor agar berkas pengumpulan dapat dibuka dan diunduh dengan aman.') +
+      '</p></div><span class="ftg-mentor-google-status ' + (active ? 'is-connected' : 'is-pending') + '">' + (active ? 'Terhubung' : 'Belum aktif') + '</span><button type="button" id="mentorGoogleConnect">' + (active ? 'Ganti akun' : 'Hubungkan Google') + '</button>';
+    host.insertBefore(panel, host.firstChild);
+    $('#mentorGoogleConnect', panel).addEventListener('click', function () {
+      var button = this;
+      button.disabled = true;
+      button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menghubungkan...';
+      driveAuth(true).then(function () {
+        googleStatusBadge(DRIVE.profile);
+        return backfillMentorDriveAccess();
+      }).then(function (count) {
+        mountMentorGooglePanel(true);
+        toast('Google mentor terhubung' + (count ? ' · ' + count + ' akses berkas diperbarui' : ''), '✅');
+      }).catch(function (error) {
+        button.disabled = false;
+        button.textContent = 'Coba Lagi';
+        toast(error.message, '⚠️');
+      });
     });
   }
 
@@ -4424,6 +4502,7 @@
     try { mountMenteeAssignments(); } catch (e) { console.warn(e); }
     try { mountMenteeWorkCenter(); } catch (e) { console.warn(e); }
     try { mountMentorOperations(); } catch (e) { console.warn(e); }
+    try { mountMentorGooglePanel(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
     try { mountMenteeProgramSuite(); } catch (e) { console.warn(e); }
     try { mountAdminDiscipline(); } catch (e) { reportError(e); }

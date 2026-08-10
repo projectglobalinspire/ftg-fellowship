@@ -124,7 +124,7 @@ test('central Drive uploads keep credentials server-side', async () => {
   const deploymentConfig = await text('vercel.json');
   const driveApi = await text('api/drive.js');
   assert.match(config, /driveMode:\s*'central'/);
-  assert.match(app, /if \(centralDriveEnabled\(\)\) return;/);
+  assert.match(app, /if \(centralDriveEnabled\(\) && role !== 'mentor'\) return;/);
   assert.match(app, /centralDriveEnabled\(\) \? Promise\.resolve\(\) : driveAuth\(\)/);
   assert.match(config, /projectglobalinspire@gmail\.com/);
   assert.match(app, /centralDriveUpload/);
@@ -142,6 +142,12 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.match(driveApi, /hostname !== 'www\.googleapis\.com'/);
   assert.match(driveApi, /Content-Range/);
   assert.match(driveApi, /response\.status === 308/);
+  assert.match(app, /function mountMentorGooglePanel/);
+  assert.match(app, /Akses Google Mentor/);
+  assert.match(app, /centralDriveEnabled\(\) && role !== 'mentor'/);
+  assert.match(app, /function backfillMentorDriveAccess/);
+  assert.match(driveApi, /body\.action === 'mentor-share'/);
+  assert.match(driveApi, /drive\.mentor_share/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleapis\.com/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleusercontent\.com/);
   assert.doesNotMatch(app, /Silakan hubungkan Drive lalu coba lagi/);
