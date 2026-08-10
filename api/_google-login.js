@@ -100,7 +100,7 @@ module.exports = async function googleLogin(req, res) {
     if (!tokenHash) throw new Error('Supabase tidak menerbitkan token login');
     // Verifikasi dilakukan langsung oleh Supabase JS di domain aplikasi. Ini
     // menghindari Site URL proyek yang lama (localhost) mengambil alih redirect.
-    const verifyPath = `/login.html#google_token=${encodeURIComponent(tokenHash)}&type=magiclink&role=${encodeURIComponent(role)}`;
+    const verifyPath = `/login.html#google_token=${encodeURIComponent(tokenHash)}&type=email&role=${encodeURIComponent(role)}`;
 
     await adminFetch('/rest/v1/audit_logs', {
       method: 'POST', headers: { Prefer: 'return=minimal' },

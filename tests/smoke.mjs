@@ -145,6 +145,8 @@ test('Google login securely authenticates existing mentee, mentor and admin prof
   assert.match(googleLogin, /auth\/v1\/admin\/generate_link/);
   assert.match(googleLogin, /properties\.hashed_token/);
   assert.match(login, /auth\.verifyOtp/);
+  assert.match(login, /type:\s*'email'/);
+  assert.match(googleLogin, /type=email/);
   assert.doesNotMatch(googleLogin, /return send\(res, 200, \{ action_link/);
   assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
   assert.match(program, /body\.action === 'google_login'/);
@@ -161,6 +163,8 @@ test('new Google users complete a pending profile and require admin approval', a
   assert.match(googleLogin, /status:\s*'invited'/);
   assert.match(googleLogin, /requested_role/);
   assert.match(program, /complete_google_profile/);
+  assert.match(program, /qa_google_auth/);
+  assert.match(program, /token_hash:tokenHash, type:'email'/);
   assert.match(setup, /MENUNGGU VERIFIKASI/);
   assert.match(setup, /Simpan Profil & Kirim Verifikasi/);
   assert.match(adminApi, /'invited', 'active'/);

@@ -136,11 +136,26 @@
       // Token hash diverifikasi langsung di domain FTG. Jangan mengikuti
       // action_link Supabase karena konfigurasi Site URL lama bisa menuju localhost.
       if (sb && hashParams.get('google_token')) {
-        sb.auth.verifyOtp({ token_hash: hashParams.get('google_token'), type: hashParams.get('type') || 'magiclink' }).then(function (result) {
+        document.getElementById('connBadge').textContent = '● Memverifikasi login Google...';
+        document.getElementById('loginForm').style.opacity = '.45';
+        document.getElementById('loginForm').style.pointerEvents = 'none';
+        var verifyTimeout = setTimeout(function () {
+          document.getElementById('loginForm').style.opacity = '';
+          document.getElementById('loginForm').style.pointerEvents = '';
+          fail('Verifikasi Google terlalu lama. Muat ulang halaman lalu coba kembali.');
+        }, 12000);
+        sb.auth.verifyOtp({ token_hash: hashParams.get('google_token'), type: 'email' }).then(function (result) {
+          clearTimeout(verifyTimeout);
           if (result.error || !result.data.session) throw result.error || new Error('Sesi Google tidak dapat dibuat');
           history.replaceState(null, '', 'login.html?role=' + encodeURIComponent(role));
           return routeSupabaseSession(result.data.session);
-        }).catch(function (error) { fail(error.message || 'Login Google gagal diverifikasi. Silakan coba lagi.'); });
+        }).catch(function (error) {
+          clearTimeout(verifyTimeout);
+          history.replaceState(null, '', 'login.html?role=' + encodeURIComponent(role));
+          document.getElementById('loginForm').style.opacity = '';
+          document.getElementById('loginForm').style.pointerEvents = '';
+          fail((error && error.message) || 'Login Google gagal diverifikasi. Silakan coba lagi.');
+        });
       } else if (sb) {
         sb.auth.getSession().then(function (result) { return routeSupabaseSession(result.data.session); });
       }

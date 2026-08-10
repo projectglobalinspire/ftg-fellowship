@@ -44,4 +44,4 @@ function method(req, res, allowed) {
   return false;
 }
 
-module.exports = { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL };
+module.exports = { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE };

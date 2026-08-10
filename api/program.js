@@ -1,4 +1,4 @@
-const { send, adminFetch, currentUser, requireRole, method } = require('./_lib');
+const { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
 const googleLogin = require('./_google-login');
 
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
@@ -37,6 +37,22 @@ module.exports = async function handler(req, res) {
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
+    if (body.action === 'qa_google_auth') {
+      const candidates = await adminFetch('/rest/v1/profiles?role=eq.mentee&status=eq.active&select=id,email&order=created_at.asc&limit=1');
+      const candidate = candidates && candidates[0];
+      if (!candidate) return send(res, 409, { error: 'Belum ada akun mentee aktif untuk QA autentikasi' });
+      const generated = await adminFetch('/auth/v1/admin/generate_link', { method:'POST', body:JSON.stringify({ type:'magiclink', email:candidate.email }) });
+      const tokenHash = generated && (generated.hashed_token || (generated.properties && generated.properties.hashed_token));
+      if (!tokenHash) throw new Error('QA tidak menerima hashed token');
+      const verifiedResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+        method:'POST', headers:{ apikey:PUBLISHABLE, 'Content-Type':'application/json' },
+        body:JSON.stringify({ token_hash:tokenHash, type:'email' })
+      });
+      const verified = await verifiedResponse.json().catch(() => ({}));
+      const passed = verifiedResponse.ok && !!verified.access_token && verified.user && verified.user.id === candidate.id;
+      await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({ actor_id:auth.user.id, action:'auth.google_qa', entity_type:'profile', entity_id:candidate.id, detail:{ passed, status:verifiedResponse.status } }) }).catch(() => null);
+      return send(res, passed ? 200 : 502, { passed, generated:!!tokenHash, session_created:!!verified.access_token, user_match:!!(verified.user && verified.user.id === candidate.id), status:verifiedResponse.status });
+    }
     if (body.action === 'settings') {
       const patch = {
         id: 1,
