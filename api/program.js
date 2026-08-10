@@ -49,9 +49,9 @@ module.exports = async function handler(req, res) {
         body:JSON.stringify({ token_hash:tokenHash, type:'email' })
       });
       const verified = await verifiedResponse.json().catch(() => ({}));
-      const passed = verifiedResponse.ok && !!verified.access_token && verified.user && verified.user.id === candidate.id;
+      const passed = verifiedResponse.ok && !!verified.access_token && !!verified.refresh_token && verified.user && verified.user.id === candidate.id;
       await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({ actor_id:auth.user.id, action:'auth.google_qa', entity_type:'profile', entity_id:candidate.id, detail:{ passed, status:verifiedResponse.status } }) }).catch(() => null);
-      return send(res, passed ? 200 : 502, { passed, generated:!!tokenHash, session_created:!!verified.access_token, user_match:!!(verified.user && verified.user.id === candidate.id), status:verifiedResponse.status });
+      return send(res, passed ? 200 : 502, { passed, generated:!!tokenHash, session_created:!!verified.access_token, refresh_created:!!verified.refresh_token, user_match:!!(verified.user && verified.user.id === candidate.id), status:verifiedResponse.status });
     }
     if (body.action === 'settings') {
       const patch = {

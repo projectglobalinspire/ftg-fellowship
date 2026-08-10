@@ -261,8 +261,12 @@
           body: JSON.stringify({ action: 'google_login', credential: response.credential, role: role })
         }).then(function (result) {
           return result.json().catch(function () { return {}; }).then(function (body) {
-            if (!result.ok || !body.verify_path) throw new Error(body.error || 'Login Google belum dapat diproses.');
-            location.href = body.verify_path;
+            if (!result.ok || !body.session || !body.session.access_token || !body.session.refresh_token) throw new Error(body.error || 'Login Google belum dapat diproses.');
+            return sb.auth.setSession({ access_token: body.session.access_token, refresh_token: body.session.refresh_token }).then(function (sessionResult) {
+              if (sessionResult.error || !sessionResult.data.session) throw sessionResult.error || new Error('Sesi Google gagal disimpan');
+              if (body.status === 'invited') { location.replace('profile-setup.html'); return; }
+              return routeSupabaseSession(sessionResult.data.session);
+            });
           });
         }).catch(function (error) {
           googleHost.style.opacity = '';

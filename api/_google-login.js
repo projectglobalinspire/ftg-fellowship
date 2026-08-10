@@ -1,4 +1,4 @@
-const { send, adminFetch } = require('./_lib');
+const { send, adminFetch, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID;
 const VALID_ROLES = ['mentee', 'mentor', 'admin'];
@@ -98,15 +98,24 @@ module.exports = async function googleLogin(req, res) {
     });
     const tokenHash = generated && (generated.hashed_token || (generated.properties && generated.properties.hashed_token));
     if (!tokenHash) throw new Error('Supabase tidak menerbitkan token login');
-    // Verifikasi dilakukan langsung oleh Supabase JS di domain aplikasi. Ini
-    // menghindari Site URL proyek yang lama (localhost) mengambil alih redirect.
-    const verifyPath = `/login.html#google_token=${encodeURIComponent(tokenHash)}&type=email&role=${encodeURIComponent(role)}`;
+    const verifiedResponse = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+      method: 'POST',
+      headers: { apikey: PUBLISHABLE, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token_hash: tokenHash, type: 'email' })
+    });
+    const verified = await verifiedResponse.json().catch(() => ({}));
+    if (!verifiedResponse.ok || !verified.access_token || !verified.refresh_token || !verified.user || verified.user.id !== profile.id) {
+      throw new Error((verified && (verified.msg || verified.message || verified.error_description)) || 'Sesi Supabase tidak dapat dibuat');
+    }
 
     await adminFetch('/rest/v1/audit_logs', {
       method: 'POST', headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ actor_id: profile.id, action: 'auth.google_login', entity_type: 'profile', entity_id: profile.id, detail: { google_email: identity.email, role } })
     }).catch(() => null);
-    return send(res, 200, { verify_path: verifyPath, role, display_name: profile.full_name, registered, status: profile.status });
+    return send(res, 200, {
+      session: { access_token: verified.access_token, refresh_token: verified.refresh_token },
+      role: profile.role, requested_role: role, display_name: profile.full_name, registered, status: profile.status
+    });
   } catch (error) {
     return send(res, 500, { error: error.message || 'Login Google gagal diproses' });
   }

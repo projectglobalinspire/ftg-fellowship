@@ -146,7 +146,10 @@ test('Google login securely authenticates existing mentee, mentor and admin prof
   assert.match(googleLogin, /properties\.hashed_token/);
   assert.match(login, /auth\.verifyOtp/);
   assert.match(login, /type:\s*'email'/);
-  assert.match(googleLogin, /type=email/);
+  assert.match(googleLogin, /token_hash:\s*tokenHash, type:\s*'email'/);
+  assert.match(googleLogin, /refresh_token:\s*verified\.refresh_token/);
+  assert.match(login, /auth\.setSession/);
+  assert.doesNotMatch(googleLogin, /verify_path/);
   assert.doesNotMatch(googleLogin, /return send\(res, 200, \{ action_link/);
   assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
   assert.match(program, /body\.action === 'google_login'/);
