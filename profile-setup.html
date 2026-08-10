@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lengkapi Profil – FTG Fellowship</title>
+  <meta name="theme-color" content="#1a5f4f">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="ftg-config.js?v=30"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Inter, sans-serif; }
+    .field { width:100%; border:1px solid #dbe4ea; border-radius:13px; padding:12px 14px; font-size:14px; outline:none; transition:.2s; }
+    .field:focus { border-color:#1a5f4f; box-shadow:0 0 0 3px rgba(26,95,79,.1); }
+  </style>
+</head>
+<body class="min-h-screen bg-[#eef4f2] text-slate-700">
+  <div class="min-h-screen grid lg:grid-cols-[.8fr_1.2fr]">
+    <aside class="hidden lg:flex bg-[#173f39] text-white p-12 flex-col justify-between relative overflow-hidden">
+      <div class="absolute w-72 h-72 rounded-full bg-[#f97316]/20 -right-24 -top-20"></div>
+      <div class="relative">
+        <div class="inline-flex items-center gap-3 bg-white rounded-2xl px-5 py-3 mb-10">
+          <img src="assets/ftg-logo.png" alt="FTG" class="h-9"><span class="text-slate-300">×</span><img src="assets/gi-logo.png" alt="GI" class="h-8">
+        </div>
+        <p class="text-emerald-200 text-xs font-bold tracking-[.25em] mb-4">WELCOME, FUTURE BUILDER</p>
+        <h1 class="text-4xl font-black leading-tight mb-5">Langkah pertamamu dimulai dari sini.</h1>
+        <p class="text-white/65 leading-relaxed">Lengkapi profil dengan data yang benar. Panitia akan mencocokkan pendaftaranmu dengan daftar peserta sebelum akses program dibuka.</p>
+      </div>
+      <p class="text-white/35 text-xs">FTG × Global Inspire · Future Builders Fellowship 2026</p>
+    </aside>
+
+    <main class="flex items-center justify-center p-5 md:p-10">
+      <section class="w-full max-w-xl bg-white rounded-[28px] shadow-xl shadow-slate-200/60 border border-white p-6 md:p-9" id="card">
+        <div id="loading" class="py-16 text-center">
+          <div class="w-10 h-10 border-4 border-emerald-100 border-t-[#1a5f4f] rounded-full animate-spin mx-auto mb-4"></div>
+          <p class="text-sm text-slate-500">Menyiapkan profilmu...</p>
+        </div>
+
+        <div id="setupView" class="hidden">
+          <span class="inline-flex bg-orange-50 text-orange-600 text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded-full mb-4">PROFIL PENDAFTARAN</span>
+          <h2 class="text-2xl md:text-3xl font-black text-slate-800">Selamat datang, <span id="welcomeName">Future Builder</span>! 👋</h2>
+          <p class="text-sm text-slate-500 mt-2 mb-7 leading-relaxed">Ceritakan sedikit tentang dirimu agar panitia dapat memverifikasi bahwa akun ini benar milik peserta FTG.</p>
+          <form id="profileForm" class="space-y-4">
+            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nama lengkap sesuai pendaftaran</label><input id="fullName" class="field" required minlength="3" maxlength="120" autocomplete="name"></div>
+            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Email Google</label><input id="googleEmail" class="field bg-slate-50 text-slate-400" readonly></div>
+            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white" required><option value="">Pilih jalur</option><option>Career Path</option><option>Entrepreneur Path</option></select></div>
+            <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 text-[11px] leading-relaxed text-amber-800">Data akan masuk ke dashboard panitia dengan status <b>Menunggu Verifikasi</b>. Akses tugas dibuka setelah nama dan identitasmu disetujui.</div>
+            <p id="formError" class="hidden text-xs font-semibold text-red-500"></p>
+            <button id="saveProfile" class="w-full bg-[#1a5f4f] hover:bg-[#134b3f] text-white rounded-xl py-3.5 font-extrabold">Simpan Profil & Kirim Verifikasi</button>
+          </form>
+        </div>
+
+        <div id="pendingView" class="hidden text-center py-5">
+          <div class="w-20 h-20 rounded-3xl bg-amber-50 text-amber-500 grid place-items-center text-4xl mx-auto mb-5">⏳</div>
+          <span class="inline-flex bg-amber-50 text-amber-700 text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded-full mb-3">MENUNGGU VERIFIKASI</span>
+          <h2 class="text-2xl font-black text-slate-800">Profilmu sudah diterima</h2>
+          <p class="text-sm text-slate-500 mt-3 leading-relaxed">Halo, <b id="pendingName"></b>. Panitia sedang mencocokkan nama dan akun Google kamu dengan daftar peserta. Silakan kembali setelah akun disetujui.</p>
+          <button id="checkStatus" class="w-full bg-[#1a5f4f] text-white rounded-xl py-3 font-extrabold mt-7">Periksa Status</button>
+          <button id="logout" class="w-full border border-slate-200 text-slate-500 rounded-xl py-3 font-bold mt-2">Keluar / Ganti Akun Google</button>
+        </div>
+
+        <div id="blockedView" class="hidden text-center py-8">
+          <div class="text-5xl mb-4">🔒</div><h2 class="text-2xl font-black text-slate-800">Akun tidak dapat digunakan</h2>
+          <p class="text-sm text-slate-500 mt-3">Pendaftaran ini diblokir atau tidak cocok dengan data peserta. Hubungi panitia jika kamu merasa ini keliru.</p>
+          <button id="blockedLogout" class="w-full border border-slate-200 rounded-xl py-3 font-bold mt-7">Keluar</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var sb = window.supabase.createClient(FTG_CONF.url, FTG_CONF.anonKey);
+      var session = null, profile = null;
+      function show(id) { ['loading','setupView','pendingView','blockedView'].forEach(function (name) { document.getElementById(name).classList.toggle('hidden', name !== id); }); }
+      function home(role) { return role === 'admin' ? 'admin-dashboard.html' : role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'; }
+      function logout() { sb.auth.signOut({ scope:'local' }).finally(function () { localStorage.removeItem('ftgSession'); location.replace('login.html'); }); }
+      function route() {
+        if (profile.status === 'active') { location.replace(home(profile.role)); return; }
+        if (profile.status === 'invited') {
+          var completed = !!profile.onboarding_completed;
+          document.getElementById('welcomeName').textContent = profile.full_name || 'Future Builder';
+          document.getElementById('fullName').value = profile.full_name || '';
+          document.getElementById('googleEmail').value = profile.google_email || session.user.email || '';
+          document.getElementById('path').value = profile.path || '';
+          document.getElementById('pendingName').textContent = profile.full_name || 'Future Builder';
+          show(completed ? 'pendingView' : 'setupView'); return;
+        }
+        show('blockedView');
+      }
+      function load() {
+        return sb.auth.getSession().then(function (result) {
+          session = result.data.session;
+          if (!session) { location.replace('login.html'); return null; }
+          return sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
+        }).then(function (result) {
+          if (!result) return;
+          if (result.error || !result.data) throw new Error('Profil tidak ditemukan');
+          profile = result.data; route();
+        }).catch(function () { show('blockedView'); });
+      }
+      document.getElementById('profileForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var button = document.getElementById('saveProfile'), error = document.getElementById('formError');
+        button.disabled = true; button.textContent = 'Mengirim profil...'; error.classList.add('hidden');
+        fetch('/api/program', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + session.access_token }, body:JSON.stringify({ action:'complete_google_profile', full_name:document.getElementById('fullName').value, path:document.getElementById('path').value }) })
+          .then(function (response) { return response.json().then(function (body) { if (!response.ok) throw new Error(body.error || 'Profil gagal disimpan'); return body; }); })
+          .then(function (body) { profile = body.profile; route(); })
+          .catch(function (reason) { error.textContent = reason.message; error.classList.remove('hidden'); button.disabled = false; button.textContent = 'Simpan Profil & Kirim Verifikasi'; });
+      });
+      document.getElementById('checkStatus').addEventListener('click', function () { show('loading'); load(); });
+      document.getElementById('logout').addEventListener('click', logout);
+      document.getElementById('blockedLogout').addEventListener('click', logout);
+      load();
+    })();
+  </script>
+</body>
+</html>

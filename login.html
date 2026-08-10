@@ -84,7 +84,7 @@
         </div>
         <div id="googleLoginButton" class="min-h-[44px] flex justify-center"></div>
         <p id="googleLoginHelp" class="text-center text-[10px] leading-relaxed text-slate-400 mt-2">
-          Gunakan akun Google yang sudah dihubungkan ke profil FTG.
+          Akun Google baru akan didaftarkan dan diverifikasi panitia.
         </p>
       </form>
 
@@ -125,7 +125,9 @@
       if (sb) sb.auth.getSession().then(function (result) {
         if (!result.data.session) return;
         return sb.from('profiles').select('*').eq('id', result.data.session.user.id).maybeSingle().then(function (p) {
-          if (p.data && p.data.status === 'active') success(p.data, result.data.session.user);
+          if (!p.data) return;
+          if (p.data.status === 'invited') { location.replace('profile-setup.html'); return; }
+          if (p.data.status === 'active') success(p.data, result.data.session.user);
         });
       });
 
@@ -183,7 +185,7 @@
         });
         email.value = '';
         password.value = '';
-        document.getElementById('googleLoginHelp').textContent = 'Masuk sebagai ' + ui.label.toLowerCase() + ' menggunakan akun Google yang sudah dihubungkan.';
+        document.getElementById('googleLoginHelp').textContent = 'Masuk sebagai ' + ui.label.toLowerCase() + '. Akun Google baru akan diminta melengkapi profil.';
       }
       tabMentee.addEventListener('click', function () { setRole('mentee'); });
       tabMentor.addEventListener('click', function () { setRole('mentor'); });
@@ -273,6 +275,7 @@
           if (result.error || !result.data.user) throw result.error || new Error('Login gagal');
           return sb.from('profiles').select('*').eq('id', result.data.user.id).maybeSingle().then(function (profileResult) {
             if (profileResult.error || !profileResult.data) throw new Error('Profil akun belum disiapkan panitia.');
+            if (profileResult.data.status === 'invited') { location.href = 'profile-setup.html'; return; }
             if (profileResult.data.status !== 'active') {
               var inactiveMessage = profileResult.data.status === 'dropped' ? 'Status kepesertaan kamu telah dinyatakan gugur. Hubungi panitia bila memerlukan klarifikasi.' : 'Akun kamu sedang dikunci panitia. Hubungi panitia untuk membuka akses.';
               return sb.auth.signOut().then(function () { throw new Error(inactiveMessage); });

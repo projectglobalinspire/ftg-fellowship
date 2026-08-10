@@ -22,7 +22,7 @@ test('protected pages use the shared engine or a dedicated authenticated flow', 
   const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
-    assert.ok(/app\.js\?v=\d+/.test(source) || (file === 'attendance.html' && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
+    assert.ok(/app\.js\?v=\d+/.test(source) || (['attendance.html', 'profile-setup.html'].includes(file) && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
   }
 });
 
@@ -132,7 +132,7 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.doesNotMatch([app, config].join('\n'), /GOOGLE_DRIVE_CLIENT_SECRET|GOOGLE_DRIVE_REFRESH_TOKEN/);
 });
 
-test('Google login is available for mentee, mentor and admin without creating duplicate profiles', async () => {
+test('Google login securely authenticates existing mentee, mentor and admin profiles', async () => {
   const login = await text('login.html');
   const app = await text('app.js');
   const googleLogin = await text('api/_google-login.js');
@@ -146,6 +146,25 @@ test('Google login is available for mentee, mentor and admin without creating du
   assert.match(googleLogin, /identity\.aud !== GOOGLE_CLIENT_ID/);
   assert.match(program, /body\.action === 'google_login'/);
   assert.match(app, /role === 'admin'.*admin-dashboard/);
+});
+
+test('new Google users complete a pending profile and require admin approval', async () => {
+  const googleLogin = await text('api/_google-login.js');
+  const program = await text('api/program.js');
+  const adminApi = await text('api/admin-users.js');
+  const setup = await text('profile-setup.html');
+  const app = await text('app.js');
+  assert.match(googleLogin, /registerGoogleUser/);
+  assert.match(googleLogin, /status:\s*'invited'/);
+  assert.match(googleLogin, /requested_role/);
+  assert.match(program, /complete_google_profile/);
+  assert.match(setup, /MENUNGGU VERIFIKASI/);
+  assert.match(setup, /Simpan Profil & Kirim Verifikasi/);
+  assert.match(adminApi, /'invited', 'active'/);
+  assert.match(app, /Verifikasi Pendaftaran Google/);
+  assert.match(app, /data-registration-approve/);
+  assert.match(app, /data-registration-block/);
+  assert.match(app, /login_provider/);
 });
 
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {

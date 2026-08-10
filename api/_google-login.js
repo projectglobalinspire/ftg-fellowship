@@ -21,10 +21,52 @@ async function googleIdentity(credential) {
 }
 
 async function profileForGoogle(email, role) {
-  const googleMatches = await adminFetch(`/rest/v1/profiles?google_email=ilike.${encodeURIComponent(email)}&role=eq.${encodeURIComponent(role)}&select=id,email,full_name,role,status,google_email&limit=2`);
+  const googleMatches = await adminFetch(`/rest/v1/profiles?google_email=ilike.${encodeURIComponent(email)}&select=id,email,full_name,role,status,google_email&limit=2`);
   if (googleMatches && googleMatches.length === 1) return googleMatches[0];
-  const emailMatches = await adminFetch(`/rest/v1/profiles?email=ilike.${encodeURIComponent(email)}&role=eq.${encodeURIComponent(role)}&select=id,email,full_name,role,status,google_email&limit=2`);
+  const emailMatches = await adminFetch(`/rest/v1/profiles?email=ilike.${encodeURIComponent(email)}&select=id,email,full_name,role,status,google_email&limit=2`);
   return emailMatches && emailMatches.length === 1 ? emailMatches[0] : null;
+}
+
+function initials(name) {
+  return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'GP';
+}
+
+async function registerGoogleUser(identity, requestedRole) {
+  const email = String(identity.email).toLowerCase();
+  const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
+  let user = (listed.users || listed || []).find(item => String(item.email || '').toLowerCase() === email);
+  const displayName = String(identity.name || email.split('@')[0]).trim().slice(0, 120);
+  if (!user) {
+    user = await adminFetch('/auth/v1/admin/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        email, email_confirm: true,
+        user_metadata: {
+          full_name: displayName, initials: initials(displayName), role: 'mentee',
+          requested_role: requestedRole, signup_provider: 'google', google_email: email,
+          picture: String(identity.picture || '').slice(0, 600)
+        }
+      })
+    });
+  } else {
+    await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ user_metadata: Object.assign({}, user.user_metadata || {}, { requested_role: requestedRole, signup_provider: 'google', google_email: email }) })
+    });
+  }
+
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id`);
+  const profile = {
+    email, full_name: displayName, role: 'mentee', initials: initials(displayName),
+    status: 'invited', google_email: email, google_connected_at: new Date().toISOString(),
+    onboarding_completed: false, updated_at: new Date().toISOString()
+  };
+  if (rows && rows[0]) {
+    await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(profile) });
+  } else {
+    await adminFetch('/rest/v1/profiles', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ id: user.id }, profile)) });
+  }
+  return Object.assign({ id: user.id }, profile);
 }
 
 module.exports = async function googleLogin(req, res) {
@@ -35,9 +77,16 @@ module.exports = async function googleLogin(req, res) {
     if (!body.credential || !VALID_ROLES.includes(role)) return send(res, 400, { error: 'Data login Google tidak lengkap' });
 
     const identity = await googleIdentity(String(body.credential));
-    const profile = await profileForGoogle(String(identity.email).toLowerCase(), role);
-    if (!profile) return send(res, 403, { error: 'Akun Google ini belum dihubungkan ke profil FTG ' + role + '. Masuk dengan email dan password sekali, lalu hubungkan Google dari dashboard.' });
-    if (profile.status !== 'active') {
+    let profile = await profileForGoogle(String(identity.email).toLowerCase(), role);
+    let registered = false;
+    if (!profile) {
+      profile = await registerGoogleUser(identity, role);
+      registered = true;
+    }
+    if (profile.status === 'active' && profile.role !== role) {
+      return send(res, 403, { error: `Akun ini terdaftar sebagai ${profile.role}. Pilih jenis login yang sesuai.` });
+    }
+    if (!['active', 'invited'].includes(profile.status)) {
       const message = profile.status === 'dropped' ? 'Status kepesertaan telah dinyatakan gugur.' : 'Akun sedang dikunci panitia.';
       return send(res, 403, { error: `${message} Hubungi panitia untuk informasi lebih lanjut.` });
     }
@@ -54,7 +103,7 @@ module.exports = async function googleLogin(req, res) {
       method: 'POST', headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ actor_id: profile.id, action: 'auth.google_login', entity_type: 'profile', entity_id: profile.id, detail: { google_email: identity.email, role } })
     }).catch(() => null);
-    return send(res, 200, { action_link: actionLink, role, display_name: profile.full_name });
+    return send(res, 200, { action_link: actionLink, role, display_name: profile.full_name, registered, status: profile.status });
   } catch (error) {
     return send(res, 500, { error: error.message || 'Login Google gagal diproses' });
   }

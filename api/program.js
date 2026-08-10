@@ -1,10 +1,39 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, adminFetch, currentUser, requireRole, method } = require('./_lib');
 const googleLogin = require('./_google-login');
+
+function clean(value, max) { return String(value || '').trim().slice(0, max); }
+function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
+
+async function completeGoogleProfile(req, res) {
+  const user = await currentUser(req);
+  if (!user) return send(res, 401, { error: 'Sesi pendaftaran tidak valid atau sudah berakhir' });
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,full_name,role,status,google_email`);
+  const profile = rows && rows[0];
+  if (!profile) return send(res, 404, { error: 'Profil pendaftaran tidak ditemukan' });
+  if (profile.status !== 'invited') return send(res, 409, { error: 'Profil ini sudah diproses panitia' });
+  const body = req.body || {};
+  const fullName = clean(body.full_name, 120);
+  const path = ['Career Path', 'Entrepreneur Path'].includes(body.path) ? body.path : '';
+  if (fullName.length < 3 || !path) return send(res, 400, { error: 'Nama lengkap dan jalur program wajib diisi' });
+  const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
+    method: 'PATCH', headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({ full_name: fullName, initials: initials(fullName), path, onboarding_completed: true, updated_at: new Date().toISOString() })
+  });
+  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {
+    method: 'PUT', body: JSON.stringify({ user_metadata: Object.assign({}, user.user_metadata || {}, { full_name: fullName, initials: initials(fullName), path, profile_completed: true }) })
+  });
+  await adminFetch('/rest/v1/audit_logs', {
+    method: 'POST', headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ actor_id: user.id, action: 'registration.profile_completed', entity_type: 'profile', entity_id: user.id, detail: { path, provider: 'google' } })
+  }).catch(() => null);
+  return send(res, 200, { profile: updated && updated[0], pending_review: true });
+}
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
     if (req.body && req.body.action === 'google_login') return googleLogin(req, res);
+    if (req.body && req.body.action === 'complete_google_profile') return completeGoogleProfile(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
