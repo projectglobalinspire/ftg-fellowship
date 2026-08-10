@@ -2575,8 +2575,16 @@
   function customAttachmentHtml(files) {
     return (files || []).map(function (f, i) {
       return '<span style="display:inline-flex;align-items:center;gap:6px;background:#e8f5ef;color:#166534;font-size:11px;font-weight:700;padding:6px 10px;border-radius:10px;margin:0 6px 6px 0">📄 ' + esc(f.name || 'Berkas') +
-        '<button type="button" data-custom-file-remove="' + i + '" style="border:0;background:transparent;color:#64748b;cursor:pointer;font-weight:800">×</button></span>';
+        '<button type="button" data-custom-file-remove="' + i + '" title="Hapus dari tugas dan Drive pusat" aria-label="Hapus ' + esc(f.name || 'berkas') + '" style="border:0;background:transparent;color:#64748b;cursor:pointer;font-weight:800">×</button></span>';
     }).join('');
+  }
+  function deleteUploadedDriveFile(file) {
+    if (!file || !file.driveId) return Promise.resolve({ localOnly: true });
+    if (!centralDriveEnabled()) return Promise.reject(new Error('Penghapusan otomatis hanya tersedia untuk Drive pusat'));
+    return apiRequest('/api/drive', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete', file_id: file.driveId })
+    });
   }
   function wireCustomAssignmentFile(btn, task, sub, onChange) {
     var inp = document.createElement('input');
@@ -2650,8 +2658,20 @@
           wrap.innerHTML = customAttachmentHtml(sub.files);
           $all('[data-custom-file-remove]', wrap).forEach(function (b) {
             b.addEventListener('click', function () {
-              sub.files.splice(+b.getAttribute('data-custom-file-remove'), 1);
-              S.assignmentSubmissions[task.id] = sub; saveState(); renderCustomFiles();
+              var file = sub.files[+b.getAttribute('data-custom-file-remove')];
+              if (!file) return;
+              if (!confirm('Hapus "' + (file.name || 'berkas') + '" dari tugas dan pindahkan ke Sampah Drive pusat?')) return;
+              b.disabled = true; b.textContent = '…';
+              deleteUploadedDriveFile(file).then(function () {
+                sub.files = sub.files.filter(function (item) { return item !== file; });
+                S.assignmentSubmissions[task.id] = sub; saveState();
+                structuredSubmissionSave(task, sub);
+                renderCustomFiles();
+                toast('File dihapus dari tugas dan dipindahkan ke Sampah Drive pusat', '🗑️');
+              }).catch(function (error) {
+                b.disabled = false; b.textContent = '×';
+                toast('File belum dihapus: ' + error.message, '⚠️');
+              });
             });
           });
         }
@@ -2930,10 +2950,23 @@
             ? '<a href="' + esc(link) + '" target="_blank" rel="noopener" style="color:#fff;text-decoration:none">📄 ' + esc(nm) + ' <span style="opacity:.75">↗ Drive</span></a>'
             : '📎 ' + esc(nm) + (meta.pending ? ' <span style="opacity:.75">(belum diunggah)</span>' : '');
           return '<span title="' + esc((meta.folder || '') + pendingTitle) + '" style="background:' + (link ? '#1a5f4f' : '#94a3b8') + ';color:#fff;font-size:11px;font-weight:600;padding:5px 12px;border-radius:99px;display:inline-flex;align-items:center;gap:6px">' + body +
-            '<b data-fdel="' + i + '" style="cursor:pointer;opacity:.7">×</b></span>';
+            '<button type="button" data-fdel="' + i + '" title="Hapus dari tugas dan Drive pusat" aria-label="Hapus ' + esc(nm) + '" style="border:0;background:transparent;color:#fff;cursor:pointer;opacity:.75;font-weight:800">×</button></span>';
         }).join('');
         $all('[data-fdel]', fileWrap).forEach(function (x) {
-          x.addEventListener('click', function () { S.files.splice(+x.getAttribute('data-fdel'), 1); saveState(); renderFiles(); });
+          x.addEventListener('click', function () {
+            var file = S.files[+x.getAttribute('data-fdel')];
+            var name = file && typeof file === 'object' ? file.name : file;
+            if (!confirm('Hapus "' + (name || 'berkas') + '" dari tugas dan pindahkan ke Sampah Drive pusat?')) return;
+            x.disabled = true; x.textContent = '…';
+            deleteUploadedDriveFile(file).then(function () {
+              S.files = S.files.filter(function (item) { return item !== file; });
+              saveState(); renderFiles();
+              toast('File dihapus dari tugas dan dipindahkan ke Sampah Drive pusat', '🗑️');
+            }).catch(function (error) {
+              x.disabled = false; x.textContent = '×';
+              toast('File belum dihapus: ' + error.message, '⚠️');
+            });
+          });
         });
       };
       renderFiles();

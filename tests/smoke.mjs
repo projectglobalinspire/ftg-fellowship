@@ -148,6 +148,13 @@ test('central Drive uploads keep credentials server-side', async () => {
   assert.match(app, /function backfillMentorDriveAccess/);
   assert.match(driveApi, /body\.action === 'mentor-share'/);
   assert.match(driveApi, /drive\.mentor_share/);
+  assert.match(app, /function deleteUploadedDriveFile/);
+  assert.match(app, /action: 'delete'/);
+  assert.match(app, /Sampah Drive pusat/);
+  assert.match(driveApi, /body\.action === 'delete'/);
+  assert.match(driveApi, /appProperties\.ftgUserId !== auth\.user\.id/);
+  assert.match(driveApi, /JSON\.stringify\(\{ trashed: true \}\)/);
+  assert.match(driveApi, /drive\.central_trash/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleapis\.com/);
   assert.match(deploymentConfig, /https:\/\/\*\.googleusercontent\.com/);
   assert.doesNotMatch(app, /Silakan hubungkan Drive lalu coba lagi/);

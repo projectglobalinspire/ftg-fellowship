@@ -193,6 +193,22 @@ module.exports = async function handler(req, res) {
     }
     if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
 
+    if (body.action === 'delete') {
+      if (!body.file_id || !(await isInsideRoot(body.file_id))) return send(res, 400, { error: 'Berkas bukan bagian dari Drive pusat FTG' });
+      const owned = await drive(`files/${encodeURIComponent(body.file_id)}?fields=id,name,trashed,appProperties`);
+      if (!owned.appProperties || owned.appProperties.ftgUserId !== auth.user.id) {
+        return send(res, 403, { error: 'Berkas ini bukan milik pengumpulan akunmu' });
+      }
+      const trashed = await drive(`files/${encodeURIComponent(body.file_id)}?fields=id,name,trashed`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true })
+      });
+      await adminFetch('/rest/v1/audit_logs', {
+        method: 'POST', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ actor_id: auth.user.id, action: 'drive.central_trash', entity_type: 'drive_file', entity_id: body.file_id, detail: { name: owned.name, recoverable: true } })
+      });
+      return send(res, 200, { deleted: true, recoverable: true, file: trashed });
+    }
+
     if (body.action === 'session') {
       const size = Number(body.size || 0);
       if (!body.file_name || !size || size > MAX_BYTES) return send(res, 400, { error: 'Nama atau ukuran berkas tidak valid (maksimal 20 MB)' });
