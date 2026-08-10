@@ -179,6 +179,21 @@ test('new Google users complete a pending profile and require admin approval', a
   assert.match(app, /login_provider/);
 });
 
+test('Fasil approval labels and one-week mentor deadlines are complete', async () => {
+  const app = await text('app.js');
+  const login = await text('login.html');
+  const admin = await text('admin-dashboard.html');
+  assert.match(login, /label: 'FASIL'/);
+  assert.match(admin, /Dashboard Fasil/);
+  assert.match(app, /defaultAssignmentDeadline\(7\)/);
+  assert.match(app, /type="datetime-local"/);
+  assert.match(app, /data-deadline-days="3"/);
+  assert.match(app, /data-deadline-days="7"/);
+  assert.match(app, /data-deadline-days="14"/);
+  assert.match(app, /Deadline harus berada setelah waktu sekarang/);
+  assert.match(app, /deadlineDate\(task\.deadline\)\.toISOString\(\)/);
+});
+
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {
   const app = await text('app.js');
   const migration = await text('supabase/migrations/20260810_program_suite.sql');

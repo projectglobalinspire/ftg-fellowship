@@ -269,7 +269,7 @@
     applyRemote(d);
     lastAppliedAt = d.updatedAt || 0;
     var by = d.updatedBy || '';
-    var who = by === 'mentor' ? 'Mentor' : (by === 'admin' ? 'Panitia' : 'Mentee');
+    var who = by === 'mentor' ? 'Mentor' : (by === 'admin' ? 'Fasil' : 'Mentee');
     // mentee: update mentee lain tidak relevan -> terapkan diam-diam
     if (myRole() === 'mentee' && by.indexOf('mentee-') === 0) return;
     // kalau jendela chat sedang terbuka, perbarui isinya langsung tanpa reload
@@ -721,10 +721,10 @@
       { email: 'dina@ftg.id', name: 'Dina Fitriani', role: 'mentee', initials: 'DF', path: 'Entrepreneur Path' },
       { email: 'bagas@ftg.id', name: 'Bagas Nugroho', role: 'mentee', initials: 'BN', path: 'Career Path' },
       { email: 'faris@ftg.id', name: 'Bapak Faris', role: 'mentor', initials: 'BF', path: 'Senior Mentor' },
-      { email: 'panitia@ftg.id', name: 'Panitia FTG', role: 'admin', initials: 'PF', path: 'Committee' }
+      { email: 'panitia@ftg.id', name: 'Fasil', role: 'admin', initials: 'FS', path: 'Program Facilitator' }
     ];
     function roleChip(r) {
-      var map = { mentee: ['MENTEE', '#f97316'], mentor: ['MENTOR', '#1a5f4f'], admin: ['PANITIA', '#8b5cf6'] };
+      var map = { mentee: ['MENTEE', '#f97316'], mentor: ['MENTOR', '#1a5f4f'], admin: ['FASIL', '#8b5cf6'] };
       var m = map[r] || ['?', '#94a3b8'];
       return '<span style="background:' + m[1] + '1a;color:' + m[1] + ';font-size:9px;font-weight:800;padding:3px 9px;border-radius:99px;letter-spacing:.05em">' + m[0] + '</span>';
     }
@@ -744,7 +744,7 @@
         rs.innerHTML =
           '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#f97316;display:inline-block"></span>Mentee</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.mentee + '</span></div>' +
           '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#1a5f4f;display:inline-block"></span>Mentor</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.mentor + '</span></div>' +
-          '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#8b5cf6;display:inline-block"></span>Panitia</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.admin + '</span></div>' +
+          '<div class="flex items-center justify-between"><span class="text-slate-600 text-xs flex items-center gap-2"><span style="width:10px;height:10px;border-radius:3px;background:#8b5cf6;display:inline-block"></span>Fasil</span><span class="text-[#2c3e50] text-sm font-bold">' + counts.admin + '</span></div>' +
           '<div class="flex items-center justify-between border-t border-slate-100 pt-2"><span class="text-slate-600 text-xs font-semibold">Total</span><span class="text-[#8b5cf6] text-sm font-bold">' + all.length + '</span></div>';
       }
       var alog = $('#accountLog');
@@ -768,7 +768,7 @@
         b.addEventListener('click', function () {
           var em = b.getAttribute('data-rmacc');
           delete G.extraUsers[em];
-          adminLog('Akun ' + em + ' dihapus oleh Panitia');
+          adminLog('Akun ' + em + ' dihapus oleh Fasil');
           saveState(); renderAccounts(); renderLog();
           toast('Akun ' + em + ' dihapus', '🗑');
         });
@@ -808,7 +808,7 @@
             }
             G.extraUsers[em] = entry;
             registerExtraUsers(G);
-            adminLog('Akun ' + role + ' baru: ' + nm + ' (' + em + ') ditambahkan oleh Panitia');
+            adminLog('Akun ' + role + ' baru: ' + nm + ' (' + em + ') ditambahkan oleh Fasil');
             saveState(); close();
             renderAccounts(); renderLog();
             toast(nm + ' ditambahkan — bisa langsung login', '✅');
@@ -826,7 +826,7 @@
     function renderLog() {
       var el = $('#adminLog');
       if (!el) return;
-      var rows = (G.adminLog || []).map(function (l) { return { icon: '🛠', text: l.text, at: l.at, who: 'Panitia' }; })
+      var rows = (G.adminLog || []).map(function (l) { return { icon: '🛠', text: l.text, at: l.at, who: 'Fasil' }; })
         .concat(allEvents(null).map(function (ev) { return { icon: ev.icon, text: ev.text, at: ev.at, who: MENTEES[ev.menteeId] ? MENTEES[ev.menteeId].name.split(' ')[0] : '' }; }));
       rows.sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
       el.innerHTML = rows.length ? rows.slice(0, 30).map(function (r) {
@@ -1053,6 +1053,8 @@
   function personalize() {
     var ses = mySession();
     if (!ses || !ses.name) return;
+    var displayName = ses.role === 'admin' ? 'Fasil' : ses.name;
+    var displayInitials = ses.role === 'admin' ? 'FS' : (ses.initials || displayName.slice(0, 2).toUpperCase());
     var color = ses.role === 'mentor' ? '#1a5f4f' : (ses.role === 'admin' ? '#8b5cf6' : (MENTEES[myMenteeId()] || {}).color || '#f97316');
 
     // pill identitas di sidebar
@@ -1060,9 +1062,9 @@
     if (pill) {
       var ps = $all('p', pill);
       var ava = $('div.rounded-full', pill);
-      if (ps[0]) ps[0].textContent = ses.name;
+      if (ps[0]) ps[0].textContent = displayName;
       if (ps[1]) ps[1].textContent = ses.path || (ses.role === 'admin' ? 'Monitoring Program' : '');
-      if (ava) { ava.textContent = ses.initials || ses.name.slice(0, 2).toUpperCase(); ava.style.background = color; }
+      if (ava) { ava.textContent = displayInitials; ava.style.background = color; }
     }
 
     // halaman bersama (leaderboard/ceremony) memakai menu milik peran yang login
@@ -1514,7 +1516,7 @@
         var targets = (a.assignment_targets || []).map(function (t) { var p = AUTH.profilesById[t.mentee_id]; return p && p.mentee_number; }).filter(Boolean);
         var task = assignmentFor(a.id);
         if (!task) { task = { id: a.id }; mentorAssignments().push(task); }
-        Object.assign(task, { title: a.title, description: a.description, deadline: a.deadline ? String(a.deadline).slice(0, 10) : '', points: a.points, referenceLink: a.reference_link || '', checklist: a.checklist || [], rubric: a.rubric || [], targets: targets.length ? targets : (AUTH.profile.mentee_number ? [AUTH.profile.mentee_number] : []), active: a.status !== 'archived', createdAt: a.created_at, updatedAt: a.updated_at, structured: true });
+        Object.assign(task, { title: a.title, description: a.description, deadline: a.deadline || '', points: a.points, referenceLink: a.reference_link || '', checklist: a.checklist || [], rubric: a.rubric || [], targets: targets.length ? targets : (AUTH.profile.mentee_number ? [AUTH.profile.mentee_number] : []), active: a.status !== 'archived', createdAt: a.created_at, updatedAt: a.updated_at, structured: true });
       });
       return Promise.all([
         sb.from('submissions').select('*,reviews(*),task_discussions(*)'),
@@ -1542,12 +1544,12 @@
 
   function structuredAssignmentSave(task) {
     if (!sb || !AUTH.user || !['mentor', 'admin'].includes(AUTH.profile.role)) return Promise.resolve();
-    return sb.from('assignments').upsert({ id: task.id, cohort_id: AUTH.profile.cohort_id || null, title: task.title, description: task.description, deadline: task.deadline ? task.deadline + 'T23:59:59+08:00' : null, points: task.points || 0, reference_link: task.referenceLink || null, checklist: task.checklist || [], rubric: task.rubric || [], status: task.active === false ? 'archived' : 'published', is_template: false, created_by: AUTH.user.id, updated_at: new Date().toISOString() }).then(function (r) {
+    return sb.from('assignments').upsert({ id: task.id, cohort_id: AUTH.profile.cohort_id || null, title: task.title, description: task.description, deadline: task.deadline ? deadlineDate(task.deadline).toISOString() : null, points: task.points || 0, reference_link: task.referenceLink || null, checklist: task.checklist || [], rubric: task.rubric || [], status: task.active === false ? 'archived' : 'published', is_template: false, created_by: AUTH.user.id, updated_at: new Date().toISOString() }).then(function (r) {
       if (r.error) throw r.error;
       var ids = (task.targets || []).map(function (n) { return AUTH.profilesByNumber[n] && AUTH.profilesByNumber[n].id; }).filter(Boolean);
       return sb.from('assignment_targets').delete().eq('assignment_id', task.id).then(function () { return ids.length ? sb.from('assignment_targets').insert(ids.map(function (id) { return { assignment_id: task.id, mentee_id: id }; })) : null; });
     }).then(function () {
-      var notices = (task.targets || []).map(function (n) { var p = AUTH.profilesByNumber[n]; return p && { user_id: p.id, type: 'assignment', title: 'Tugas baru', body: task.title, href: 'mentee-dashboard.html#tugas', delivery: { in_app: 'sent' } }; }).filter(Boolean);
+      var notices = (task.targets || []).map(function (n) { var p = AUTH.profilesByNumber[n]; return p && { user_id: p.id, type: 'assignment', title: 'Tugas baru', body: task.title + ' · ' + dueLabel(task.deadline), href: 'mentee-dashboard.html#tugas', delivery: { in_app: 'sent' } }; }).filter(Boolean);
       return notices.length ? apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ notifications:notices }) }) : null;
     }).catch(reportError);
   }
@@ -1613,7 +1615,7 @@
     if (sub && sub.review) return { key: 'approved', label: 'Selesai · ' + sub.review.score + '/100', color: '#16a34a' };
     if (sub && sub.submittedAt) return { key: 'review', label: 'Menunggu Review', color: '#8b5cf6' };
     if (sub && (sub.text || sub.link || (sub.files || []).length)) return { key: 'draft', label: 'Draft Tersimpan', color: '#0ea5e9' };
-    if (task.deadline && new Date(task.deadline + 'T23:59:59') < new Date()) return { key: 'late', label: 'Terlambat', color: '#ef4444' };
+    if (task.deadline && deadlineDate(task.deadline) < new Date()) return { key: 'late', label: 'Terlambat', color: '#ef4444' };
     return { key: 'todo', label: 'Belum Dikerjakan', color: '#f97316' };
   }
   function runAutomatedReminders() {
@@ -1622,7 +1624,8 @@
     var changed = false;
     mentorAssignments().forEach(function (task) {
       if (task.active === false || !task.deadline) return;
-      var due = new Date(task.deadline + 'T00:00:00');
+      var due = deadlineDate(task.deadline);
+      due.setHours(0, 0, 0, 0);
       var days = Math.round((due - today) / 86400000);
       if (allowed.indexOf(days) === -1) return;
       (task.targets || []).forEach(function (id) {
@@ -2435,13 +2438,32 @@
     st.assignmentSubmissions = st.assignmentSubmissions || {};
     return st.assignmentSubmissions[taskId] || null;
   }
+  function deadlineDate(value) {
+    if (!value) return null;
+    // Data lama hanya berisi tanggal; pertahankan artinya sebagai akhir hari.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value + 'T23:59:59');
+    return new Date(value);
+  }
+  function localDateTimeValue(value) {
+    var d = value instanceof Date ? value : deadlineDate(value);
+    if (!d || isNaN(d.getTime())) return '';
+    function two(n) { return String(n).padStart(2, '0'); }
+    return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + 'T' + two(d.getHours()) + ':' + two(d.getMinutes());
+  }
+  function defaultAssignmentDeadline(days) {
+    var d = new Date();
+    d.setDate(d.getDate() + (days || 7));
+    d.setHours(23, 59, 0, 0);
+    return d;
+  }
   function dueLabel(iso) {
     if (!iso) return 'Tanpa deadline';
-    var d = new Date(iso + 'T23:59:59');
+    var d = deadlineDate(iso);
     var diff = Math.ceil((d - new Date()) / 86400000);
-    if (diff < 0) return 'Terlambat ' + Math.abs(diff) + ' hari';
-    if (diff === 0) return 'Deadline hari ini';
-    return 'Deadline ' + d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    var exact = d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (diff < 0) return 'Terlambat · ' + exact;
+    if (diff === 0) return 'Deadline hari ini, ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return 'Deadline ' + exact + ' · ' + diff + ' hari lagi';
   }
   function customAttachmentHtml(files) {
     return (files || []).map(function (f, i) {
@@ -2842,21 +2864,23 @@
 
   function openAssignmentEditor(task, onSaved) {
     task = task || null;
-    var defaultDeadline = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    var defaultDeadline = localDateTimeValue(defaultAssignmentDeadline(7));
+    var minimumDeadline = localDateTimeValue(new Date(Date.now() + 5 * 60000));
     var selected = task ? (task.targets || []).slice() : menteeIds().slice();
     var defaultRubric = [{ label: 'Kedalaman analisis', weight: 40, max: 100 }, { label: 'Keselarasan nilai', weight: 25, max: 100 }, { label: 'Kualitas refleksi', weight: 20, max: 100 }, { label: 'Ketepatan waktu', weight: 15, max: 100 }];
     var rubric = task && task.rubric ? task.rubric : defaultRubric;
     var adminRubrics = (G.programSettings && G.programSettings.rubricTemplates) || [];
     modal(
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">' + (task ? '✏️ Edit Tugas' : '➕ Berikan Tugas Baru') + '</h3>' +
-      '<p style="font-size:11px;color:#64748b;margin-bottom:14px">Tugas dan notifikasi langsung muncul pada akun mentee yang dipilih.</p>' +
+      '<p style="font-size:11px;color:#64748b;margin-bottom:14px">Tugas dan notifikasi langsung muncul pada akun mentee. Durasi standar otomatis <b>1 minggu</b> dan dapat diubah mentor.</p>' +
       (!task && G.assignmentTemplates.length ? '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Gunakan template</label><select id="mentorTaskTemplatePick" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:11px;background:#fff;margin-bottom:9px"><option value="">Mulai dari kosong</option>' + G.assignmentTemplates.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>'; }).join('') + '</select>' : '') +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Judul tugas *</label>' +
       '<input id="mentorTaskTitle" value="' + esc(task ? task.title : '') + '" placeholder="Contoh: Riset Masalah Pengguna" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;margin-bottom:10px">' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Instruksi *</label>' +
       '<textarea id="mentorTaskDesc" rows="4" placeholder="Tuliskan tujuan, langkah pengerjaan, dan output yang diharapkan..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical;margin-bottom:10px">' + esc(task ? task.description : '') + '</textarea>' +
-      '<div style="display:grid;grid-template-columns:1fr 110px;gap:9px"><div><label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Deadline *</label><input id="mentorTaskDeadline" type="date" value="' + esc(task ? task.deadline : defaultDeadline) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12px"></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 110px;gap:9px"><div><label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Tanggal &amp; jam deadline *</label><input id="mentorTaskDeadline" type="datetime-local" min="' + esc(minimumDeadline) + '" value="' + esc(task ? localDateTimeValue(task.deadline) : defaultDeadline) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12px"></div>' +
       '<div><label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Poin</label><input id="mentorTaskPoints" type="number" min="0" max="500" value="' + (task ? (+task.points || 0) : 50) + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:12px"></div></div>' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span style="font-size:10px;color:#64748b">Atur cepat:</span><button type="button" data-deadline-days="3" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 8px;font-size:10px;cursor:pointer">3 hari</button><button type="button" data-deadline-days="7" style="border:0;background:#e8f5ef;color:#166534;border-radius:8px;padding:5px 9px;font-size:10px;font-weight:800;cursor:pointer">1 minggu</button><button type="button" data-deadline-days="14" style="border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:4px 8px;font-size:10px;cursor:pointer">2 minggu</button></div>' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Link materi/referensi (opsional)</label>' +
       '<input id="mentorTaskLink" type="url" value="' + esc(task ? (task.referenceLink || '') : '') + '" placeholder="https://..." style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px">' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin:10px 0 4px">Checklist pengerjaan (satu langkah per baris)</label>' +
@@ -2882,12 +2906,19 @@
         $('#mentorTaskAll', box).addEventListener('click', function () {
           $all('#mentorTaskTargets input', box).forEach(function (c) { c.checked = true; });
         });
+        $all('[data-deadline-days]', box).forEach(function (button) {
+          button.addEventListener('click', function () {
+            $('#mentorTaskDeadline', box).value = localDateTimeValue(defaultAssignmentDeadline(+button.getAttribute('data-deadline-days')));
+          });
+        });
         $('#mentorTaskSave', box).addEventListener('click', function () {
           var title = $('#mentorTaskTitle', box).value.trim();
           var desc = $('#mentorTaskDesc', box).value.trim();
           var deadline = $('#mentorTaskDeadline', box).value;
           var targets = $all('#mentorTaskTargets input', box).filter(function (c) { return c.checked; }).map(function (c) { return +c.value; });
           if (!title || !desc || !deadline) { toast('Judul, instruksi, dan deadline wajib diisi', '⚠️'); return; }
+          var deadlineAt = new Date(deadline);
+          if (isNaN(deadlineAt.getTime()) || deadlineAt <= new Date()) { toast('Deadline harus berada setelah waktu sekarang', '⚠️'); return; }
           if (!targets.length) { toast('Pilih minimal satu mentee', '⚠️'); return; }
           var checklist = $('#mentorTaskChecklist', box).value.split(/\r?\n/).map(function (v) { return v.trim(); }).filter(Boolean);
           var rubricRows = $('#mentorTaskRubric', box).value.split(/\r?\n/).map(function (line) {
@@ -2901,13 +2932,13 @@
             task = { id: 'task-' + Date.now(), createdAt: new Date().toISOString(), createdBy: (mySession() || {}).name || 'Pak Faris', active: true };
             mentorAssignments().unshift(task);
           }
-          task.title = title; task.description = desc; task.deadline = deadline;
+          task.title = title; task.description = desc; task.deadline = deadlineAt.toISOString();
           task.points = Math.max(0, +$('#mentorTaskPoints', box).value || 0);
           task.referenceLink = $('#mentorTaskLink', box).value.trim(); task.targets = targets;
           task.checklist = checklist; task.rubric = rubricRows;
           task.updatedAt = new Date().toISOString();
           targets.forEach(function (id) {
-            pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari Pak Faris: ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(deadline), 'mentee');
+            pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari Pak Faris: ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
           });
           saveState(); close(); toast(isNew ? 'Tugas diberikan dan notifikasi terkirim' : 'Perubahan tugas tersimpan', '✅');
           if ($('#mentorTaskTemplate', box).checked) {
@@ -4078,13 +4109,13 @@
     var wrap = $('#accountRows'); if (!wrap) return;
     function accountRoleChip(role) {
       var style = role === 'mentor' ? 'background:#dcfce7;color:#166534' : role === 'admin' ? 'background:#ede9fe;color:#6d28d9' : 'background:#ffedd5;color:#c2410c';
-      var label = role === 'admin' ? 'Panitia' : role === 'mentor' ? 'Mentor' : 'Mentee';
+      var label = role === 'admin' ? 'Fasil' : role === 'mentor' ? 'Mentor' : 'Mentee';
       return '<span style="' + style + ';font-size:9px;font-weight:800;padding:4px 7px;border-radius:999px">' + label + '</span>';
     }
     var oldMentee = $('#btnAddMentee'), oldMentor = $('#btnAddMentor');
     function replaceButton(old, role) { if (!old) return; var fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old); fresh.addEventListener('click', function () { secureAccountModal(role, load); }); }
     replaceButton(oldMentee, 'mentee'); replaceButton(oldMentor, 'mentor');
-    var toolbar = document.createElement('div'); toolbar.className = 'px-5 py-3 border-b border-slate-100'; toolbar.innerHTML = '<div style="display:flex;gap:8px"><input id="accountSearch" placeholder="Cari nama atau email..." style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:8px 11px;font-size:11px"><select id="accountRoleFilter" style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;font-size:11px;background:#fff"><option value="">Semua role</option><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Panitia</option></select></div><p id="accountSecureStatus" style="font-size:9px;color:#16a34a;margin-top:5px">🔒 Dikelola melalui Supabase Auth · password tidak dapat dilihat panitia</p>';
+    var toolbar = document.createElement('div'); toolbar.className = 'px-5 py-3 border-b border-slate-100'; toolbar.innerHTML = '<div style="display:flex;gap:8px"><input id="accountSearch" placeholder="Cari nama atau email..." style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:8px 11px;font-size:11px"><select id="accountRoleFilter" style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;font-size:11px;background:#fff"><option value="">Semua role</option><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Fasil</option></select></div><p id="accountSecureStatus" style="font-size:9px;color:#16a34a;margin-top:5px">🔒 Dikelola melalui Supabase Auth · password tidak dapat dilihat Fasil</p>';
     wrap.parentElement.insertBefore(toolbar, wrap);
     var profiles = [];
     function render() {
@@ -4218,7 +4249,7 @@
     modal('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px"><div><h3 style="font-weight:800;color:#1e293b">📄 ' + esc(name || 'Preview berkas') + '</h3><p style="font-size:10px;color:#64748b">Akses tetap privat sesuai akun Google mentor.</p></div>' + (download ? '<a href="' + esc(download) + '" target="_blank" rel="noopener" style="background:#1a5f4f;color:#fff;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:800;text-decoration:none">Unduh</a>' : '') + '</div><iframe src="' + esc(preview) + '" title="Preview ' + esc(name || 'berkas') + '" style="width:100%;height:58vh;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc"></iframe><a href="' + esc(link) + '" target="_blank" rel="noopener" style="display:block;text-align:center;font-size:10px;color:#8b5cf6;margin-top:8px">Buka langsung di Google Drive ↗</a>');
   }
   function globalSearchModal() {
-    var pages = myRole() === 'mentee' ? [['Dashboard','mentee-dashboard.html'],['Tugas Saya','assignment-submission.html'],['Progress Saya','progress-tracker.html'],['Jurnal Pribadi','jurnal.html'],['Feedback Mentor','mentor-feedback.html'],['Workshop','workshop-library.html']] : myRole() === 'mentor' ? [['Dashboard Mentor','mentor-dashboard.html'],['Tugas & Review','mentor-review.html'],['Mentee Saya','mentor-mentee.html'],['Feedback','mentor-feedback.html'],['Leaderboard','kpi-leaderboard.html']] : [['Dashboard Panitia','admin-dashboard.html'],['Kelola Akun','admin-akun.html'],['Tugas Global','admin-dashboard.html']];
+    var pages = myRole() === 'mentee' ? [['Dashboard','mentee-dashboard.html'],['Tugas Saya','assignment-submission.html'],['Progress Saya','progress-tracker.html'],['Jurnal Pribadi','jurnal.html'],['Feedback Mentor','mentor-feedback.html'],['Workshop','workshop-library.html']] : myRole() === 'mentor' ? [['Dashboard Mentor','mentor-dashboard.html'],['Tugas & Review','mentor-review.html'],['Mentee Saya','mentor-mentee.html'],['Feedback','mentor-feedback.html'],['Leaderboard','kpi-leaderboard.html']] : [['Dashboard Fasil','admin-dashboard.html'],['Kelola Akun','admin-akun.html'],['Tugas Global','admin-dashboard.html']];
     modal('<h3 style="font-weight:800;color:#1e293b">🔎 Cari di FTG Fellowship</h3><input id="globalSearchInput" autofocus placeholder="Cari halaman, tugas, atau mentee..." style="width:100%;border:1px solid #cbd5e1;border-radius:11px;padding:10px;margin:10px 0"><div id="globalSearchRows"></div>', function (box) {
       var items = pages.map(function (p) { return { title:p[0],meta:'Halaman',href:p[1] }; }).concat(mentorAssignments().map(function (t) { return { title:t.title,meta:'Tugas · '+dueLabel(t.deadline),href:myRole()==='mentee'?'mentee-dashboard.html#tugas':'mentor-review.html' }; })).concat(myRole() !== 'mentee' ? menteeIds().map(function (id) { return { title:MENTEES[id].name,meta:'Mentee · '+MENTEES[id].path,href:'mentor-mentee.html' }; }) : []);
       function render(q) { q=(q||'').toLowerCase(); var rows=items.filter(function(i){return !q||(i.title+' '+i.meta).toLowerCase().indexOf(q)>-1;}).slice(0,12); $('#globalSearchRows',box).innerHTML=rows.map(function(i){return '<a href="'+esc(i.href)+'" style="display:block;padding:9px;border-bottom:1px solid #f1f5f9;text-decoration:none"><b style="font-size:11px;color:#334155">'+esc(i.title)+'</b><p style="font-size:9px;color:#94a3b8">'+esc(i.meta)+'</p></a>';}).join('')||'<p style="padding:18px;text-align:center;color:#94a3b8;font-size:11px">Tidak ditemukan.</p>'; }

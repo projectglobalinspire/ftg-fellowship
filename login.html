@@ -49,7 +49,7 @@
       </div>
       <p class="text-slate-500 text-sm mb-5" id="roleDesc">Masuk untuk melanjutkan perjalanan fellowship-mu.</p>
 
-      <!-- Role toggle (Panitia masuk lewat tautan khusus, tidak ditampilkan) -->
+      <!-- Role toggle (Fasil masuk lewat tautan khusus, tidak ditampilkan) -->
       <div class="flex bg-slate-100 rounded-xl p-1 gap-1 mb-5" id="roleTabs">
         <button type="button" id="tabMentee" class="flex-1 py-2 rounded-lg text-xs font-bold bg-white shadow text-[#2c3e50]">🎓 Mentee</button>
         <button type="button" id="tabMentor" class="flex-1 py-2 rounded-lg text-xs font-semibold text-slate-500">🧑‍🏫 Mentor</button>
@@ -84,7 +84,7 @@
         </div>
         <div id="googleLoginButton" class="min-h-[44px] flex justify-center"></div>
         <p id="googleLoginHelp" class="text-center text-[10px] leading-relaxed text-slate-400 mt-2">
-          Akun Google baru akan didaftarkan dan diverifikasi panitia.
+          Akun Google baru akan didaftarkan dan diverifikasi Fasil.
         </p>
       </form>
 
@@ -206,7 +206,7 @@
       var ROLE_UI = {
         mentee: { label: 'MENTEE', cls: 'bg-[#f97316]/10 text-[#f97316]', desc: 'Masuk untuk melanjutkan perjalanan fellowship-mu.' },
         mentor: { label: 'MENTOR', cls: 'bg-[#1a5f4f]/10 text-[#1a5f4f]', desc: 'Masuk untuk memantau & menilai mentee kamu.' },
-        admin:  { label: 'PANITIA', cls: 'bg-[#8b5cf6]/10 text-[#8b5cf6]', desc: 'Masuk untuk memantau jalannya program secara keseluruhan.' }
+        admin:  { label: 'FASIL', cls: 'bg-[#8b5cf6]/10 text-[#8b5cf6]', desc: 'Masuk untuk memverifikasi peserta dan memantau program.' }
       };
       function setRole(r) {
         role = ROLE_UI[r] ? r : 'mentee';
@@ -314,10 +314,10 @@
         sb.auth.signInWithPassword({ email: em, password: pw }).then(function (result) {
           if (result.error || !result.data.user) throw result.error || new Error('Login gagal');
           return sb.from('profiles').select('*').eq('id', result.data.user.id).maybeSingle().then(function (profileResult) {
-            if (profileResult.error || !profileResult.data) throw new Error('Profil akun belum disiapkan panitia.');
+            if (profileResult.error || !profileResult.data) throw new Error('Profil akun belum disiapkan Fasil.');
             if (profileResult.data.status === 'invited') { location.href = 'profile-setup.html'; return; }
             if (profileResult.data.status !== 'active') {
-              var inactiveMessage = profileResult.data.status === 'dropped' ? 'Status kepesertaan kamu telah dinyatakan gugur. Hubungi panitia bila memerlukan klarifikasi.' : 'Akun kamu sedang dikunci panitia. Hubungi panitia untuk membuka akses.';
+              var inactiveMessage = profileResult.data.status === 'dropped' ? 'Status kepesertaan kamu telah dinyatakan gugur. Hubungi Fasil bila memerlukan klarifikasi.' : 'Akun kamu sedang dikunci Fasil. Hubungi Fasil untuk membuka akses.';
               return sb.auth.signOut().then(function () { throw new Error(inactiveMessage); });
             }
             if (profileResult.data.role !== role) return sb.auth.signOut().then(function () { throw new Error('Akun ini terdaftar sebagai ' + profileResult.data.role + '. Pilih peran yang sesuai.'); });
@@ -325,7 +325,7 @@
           });
         }).catch(function (error) {
           var message = error.message === 'Invalid login credentials' ? 'Email atau password salah.' : error.message;
-          if (/banned/i.test(message || '')) message = 'Akun kamu sedang dikunci atau berstatus gugur. Hubungi panitia untuk informasi lebih lanjut.';
+          if (/banned/i.test(message || '')) message = 'Akun kamu sedang dikunci atau berstatus gugur. Hubungi Fasil untuk informasi lebih lanjut.';
           fail(message);
         });
       });
