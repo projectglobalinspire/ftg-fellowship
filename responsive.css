@@ -5,6 +5,42 @@
 * { -webkit-tap-highlight-color: transparent; }
 html, body { max-width: 100%; }
 
+/* Shell sidebar selalu mengikuti tinggi viewport. Menu menjadi area scroll
+   tersendiri supaya Keluar, widget, dan status koneksi tidak bertumpuk. */
+aside[data-design-id] {
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+aside[data-design-id] > nav {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.18) transparent;
+}
+aside[data-design-id] > nav::-webkit-scrollbar { width: 5px; }
+aside[data-design-id] > nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); border-radius: 99px; }
+aside[data-design-id] > :not(nav) { flex-shrink: 0; }
+.ftg-conn {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  margin: 7px 12px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  padding: 5px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.ftg-conn.ftg-conn-floating { position: fixed; bottom: 10px; left: 12px; z-index: 70; margin: 0; }
+
 /* Halaman login berdiri di luar shell main/aside, jadi perlu aturan sendiri. */
 #loginCard { min-width: 0; }
 .login-heading { gap: 12px; }
@@ -126,7 +162,7 @@ main[data-design-id] header {
     height: 100vh;
     height: 100dvh;
     min-height: 0 !important;
-    overflow-y: auto;
+    overflow: hidden;
     z-index: 80;
   }
   aside[data-design-id].ftg-open {
@@ -169,8 +205,7 @@ main[data-design-id] header {
   aside[data-design-id] { scrollbar-width: none; }
   aside[data-design-id]::-webkit-scrollbar { width: 0; height: 0; }
 
-  /* Badge status koneksi tidak boleh menimpa drawer/isi drawer */
-  .ftg-conn { z-index: 70 !important; }
+  /* Badge status koneksi merupakan footer drawer, bukan overlay layar. */
   .ftg-overlay {
     display: block;
     position: fixed;

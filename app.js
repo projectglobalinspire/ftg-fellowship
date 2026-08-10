@@ -1157,12 +1157,15 @@
 
   function showConnBadge() {
     if (!IS_APP_PAGE) return;
+    if (document.querySelector('.ftg-conn')) return;
     var b = document.createElement('div');
     b.className = 'ftg-conn';
-    b.style.cssText = 'position:fixed;bottom:10px;left:12px;z-index:8990;font-size:10px;font-weight:700;padding:4px 10px;border-radius:99px;pointer-events:none;' +
+    b.style.cssText =
       (sb ? 'background:rgba(34,197,94,.14);color:#22c55e;' : 'background:rgba(148,163,184,.14);color:#94a3b8;');
     b.textContent = sb ? '● Live — tersinkron server' : '○ Offline — data lokal';
-    document.body.appendChild(b);
+    var aside = document.querySelector('aside[data-design-id]');
+    if (aside) aside.appendChild(b);
+    else { b.classList.add('ftg-conn-floating'); document.body.appendChild(b); }
   }
 
   /* ---------- Helpers ---------- */

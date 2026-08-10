@@ -205,6 +205,16 @@ test('login shows progress animation and never looks frozen', async () => {
   assert.match(login, /Proses login terlalu lama/);
 });
 
+test('sidebar footer status never overlaps logout or content', async () => {
+  const app = await text('app.js');
+  const responsive = await text('responsive.css');
+  assert.match(responsive, /aside\[data-design-id\]\s*>\s*nav[\s\S]*overflow-y:\s*auto/);
+  assert.match(responsive, /height:\s*100dvh\s*!important/);
+  assert.match(responsive, /\.ftg-conn\s*\{[\s\S]*position:\s*static/);
+  assert.match(app, /if \(aside\) aside\.appendChild\(b\)/);
+  assert.doesNotMatch(app, /b\.style\.cssText = 'position:fixed;bottom:10px;left:12px/);
+});
+
 test('program suite covers durable revisions, flexible rubrics and operations', async () => {
   const app = await text('app.js');
   const migration = await text('supabase/migrations/20260810_program_suite.sql');
