@@ -6,5 +6,10 @@
     "test": "node --test tests/smoke.mjs",
     "check": "node --check app.js && node --test tests/smoke.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "nodemailer": "^9.0.5"
+  }
 }

@@ -82,6 +82,23 @@ Berkas sampai 20 MB didukung. Berkas di atas 5 MB memakai resumable upload. Jika
 - File tidak dibuat publik. Mentor yang terhubung dapat membuka preview atau mengunduh file dari modal review tugas.
 - Jalankan `setup-v3-google.sql` sekali untuk menambahkan kolom koneksi Google.
 
+## Email transaksional Zoho Mail
+
+Email tugas baru, pengingat H-3/H-1/deadline, feedback, dan permintaan revisi dikirim server-side melalui Zoho SMTP. Isi credential hanya pada environment Vercel, jangan di `ftg-config.js` atau browser.
+
+```text
+EMAIL_PROVIDER=zoho
+ZOHO_SMTP_HOST=smtppro.zoho.com
+ZOHO_SMTP_PORT=465
+ZOHO_SMTP_USER=hope@faithtogrow.org
+ZOHO_SMTP_APP_PASSWORD=<app password Zoho>
+NOTIFICATION_FROM_EMAIL=FTG Fellowship <hope@faithtogrow.org>
+NOTIFICATION_REPLY_TO=hope@faithtogrow.org
+APP_URL=https://ftg-fellowship.vercel.app
+```
+
+Gunakan `smtp.zoho.com` jika Server Configuration pada akun Zoho menunjukkan akun organisasi gratis; gunakan nilai yang ditampilkan Zoho sebagai sumber kebenaran. App password dibuat dari Zoho Accounts → Security → App Passwords saat MFA aktif. Endpoint admin `/api/email-test` menguji pengiriman ke email Fasil yang sedang login. Semua percobaan tetap dicatat pada `email_outbox`.
+
 ## Teknologi
 
 HTML + Tailwind CSS (CDN) + Vanilla JS, dengan Supabase untuk sinkronisasi state dan Google Drive untuk lampiran. `localStorage` dipakai sebagai cache/fallback tampilan, bukan tempat menyimpan isi berkas.
