@@ -11,9 +11,9 @@
   <script src="ftg-config.js?v=30"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script defer src="app.js?v=40"></script>
+  <script defer src="app.js?v=41"></script>
   <meta name="theme-color" content="#2c3e50">
-  <link rel="stylesheet" href="responsive.css?v=40">
+  <link rel="stylesheet" href="responsive.css?v=41">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="manifest" href="manifest.json">
@@ -319,5 +319,23 @@
       </div>
     </div>
   </main>
+  <script>
+    (function () {
+      var repairKey = 'ftg-lms-cache-repair-v41';
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller && !sessionStorage.getItem(repairKey)) {
+        sessionStorage.setItem(repairKey, '1');
+        Promise.all([
+          navigator.serviceWorker.getRegistrations().then(function (items) { return Promise.all(items.map(function (item) { return item.unregister(); })); }),
+          'caches' in window ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (key) { return caches.delete(key); })); }) : Promise.resolve()
+        ]).then(function () { location.replace('workshop-library.html?fresh=41'); });
+      }
+      window.setTimeout(function () {
+        var body = document.getElementById('ftgLmsBody');
+        if (!body || !body.classList.contains('ftg-lms-loading')) return;
+        body.className = 'ftg-lms-layout';
+        body.innerHTML = '<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe title="Mentoring Sesi 1 FBF" src="https://www.youtube-nocookie.com/embed/fmu6RKmoXAc?rel=0&modestbranding=1" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><span>Mentoring</span><h3>Mentoring Sesi 1 FBF</h3><p>Rekaman Mentoring Sesi 1 Future Builders Fellowship.</p></div></div>';
+      }, 1500);
+    })();
+  </script>
 </body>
 </html>

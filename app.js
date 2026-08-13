@@ -4581,7 +4581,8 @@
 
   /* ---------- Boot ---------- */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('sw.js').catch(function () { /* offline support opsional */ });
+    navigator.serviceWorker.getRegistrations().then(function(registrations){registrations.forEach(function(registration){registration.unregister();});}).catch(function(){});
+    if ('caches' in window) caches.keys().then(function(keys){keys.filter(function(key){return key.indexOf('ftg-v')===0;}).forEach(function(key){caches.delete(key);});}).catch(function(){});
   }
   /* Render halaman dari data yang ada sekarang — dipanggil segera, tanpa
      menunggu server, supaya semua tombol langsung bisa diklik. */

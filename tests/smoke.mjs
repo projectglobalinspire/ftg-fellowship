@@ -328,6 +328,12 @@ test('LMS recordings are playable for mentees and mentors but managed only by Fa
   assert.match(app, /featured-mentoring-1/);
   assert.match(app, /loading="eager"/);
   assert.match(app, /AbortController/);
+  assert.doesNotMatch(app, /serviceWorker\.register\(/);
+  assert.match(app, /getRegistrations\(\)/);
+  const workshop = await text('workshop-library.html');
+  assert.match(workshop, /ftg-lms-cache-repair-v41/);
+  assert.match(workshop, /classList\.contains\('ftg-lms-loading'\)/);
+  assert.match(workshop, /window\.setTimeout[\s\S]*1500/);
   assert.match(app, /LMS & Rekaman/);
   assert.match(app, /function openRecordingManager/);
   assert.match(app, /recording_save/);
