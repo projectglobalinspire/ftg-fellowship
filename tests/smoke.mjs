@@ -320,6 +320,7 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   assert.match(calendar, /BEGIN:VCALENDAR/);
   assert.match(reports, /application\/vnd\.ms-excel/);
   assert.match(app, /Kesehatan Program/);
+  assert.match(app, /Zoho aktif/);
   assert.match(app, /Audit Log/);
 });
 
