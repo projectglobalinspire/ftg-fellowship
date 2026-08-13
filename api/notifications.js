@@ -16,11 +16,11 @@ function cleanHref(value) {
 async function adminConsole(req, res, auth) {
   if (auth.profile.role !== 'admin') return send(res, 403, { error:'Hanya Fasil yang dapat membuka pusat email' });
   const [profiles, outbox] = await Promise.all([
-    adminFetch('/rest/v1/profiles?select=id,full_name,email,role,status&email=not.is.null&order=role.asc,full_name.asc&limit=1000'),
+    adminFetch('/rest/v1/profiles?select=id,full_name,email,google_email,role,status,notification_preferences,created_at&order=role.asc,full_name.asc&limit=1000'),
     adminFetch('/rest/v1/email_outbox?select=id,recipient,subject,status,error,attempts,sent_at,created_at&order=created_at.desc&limit=50')
   ]);
   return send(res, 200, {
-    profiles:(profiles || []).filter(profile => validEmail(profile.email)),
+    profiles:(profiles || []).map(profile => Object.assign({}, profile, { email_valid:validEmail(profile.email) })),
     outbox:outbox || [],
     email_provider:emailProvider(),
     email_sender:senderAddress()

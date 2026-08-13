@@ -44,7 +44,7 @@
           <p id="setupIntro" class="text-sm text-slate-500 mt-2 mb-7 leading-relaxed">Ceritakan sedikit tentang dirimu agar Fasil dapat memverifikasi bahwa akun ini benar milik peserta FTG.</p>
           <form id="profileForm" class="space-y-4">
             <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nama lengkap sesuai pendaftaran</label><input id="fullName" class="field" required minlength="3" maxlength="120" autocomplete="name"></div>
-            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Email Google</label><input id="googleEmail" class="field bg-slate-50 text-slate-400" readonly></div>
+            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Email login & notifikasi *</label><input id="googleEmail" class="field bg-slate-50 text-slate-500" type="email" required readonly autocomplete="email"><p class="text-[10px] text-emerald-700 mt-1.5">Email terverifikasi ini otomatis digunakan untuk tugas, deadline, feedback, status akun, dan informasi program.</p></div>
             <div id="menteeFields"><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white"><option value="">Pilih jalur</option><option>Career Path</option><option>Entrepreneur Path</option></select></div>
             <div id="mentorFields" class="hidden space-y-5">
               <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4"><p class="text-xs font-black tracking-wider text-emerald-800">A. PROFIL PROFESIONAL</p><p class="text-[11px] text-emerald-700 mt-1">Data ini membantu Fasil menilai kecocokan mentor dengan kebutuhan mentee.</p></div>
@@ -103,7 +103,7 @@
           var mentor = requestedRole === 'mentor';
           document.getElementById('welcomeName').textContent = profile.full_name || 'Future Builder';
           document.getElementById('fullName').value = profile.full_name || '';
-          document.getElementById('googleEmail').value = profile.google_email || session.user.email || '';
+          document.getElementById('googleEmail').value = profile.email || profile.google_email || session.user.email || '';
           document.getElementById('path').value = profile.path || '';
           document.getElementById('menteeFields').classList.toggle('hidden', mentor);
           document.getElementById('mentorFields').classList.toggle('hidden', !mentor);
@@ -145,7 +145,9 @@
       document.getElementById('profileForm').addEventListener('submit', function (event) {
         event.preventDefault();
         var button = document.getElementById('saveProfile'), error = document.getElementById('formError');
-        var mentor = requestedRole === 'mentor', payload = { action:'complete_google_profile', full_name:document.getElementById('fullName').value, path:document.getElementById('path').value };
+        var notificationEmail = document.getElementById('googleEmail').value.trim().toLowerCase();
+        var mentor = requestedRole === 'mentor', payload = { action:'complete_google_profile', email:notificationEmail, full_name:document.getElementById('fullName').value, path:document.getElementById('path').value };
+        if (!notificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notificationEmail)) { error.textContent='Email login dan notifikasi wajib valid.'; error.classList.remove('hidden'); return; }
         if (mentor) {
           var tags = Array.from(document.querySelectorAll('[name="mentorExpertise"]:checked')).map(function (box) { return box.value; });
           var format = document.querySelector('[name="mentorFormat"]:checked');

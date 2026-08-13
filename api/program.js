@@ -1,5 +1,6 @@
 const { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
 const googleLogin = require('./_google-login');
+const { deliverEmail } = require('./_email');
 
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
 function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
@@ -33,11 +34,15 @@ function mentorApplication(body) {
 async function completeGoogleProfile(req, res) {
   const user = await currentUser(req);
   if (!user) return send(res, 401, { error: 'Sesi pendaftaran tidak valid atau sudah berakhir' });
-  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,full_name,role,status,google_email`);
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,full_name,role,status,google_email,onboarding_completed`);
   const profile = rows && rows[0];
   if (!profile) return send(res, 404, { error: 'Profil pendaftaran tidak ditemukan' });
   if (profile.status !== 'invited') return send(res, 409, { error: 'Profil ini sudah diproses panitia' });
+  if (profile.onboarding_completed) return send(res, 409, { error:'Profil sudah dikirim dan sedang menunggu verifikasi Fasil' });
   const body = req.body || {};
+  const email = clean(body.email, 254).toLowerCase();
+  const verifiedEmail = clean(user.email, 254).toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email !== verifiedEmail || email !== clean(profile.email, 254).toLowerCase()) return send(res, 400, { error:'Email notifikasi harus sama dengan email login yang telah terverifikasi' });
   const requestedRole = ['mentee', 'mentor'].includes(user.user_metadata && user.user_metadata.requested_role) ? user.user_metadata.requested_role : 'mentee';
   const fullName = clean(body.full_name, 120);
   const path = requestedRole === 'mentor' ? 'Senior Mentor' : (['Career Path', 'Entrepreneur Path'].includes(body.path) ? body.path : '');
@@ -46,7 +51,7 @@ async function completeGoogleProfile(req, res) {
   if (requestedRole === 'mentor') application = mentorApplication(body);
   const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
     method: 'PATCH', headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ full_name: fullName, initials: initials(fullName), path, onboarding_completed: true, updated_at: new Date().toISOString() })
+    body: JSON.stringify({ email, full_name: fullName, initials: initials(fullName), path, notification_preferences:{ in_app:true, email:true, deadline:true, review:true, session:true }, onboarding_completed: true, updated_at: new Date().toISOString() })
   });
   await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {
     method: 'PUT', body: JSON.stringify({ user_metadata: Object.assign({}, user.user_metadata || {}, { full_name: fullName, initials: initials(fullName), path, profile_completed: true, mentor_application: application }) })
@@ -55,7 +60,18 @@ async function completeGoogleProfile(req, res) {
     method: 'POST', headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({ actor_id: user.id, action: requestedRole === 'mentor' ? 'registration.mentor_submitted' : 'registration.profile_completed', entity_type: 'profile', entity_id: user.id, detail: { path, provider: 'google', requested_role: requestedRole, expertise: application && application.expertise_tags } })
   }).catch(() => null);
-  return send(res, 200, { profile: updated && updated[0], pending_review: true });
+  const notification = { type:'registration', title:'Profil pendaftaran berhasil dikirim', body:`Profil ${requestedRole === 'mentor' ? 'Mentor' : 'Mentee'} kamu sudah diterima dan sedang menunggu verifikasi Fasil.`, href:'profile-setup.html' };
+  const notices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:user.id, delivery:{ in_app:'sent', email:'queued' } }, notification)) }).catch(() => []);
+  const delivery = await deliverEmail({ id:user.id, email }, notification, notices[0] && notices[0].id).catch(error => ({ status:'failed', reason:error.message }));
+  if (notices[0]) await adminFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(notices[0].id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:delivery.status } }) }).catch(() => null);
+  const admins = await adminFetch('/rest/v1/profiles?role=eq.admin&status=eq.active&select=id,email,notification_preferences&limit=50').catch(() => []);
+  const adminNotice = { type:'registration', title:'Pendaftaran baru menunggu verifikasi', body:`${fullName} mendaftar sebagai ${requestedRole === 'mentor' ? 'Mentor' : 'Mentee'} menggunakan ${email}.`, href:'admin-dashboard.html' };
+  for (const admin of admins || []) {
+    const adminNotices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:admin.id, delivery:{ in_app:'sent', email:'queued' } }, adminNotice)) }).catch(() => []);
+    const adminDelivery = await deliverEmail(admin, adminNotice, adminNotices[0] && adminNotices[0].id).catch(error => ({ status:'failed', reason:error.message }));
+    if (adminNotices[0]) await adminFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(adminNotices[0].id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:adminDelivery.status } }) }).catch(() => null);
+  }
+  return send(res, 200, { profile: updated && updated[0], pending_review: true, email_delivery:delivery.status });
 }
 
 module.exports = async function handler(req, res) {

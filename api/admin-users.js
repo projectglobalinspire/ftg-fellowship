@@ -15,10 +15,12 @@ module.exports = async function handler(req, res) {
     const body = req.body || {};
     if (req.method === 'POST') {
       if (!body.email || !body.full_name || !['mentee', 'mentor', 'admin'].includes(body.role)) return send(res, 400, { error: 'Email, nama, dan role wajib valid' });
+      const accountEmail = String(body.email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail) || accountEmail.length > 254) return send(res, 400, { error:'Format email akun tidak valid' });
       const password = body.password || `${crypto.randomUUID().slice(0, 10)}Aa1!`;
-      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: body.email.toLowerCase(), password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role: body.role, initials: body.initials || '', path: body.path || '', mentee_number: body.mentee_number || null } }) });
+      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role: body.role, initials: body.initials || '', path: body.path || '', mentee_number: body.mentee_number || null } }) });
       if (body.mentor_id || body.cohort_id) await adminFetch(`/rest/v1/profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ mentor_id: body.mentor_id || null, cohort_id: body.cohort_id || null }) });
-      await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.create', entity_type: 'profile', entity_id: user.id, detail: { email: body.email, role: body.role } }) });
+      await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.create', entity_type: 'profile', entity_id: user.id, detail: { email: accountEmail, role: body.role } }) });
       return send(res, 201, { user, temporary_password: body.password ? undefined : password });
     }
     const id = body.id || req.query.id;
@@ -44,7 +46,8 @@ module.exports = async function handler(req, res) {
         await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify({ ban_duration:approved ? 'none' : '876000h', user_metadata:Object.assign({}, metadata, { registration_decision:approved ? 'approved' : 'rejected', registration_decided_at:new Date().toISOString() }) }) });
         const notification = { type:'registration', title:approved ? 'Pendaftaran disetujui' : 'Pendaftaran belum disetujui', body:approved ? `Akses ${requestedRole === 'mentor' ? 'mentor' : 'mentee'} kamu sudah aktif.` : patch.discipline_note, href:approved ? (requestedRole === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html') : 'login.html' };
         const notices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:id, delivery:{ in_app:'sent', email:'queued' } }, notification)) }).catch(() => []);
-        await deliverEmail(applicant, notification, notices[0] && notices[0].id).catch(() => null);
+        const delivery = await deliverEmail(applicant, notification, notices[0] && notices[0].id).catch(error => ({ status:'failed', reason:error.message }));
+        if (notices[0]) await adminFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(notices[0].id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:delivery.status } }) }).catch(() => null);
         await adminFetch('/rest/v1/audit_logs', { method:'POST', body:JSON.stringify({ actor_id:auth.user.id, action:approved ? 'registration.approve' : 'registration.reject', entity_type:'profile', entity_id:id, detail:{ requested_role:requestedRole, reason:approved ? null : patch.discipline_note } }) });
         return send(res, 200, { ok:true, status:patch.status, role:approved ? requestedRole : applicant.role });
       }
@@ -100,12 +103,18 @@ module.exports = async function handler(req, res) {
       const profilePatch = {};
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
-      if (Object.keys(profilePatch).length) await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
       const authPatch = {};
-      if (body.email) authPatch.email = body.email;
+      if (body.email) {
+        const normalizedEmail = String(body.email).trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || normalizedEmail.length > 254) return send(res, 400, { error:'Email akun tidak valid' });
+        authPatch.email = normalizedEmail;
+        authPatch.email_confirm = true;
+        profilePatch.email = normalizedEmail;
+      }
       if (body.password) authPatch.password = body.password;
       if (body.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(body.status) ? '876000h' : 'none';
       if (Object.keys(authPatch).length) await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(authPatch) });
+      if (Object.keys(profilePatch).length) await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
       await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.update', entity_type: 'profile', entity_id: id, detail: profilePatch }) });
       return send(res, 200, { ok: true });
     }

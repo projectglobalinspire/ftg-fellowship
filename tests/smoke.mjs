@@ -347,6 +347,25 @@ test('Fasil can manually send synchronized email and dashboard notifications', a
   assert.match(css, /\.ftg-mail-compose/);
 });
 
+test('registration email is required, verified, synchronized and visible to Fasil', async () => {
+  const setup = await text('profile-setup.html');
+  const program = await text('api/program.js');
+  const adminApi = await text('api/admin-users.js');
+  const notifications = await text('api/notifications.js');
+  const app = await text('app.js');
+  assert.match(setup, /Email login & notifikasi \*/);
+  assert.match(setup, /id="googleEmail"[^>]*type="email"[^>]*required[^>]*readonly/);
+  assert.match(setup, /email:notificationEmail/);
+  assert.match(program, /Email notifikasi harus sama dengan email login yang telah terverifikasi/);
+  assert.match(program, /Profil pendaftaran berhasil dikirim/);
+  assert.match(program, /notification_preferences:\{ in_app:true, email:true/);
+  assert.match(adminApi, /profilePatch\.email = normalizedEmail/);
+  assert.match(notifications, /email_valid:validEmail/);
+  assert.match(app, /Semua Email Terdaftar/);
+  assert.match(app, /Email akun menjadi tujuan otomatis notifikasi/);
+  assert.match(app, /Direktori Email/);
+});
+
 test('LMS recordings are playable for mentees and mentors but managed only by Fasil', async () => {
   const app = await text('app.js');
   const operations = await text('api/operations.js');
