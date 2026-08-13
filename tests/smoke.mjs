@@ -355,3 +355,20 @@ test('LMS recordings are playable for mentees and mentors but managed only by Fa
   assert.match(responsive, /aspect-ratio:16\/9/);
   assert.match(vercel, /frame-src[^\"]*youtube-nocookie\.com/);
 });
+
+test('Design Thinking is server-backed, weekly controlled, versioned and monitored by role', async () => {
+  const app = await text('app.js');
+  const api = await text('api/learning.js');
+  assert.match(app, /apiRequest\('\/api\/learning'/);
+  assert.match(app, /action:'progress_save'/);
+  assert.match(app, /Kurikulum & Canvas/);
+  assert.match(app, /Tugas & Pengumpulan/);
+  assert.match(api, /week\.mode === 'open'/);
+  assert.match(api, /week\.mode === 'closed'/);
+  assert.match(api, /week\.number <= activeWeek/);
+  assert.match(api, /auth\.profile\.role !== 'admin'/);
+  assert.match(api, /auth\.profile\.role !== 'mentee'/);
+  assert.match(api, /submission_versions/);
+  assert.match(api, /assignment_targets/);
+  assert.match(api, /audit_logs/);
+});

@@ -1929,7 +1929,69 @@
   /* ================================================================
      PAGE: DESIGN THINKING MODULE
      ================================================================ */
+  function canvasCompletion(config, progress) {
+    var total = 1, filled = progress && progress.niyyah && progress.niyyah.trim() ? 1 : 0;
+    (config.weeks || []).forEach(function (week) {
+      total += week.questions.length;
+      var answers = progress && progress.weeks && progress.weeks[String(week.number)] && progress.weeks[String(week.number)].answers || [];
+      filled += answers.filter(function (answer) { return String(answer || '').trim(); }).length;
+    });
+    return { filled:filled, total:total, percent:Math.round(filled / Math.max(1, total) * 100) };
+  }
+  function mountRealDesignThinking() {
+    if (PAGE.indexOf('design-thinking') !== 0 || !AUTH.accessToken) return false;
+    var host = $('main > div.px-8');
+    if (!host) return false;
+    var legacyWeekSwitch = $('main > header > div:last-child');
+    if (legacyWeekSwitch && legacyWeekSwitch.querySelector('[data-design-id*="week1-tab"]')) legacyWeekSwitch.style.display = 'none';
+    host.innerHTML = '<section class="ftg-canvas-loading"><i class="fa-solid fa-circle-notch fa-spin"></i><b>Menyiapkan ruang belajar...</b><span>Mengambil kurikulum dan progres terakhirmu.</span></section>';
+    apiRequest('/api/learning').then(function (data) {
+      if (!data.assignment) {
+        host.innerHTML = '<section class="ftg-canvas-empty"><i class="fa-solid fa-calendar-check"></i><h2>Canvas sedang disiapkan Fasil</h2><p>Kurikulum belum dipublikasikan. Setelah Fasil membuka minggu aktif, halaman ini otomatis menampilkan materi resminya.</p></section>';
+        return;
+      }
+      var config = data.config, row = data.progress || {}, progress = row.checklist_state || { niyyah:'', weeks:{} };
+      progress.weeks = progress.weeks || {};
+      var selected = Math.max(1, Math.min(4, Number(config.active_week) || 1));
+      function render() {
+        var complete = canvasCompletion(config, progress), week = config.weeks[selected - 1];
+        var answers = progress.weeks[String(selected)] && progress.weeks[String(selected)].answers || [];
+        host.innerHTML = '<section class="ftg-canvas-journey"><div><span>PROGRAM RESMI · BULAN 1</span><h2>' + esc(config.title) + '</h2><p>' + esc(config.instructions) + '</p></div><div class="ftg-canvas-meter"><b>' + complete.percent + '%</b><span><i style="width:' + complete.percent + '%"></i></span><small>' + complete.filled + ' dari ' + complete.total + ' bagian terisi</small></div></section>' +
+          '<section class="ftg-canvas-weekbar">' + config.weeks.map(function (item) { var wanswers = progress.weeks[String(item.number)] && progress.weeks[String(item.number)].answers || [], done = wanswers.length && wanswers.every(function (answer) { return String(answer || '').trim(); }); return '<button type="button" data-canvas-week="' + item.number + '" class="' + (selected === item.number ? 'is-active ' : '') + (item.is_open ? 'is-open' : 'is-locked') + '"><span>W' + item.number + (done ? ' ✓' : '') + '</span><b>' + esc(item.phase) + '</b><small>' + (item.is_open ? esc(item.title) : 'Belum dibuka Fasil') + '</small><i class="fa-solid ' + (item.is_open ? 'fa-arrow-right' : 'fa-lock') + '"></i></button>'; }).join('') + '</section>' +
+          '<section class="ftg-canvas-workspace"><div class="ftg-canvas-main"><div class="ftg-canvas-head"><div><span>MINGGU ' + week.number + ' · ' + esc(week.phase) + '</span><h2>' + esc(week.title) + '</h2><p>' + esc(week.description || 'Jawab berdasarkan proses dan temuanmu sendiri.') + '</p></div><div id="canvasSaveState" class="ftg-canvas-save"><i class="fa-solid fa-cloud"></i> Tersimpan</div></div>' +
+          (selected === 1 ? '<label class="ftg-canvas-question"><b>Niyyah perjalananmu</b><small>Apa niat tulusmu dan siapa yang ingin kamu beri manfaat?</small><textarea id="canvasNiyyah" rows="3" ' + (!week.is_open ? 'disabled' : '') + ' placeholder="Tuliskan niyyahmu...">' + esc(progress.niyyah || '') + '</textarea></label>' : '') +
+          (week.is_open ? week.questions.map(function (question, index) { return '<label class="ftg-canvas-question"><span>' + (index + 1) + '</span><b>' + esc(question) + '</b><textarea data-canvas-answer="' + index + '" rows="4" placeholder="Tulis jawabanmu dengan lengkap...">' + esc(answers[index] || '') + '</textarea></label>'; }).join('') : '<div class="ftg-canvas-locked"><i class="fa-solid fa-lock"></i><h3>Minggu ini belum dibuka</h3><p>Fasil mengatur pembukaan berdasarkan kalender program. Jawaban minggu sebelumnya tetap aman dan dapat dibaca.</p></div>') + '</div>' +
+          '<aside class="ftg-canvas-side"><div><span>STATUS BELAJAR</span><h3>' + (row.status === 'approved' ? 'Sudah dinilai' : row.status === 'submitted' ? 'Menunggu review' : 'Draft aktif') + '</h3><p>Terakhir diperbarui ' + (row.updated_at ? new Date(row.updated_at).toLocaleString('id-ID') : 'belum pernah') + '</p></div><ul><li><i class="fa-solid fa-shield-halved"></i><span><b>Aman di server</b>Jawaban tidak bergantung pada browser ini.</span></li><li><i class="fa-solid fa-eye"></i><span><b>Dapat dipantau</b>Mentor dan Fasil melihat progres sesuai hak akses.</span></li><li><i class="fa-solid fa-clock-rotate-left"></i><span><b>Riwayat versi</b>Versi lama dipertahankan saat dikumpulkan ulang.</span></li></ul><button id="canvasSubmitOfficial" type="button" ' + (!week.is_open ? 'disabled' : '') + '><i class="fa-solid fa-paper-plane"></i> Lampiran & Kumpulkan</button><small>Pengumpulan memakai alur Tugas Saya: Drive pusat, revisi, rubrik, dan review mentor.</small></aside></section>';
+        $all('[data-canvas-week]', host).forEach(function (button) { button.addEventListener('click', function () { selected = +button.getAttribute('data-canvas-week'); render(); }); });
+        var timer;
+        function saveDraft() {
+          clearTimeout(timer);
+          var state = document.getElementById('canvasSaveState'); if (state) state.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...';
+          timer = setTimeout(function () {
+            apiRequest('/api/learning', { method:'POST', body:JSON.stringify({ action:'progress_save', progress:progress }) }).then(function (saved) {
+              row.status = saved.status; row.updated_at = new Date().toISOString();
+              var status = document.getElementById('canvasSaveState'); if (status) status.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Tersimpan';
+            }).catch(function (error) { var status=document.getElementById('canvasSaveState'); if(status)status.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> Gagal menyimpan'; toast(error.message, '⚠️'); });
+          }, 650);
+        }
+        var niyyah = document.getElementById('canvasNiyyah'); if (niyyah) niyyah.addEventListener('input', function () { progress.niyyah = niyyah.value; saveDraft(); });
+        $all('[data-canvas-answer]', host).forEach(function (field) { field.addEventListener('input', function () { progress.weeks[String(selected)] = progress.weeks[String(selected)] || { answers:[] }; progress.weeks[String(selected)].answers[+field.getAttribute('data-canvas-answer')] = field.value; saveDraft(); }); });
+        var submit = document.getElementById('canvasSubmitOfficial'); if (submit) submit.addEventListener('click', function () {
+          submit.disabled = true; submit.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan progres...';
+          apiRequest('/api/learning', { method:'POST', body:JSON.stringify({ action:'progress_save', progress:progress }) }).then(function () {
+            var task = assignmentFor('dt-canvas-month-1');
+            if (!task) { location.href = 'assignment-submission.html'; return; }
+            submit.disabled = false; submit.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Lampiran & Kumpulkan';
+            openTaskSubmission(task, render);
+          }).catch(function (error) { submit.disabled=false; submit.innerHTML='<i class="fa-solid fa-paper-plane"></i> Coba lagi'; toast(error.message, '⚠️'); });
+        });
+      }
+      render();
+    }).catch(function (error) { host.innerHTML='<section class="ftg-canvas-empty is-error"><i class="fa-solid fa-triangle-exclamation"></i><h2>Ruang belajar belum dapat dibuka</h2><p>'+esc(error.message)+'</p><button type="button" onclick="location.reload()">Coba Lagi</button></section>'; });
+    return true;
+  }
   function initDesignThinking() {
+    if (mountRealDesignThinking()) return;
     // NIYYAH
     var niyyah = $('header + div input[type=text]') || $('[data-design-id^="canvas-section"] input[type=text]');
     if (niyyah) {
@@ -2639,12 +2701,13 @@
         '<div style="background:#ecfdf5;border:1px solid #bbf7d0;border-radius:14px;padding:14px"><b style="color:#166534">Skor ' + sub.review.score + '/100</b><p style="font-size:12px;color:#475569;margin-top:6px">' + esc(sub.review.text) + '</p></div>' + historyHtml);
       return;
     }
+    var visibleChecklist = (task.checklist || []).filter(function (item) { return typeof item === 'string'; });
     return modal(
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">📝 ' + esc(task.title) + '</h3>' +
       '<p style="font-size:11px;color:#f97316;font-weight:700;margin-bottom:10px">' + esc(dueLabel(task.deadline)) + ' · +' + (+task.points || 0) + ' poin</p>' +
       '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:11px;margin-bottom:12px;font-size:12px;color:#475569;white-space:pre-line">' + esc(task.description || 'Ikuti arahan mentor.') + '</div>' +
       (task.referenceLink ? '<a href="' + esc(task.referenceLink) + '" target="_blank" rel="noopener" style="display:inline-block;color:#8b5cf6;font-size:11px;font-weight:700;margin-bottom:12px">🔗 Buka materi/referensi</a>' : '') +
-      ((task.checklist || []).length ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px;margin-bottom:12px"><p style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:6px">Checklist pengerjaan</p>' + task.checklist.map(function (item, i) { return '<label style="display:flex;gap:7px;align-items:center;font-size:11px;color:#334155;margin:5px 0"><input type="checkbox" data-task-check="' + i + '" ' + (sub.checks[i] ? 'checked' : '') + '> ' + esc(item) + '</label>'; }).join('') + '</div>' : '') +
+      (visibleChecklist.length ? '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px;margin-bottom:12px"><p style="font-size:11px;font-weight:800;color:#1d4ed8;margin-bottom:6px">Checklist pengerjaan</p>' + visibleChecklist.map(function (item, i) { return '<label style="display:flex;gap:7px;align-items:center;font-size:11px;color:#334155;margin:5px 0"><input type="checkbox" data-task-check="' + i + '" ' + (sub.checks[i] ? 'checked' : '') + '> ' + esc(item) + '</label>'; }).join('') + '</div>' : '') +
       (sub.review && sub.review.decision === 'revision' ? '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px;margin-bottom:12px"><b style="font-size:11px;color:#b91c1c">Mentor meminta revisi</b><p style="font-size:11px;color:#475569;margin-top:4px">' + esc(sub.review.text || '') + '</p></div>' : '') +
       historyHtml + '<label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:5px">Jawaban / catatan pengerjaan</label>' +
       '<textarea id="customTaskText" rows="5" style="width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:11px;font:inherit;font-size:12px;resize:vertical" placeholder="Tulis hasil pekerjaanmu...">' + esc(sub.text || '') + '</textarea>' +
@@ -4423,6 +4486,41 @@
       });
     }).catch(function(e){toast(e.message,'⚠️');});
   }
+  function learningProgressMeta(config, row) {
+    var progress = row && row.checklist_state || { weeks:{} }, complete = canvasCompletion(config, progress), lastWeek = 0;
+    (config.weeks || []).forEach(function (week) { var answers=progress.weeks && progress.weeks[String(week.number)] && progress.weeks[String(week.number)].answers || []; if (answers.some(function(a){return String(a||'').trim();})) lastWeek=week.number; });
+    return { percent:complete.percent, filled:complete.filled, total:complete.total, lastWeek:lastWeek, updated:row && row.updated_at, status:row && row.status || 'not_started' };
+  }
+  function learningDetail(profile, progress, config) {
+    var state = progress && progress.checklist_state || { weeks:{} };
+    modal('<div class="ftg-learning-detail"><span>PROGRES CANVAS</span><h3>' + esc(profile.full_name) + '</h3><p>' + esc(profile.email) + ' · ' + esc(profile.path || 'Mentee') + '</p><div class="ftg-learning-answer"><b>Niyyah</b><p>' + esc(state.niyyah || 'Belum diisi') + '</p></div>' + config.weeks.map(function(week){var answers=state.weeks&&state.weeks[String(week.number)]&&state.weeks[String(week.number)].answers||[];return '<section><h4>W'+week.number+' · '+esc(week.phase)+'</h4>'+week.questions.map(function(q,i){return '<div class="ftg-learning-answer"><b>'+esc(q)+'</b><p>'+esc(answers[i]||'Belum diisi')+'</p></div>';}).join('')+'</section>';}).join('') + '</div>');
+  }
+  function openLearningManager() {
+    var isAdmin = myRole() === 'admin';
+    apiRequest('/api/learning').then(function(data){
+      var config=data.config, learners=data.learners||[];
+      var configHtml = isAdmin ? '<div class="ftg-learning-config"><div class="ftg-learning-config-head"><div><small>KURIKULUM TERPUSAT</small><h3>Atur Canvas & Pembukaan Minggu</h3><p>Mode otomatis mengikuti minggu aktif. Buka/Kunci Paksa mengesampingkan jadwal.</p></div><label>Minggu aktif<select id="learningActiveWeek">'+[1,2,3,4].map(function(n){return '<option value="'+n+'" '+(config.active_week===n?'selected':'')+'>Minggu '+n+'</option>';}).join('')+'</select></label></div><label>Judul Canvas<input id="learningTitle" value="'+esc(config.title)+'"></label><label>Petunjuk<textarea id="learningInstructions" rows="2">'+esc(config.instructions)+'</textarea></label><div class="ftg-learning-week-config">'+config.weeks.map(function(week){return '<article data-learning-config-week="'+week.number+'"><div><span>W'+week.number+'</span><div><b>'+esc(week.phase)+'</b><small>'+esc(week.title)+'</small></div></div><label>Mode<select data-learning-mode><option value="automatic" '+(week.mode==='automatic'?'selected':'')+'>Otomatis</option><option value="open" '+(week.mode==='open'?'selected':'')+'>Buka Paksa</option><option value="closed" '+(week.mode==='closed'?'selected':'')+'>Kunci Paksa</option></select></label><label>Judul<input data-learning-title value="'+esc(week.title)+'"></label><div class="ftg-learning-dates"><label>Dibuka<input data-learning-open type="datetime-local" value="'+localDateTimeValue(week.open_at)+'"></label><label>Ditutup<input data-learning-close type="datetime-local" value="'+localDateTimeValue(week.close_at)+'"></label></div><label>Pertanyaan (satu per baris)<textarea data-learning-questions rows="4">'+esc(week.questions.join('\n'))+'</textarea></label></article>';}).join('')+'</div><button id="learningConfigSave" class="ftg-suite-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan & Publikasikan</button></div>' : '';
+      var monitorHtml='<div class="ftg-learning-monitor"><div><div><small>MONITOR TANPA IMPERSONASI</small><h3>Progres Belajar Mentee</h3></div><span>'+learners.length+' mentee</span></div><div class="ftg-learning-table"><div class="ftg-learning-row is-head"><span>Mentee</span><span>Minggu</span><span>Progres</span><span>Status</span><span>Aktivitas</span></div>'+learners.map(function(item){var meta=learningProgressMeta(config,item.progress);return '<button type="button" class="ftg-learning-row" data-learning-person="'+item.profile.id+'"><span><b>'+esc(item.profile.full_name)+'</b><small>'+esc(item.profile.path||'Mentee')+'</small></span><span>W'+(meta.lastWeek||'—')+'</span><span><i><em style="width:'+meta.percent+'%"></em></i><b>'+meta.percent+'%</b></span><span class="is-'+meta.status+'">'+esc(meta.status==='submitted'?'Menunggu review':meta.status==='approved'?'Dinilai':meta.status==='revision'?'Perlu revisi':meta.status==='draft'?'Draft':'Belum mulai')+'</span><span>'+(meta.updated?new Date(meta.updated).toLocaleDateString('id-ID'):'—')+' <i class="fa-solid fa-chevron-right"></i></span></button>';}).join('')+'</div></div>';
+      modal('<div class="ftg-learning-manager">'+configHtml+monitorHtml+'</div>',function(box,close){
+        box.style.maxWidth='980px';
+        $all('[data-learning-person]',box).forEach(function(button){button.addEventListener('click',function(){var item=learners.filter(function(x){return x.profile.id===button.getAttribute('data-learning-person');})[0];if(item)learningDetail(item.profile,item.progress,config);});});
+        var save=document.getElementById('learningConfigSave'); if(save)save.addEventListener('click',function(){
+          config.title=document.getElementById('learningTitle').value;config.instructions=document.getElementById('learningInstructions').value;config.active_week=+document.getElementById('learningActiveWeek').value;
+          $all('[data-learning-config-week]',box).forEach(function(card){var n=+card.getAttribute('data-learning-config-week'),week=config.weeks[n-1];week.mode=$('[data-learning-mode]',card).value;week.title=$('[data-learning-title]',card).value;week.open_at=$('[data-learning-open]',card).value||null;week.close_at=$('[data-learning-close]',card).value||null;week.questions=$('[data-learning-questions]',card).value.split(/\r?\n/).map(function(q){return q.trim();}).filter(Boolean);});
+          save.disabled=true;save.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> Mempublikasikan...';
+          apiRequest('/api/learning',{method:'POST',body:JSON.stringify({action:'config_save',config:config})}).then(function(){close();toast('Kurikulum dan akses minggu berhasil diperbarui','✅');openLearningManager();}).catch(function(error){save.disabled=false;save.textContent='Coba Lagi';toast(error.message,'⚠️');});
+        });
+      });
+    }).catch(function(error){toast(error.message,'⚠️');});
+  }
+  function openAssignmentMonitor() {
+    apiRequest('/api/operations').then(function(data){
+      var profiles={};(data.profiles||[]).forEach(function(p){profiles[p.id]=p;});
+      var submissions=data.submissions||[];
+      var rows=(data.assignments||[]).map(function(task){var related=submissions.filter(function(s){return s.assignment_id===task.id;}),sent=related.filter(function(s){return !!s.submitted_at;}),reviewed=related.filter(function(s){return s.status==='approved';});return {task:task,related:related,sent:sent,reviewed:reviewed};});
+      modal('<div class="ftg-assignment-monitor"><span>MONITORING TERPUSAT</span><h3>Tugas & Pengumpulan Program</h3><p>Fasil melihat status lintas mentor tanpa membuka dashboard mentee.</p><div class="ftg-assignment-monitor-list">'+rows.map(function(item){return '<article><div><b>'+esc(item.task.title)+'</b><small>'+(item.task.deadline?'Deadline '+new Date(item.task.deadline).toLocaleString('id-ID'):'Tanpa deadline')+' · '+esc(item.task.status)+'</small></div><div><span><b>'+item.sent.length+'</b> terkumpul</span><span><b>'+item.reviewed.length+'</b> dinilai</span><button type="button" data-monitor-task="'+esc(item.task.id)+'">Lihat detail</button></div></article><div data-monitor-detail="'+esc(item.task.id)+'" hidden>'+item.related.map(function(sub){var p=profiles[sub.mentee_id]||{};return '<div><span><b>'+esc(p.full_name||'Mentee')+'</b><small>'+esc(p.email||'')+'</small></span><em>'+esc(sub.status)+'</em><time>'+(sub.updated_at?new Date(sub.updated_at).toLocaleString('id-ID'):'—')+'</time></div>';}).join('')+'</div>';}).join('')+'</div></div>',function(box){box.style.maxWidth='850px';$all('[data-monitor-task]',box).forEach(function(button){button.addEventListener('click',function(){var detail=$('[data-monitor-detail="'+button.getAttribute('data-monitor-task')+'"]',box);if(detail){detail.hidden=!detail.hidden;button.textContent=detail.hidden?'Lihat detail':'Tutup detail';}});});});
+    }).catch(function(error){toast(error.message,'⚠️');});
+  }
   function mountAdminOperations() {
     if (PAGE.indexOf('admin-') !== 0) return;
     var host = $('main > div.px-8'); if (!host || document.getElementById('admin-operations')) return;
@@ -4434,6 +4532,21 @@
     recordingButton.id='adminRecordings';recordingButton.innerHTML='<i class="fa-solid fa-circle-play"></i><b>LMS & Rekaman</b>';
     if(suiteGrid)suiteGrid.insertBefore(recordingButton,suiteGrid.children[1]||null);
     recordingButton.addEventListener('click',openRecordingManager);
+    var learningButton=document.createElement('button');learningButton.id='adminLearning';learningButton.innerHTML='<i class="fa-solid fa-brain"></i><b>Kurikulum & Canvas</b>';
+    if(suiteGrid)suiteGrid.insertBefore(learningButton,suiteGrid.children[1]||null);learningButton.addEventListener('click',openLearningManager);
+    var assignmentMonitor=document.createElement('button');assignmentMonitor.id='adminAssignmentMonitor';assignmentMonitor.innerHTML='<i class="fa-solid fa-list-check"></i><b>Tugas & Pengumpulan</b>';
+    if(suiteGrid)suiteGrid.insertBefore(assignmentMonitor,suiteGrid.children[2]||null);assignmentMonitor.addEventListener('click',openAssignmentMonitor);
+  }
+  function mountMentorLearningMonitor() {
+    if (!/^(mentor-dashboard|mentor-mentee)/.test(PAGE) || myRole() !== 'mentor') return;
+    var host = document.getElementById('mentor-operations');
+    if (!host || document.getElementById('mentorLearningMonitor')) return;
+    var head = host.firstElementChild;
+    if (!head) return;
+    var actions = head.lastElementChild;
+    if (!actions) return;
+    var button = document.createElement('button'); button.id='mentorLearningMonitor'; button.type='button'; button.className='ftg-mentor-learning-button'; button.innerHTML='<i class="fa-solid fa-brain"></i> Progres Canvas';
+    actions.insertBefore(button, actions.firstChild); button.addEventListener('click', openLearningManager);
   }
 
   function disciplineStatus(status) {
@@ -4617,7 +4730,7 @@
     try { mountMentorAssignmentManager(); } catch (e) { console.warn(e); }
     try { mountMenteeAssignments(); } catch (e) { console.warn(e); }
     try { mountMenteeWorkCenter(); } catch (e) { console.warn(e); }
-    try { mountMentorOperations(); } catch (e) { console.warn(e); }
+    try { mountMentorOperations(); mountMentorLearningMonitor(); } catch (e) { console.warn(e); }
     try { mountMentorGooglePanel(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
     try { mountMenteeProgramSuite(); } catch (e) { console.warn(e); }
