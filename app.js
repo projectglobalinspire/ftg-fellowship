@@ -4247,7 +4247,7 @@
     function render(rows) {
       if (!rows.length) { body.className='ftg-lms-empty'; body.innerHTML='<i class="fa-solid fa-video-slash"></i><b>Belum ada rekaman</b><span>Fasil akan menambahkan video setelah sesi selesai.</span>'; return; }
       body.className='ftg-lms-layout';
-      body.innerHTML='<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe id="ftgLmsIframe" title="Pemutar rekaman LMS" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><span id="ftgLmsSession"></span><h3 id="ftgLmsTitle"></h3><p id="ftgLmsDescription"></p><small id="ftgLmsDate"></small></div></div><div class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><b>Daftar Rekaman</b><span>'+rows.length+' video</span></div><div id="ftgLmsItems"></div></div>';
+      body.innerHTML='<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe id="ftgLmsIframe" title="Pemutar rekaman LMS" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><span id="ftgLmsSession"></span><h3 id="ftgLmsTitle"></h3><p id="ftgLmsDescription"></p><small id="ftgLmsDate"></small></div></div><div class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><b>Daftar Rekaman</b><span>'+rows.length+' video</span></div><div id="ftgLmsItems"></div></div>';
       var list=byId('ftgLmsItems'), frame=byId('ftgLmsIframe');
       function select(row, button) {
         frame.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(row.youtube_id)+'?rel=0&modestbranding=1';
@@ -4258,7 +4258,14 @@
       rows.forEach(function(row,index){var b=document.createElement('button');b.type='button';b.className='ftg-lms-item';b.innerHTML='<span class="ftg-lms-thumb"><img src="https://i.ytimg.com/vi/'+encodeURIComponent(row.youtube_id)+'/mqdefault.jpg" alt="" loading="lazy"><i class="fa-solid fa-play"></i></span><span><b>'+esc(row.title)+'</b><small>'+esc(row.location||'Rekaman Program')+' · '+esc(recordingDate(row.starts_at))+'</small></span>';b.addEventListener('click',function(){select(row,b);});list.appendChild(b);if(index===0)select(row,b);});
     }
     function load(){body.className='ftg-lms-loading';body.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan video pembelajaran…</span>';apiRequest('/api/operations?resource=recordings').then(function(data){render(data.recordings||[]);}).catch(function(e){showError(e.message);});}
-    load();
+    function fastLoad(){
+      var fallback=[{id:'featured-mentoring-1',title:'Mentoring Sesi 1 FBF',youtube_id:'fmu6RKmoXAc',location:'Mentoring',starts_at:'2026-08-13T19:00:00+08:00',description:'Rekaman Mentoring Sesi 1 Future Builders Fellowship. Tonton ulang pembahasan sesi dan catat poin penting untuk tindak lanjut.'}],cached=null;
+      try{cached=JSON.parse(localStorage.getItem('ftgRecordingsCache')||'null');}catch(_){cached=null;}
+      render(Array.isArray(cached)&&cached.length?cached:fallback);
+      var controller=typeof AbortController!=='undefined'?new AbortController():null,timer=controller?setTimeout(function(){controller.abort();},8000):null;
+      apiRequest('/api/operations?resource=recordings',controller?{signal:controller.signal}:{}).then(function(data){var rows=data.recordings||[];if(timer)clearTimeout(timer);try{localStorage.setItem('ftgRecordingsCache',JSON.stringify(rows));}catch(_){}render(rows);}).catch(function(){if(timer)clearTimeout(timer);});
+    }
+    fastLoad();
   }
   function assignmentHistoryHtml(sub) {
     var versions = sub.versions || [], reviews = sub.reviewHistory || [];

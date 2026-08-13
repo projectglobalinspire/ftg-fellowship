@@ -324,6 +324,10 @@ test('LMS recordings are playable for mentees and mentors but managed only by Fa
   const vercel = await text('vercel.json');
   assert.match(app, /function mountRecordingLibrary/);
   assert.match(app, /youtube-nocookie\.com\/embed/);
+  assert.match(app, /function fastLoad/);
+  assert.match(app, /featured-mentoring-1/);
+  assert.match(app, /loading="eager"/);
+  assert.match(app, /AbortController/);
   assert.match(app, /LMS & Rekaman/);
   assert.match(app, /function openRecordingManager/);
   assert.match(app, /recording_save/);
