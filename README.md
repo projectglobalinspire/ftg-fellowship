@@ -97,7 +97,7 @@ NOTIFICATION_REPLY_TO=hope@faithtogrow.org
 APP_URL=https://ftg-fellowship.vercel.app
 ```
 
-Gunakan `smtp.zoho.com` jika Server Configuration pada akun Zoho menunjukkan akun organisasi gratis; gunakan nilai yang ditampilkan Zoho sebagai sumber kebenaran. App password dibuat dari Zoho Accounts → Security → App Passwords saat MFA aktif. Endpoint admin `/api/email-test` menguji pengiriman ke email Fasil yang sedang login. Semua percobaan tetap dicatat pada `email_outbox`.
+Gunakan `smtp.zoho.com` jika Server Configuration pada akun Zoho menunjukkan akun organisasi gratis; gunakan nilai yang ditampilkan Zoho sebagai sumber kebenaran. App password dibuat dari Zoho Accounts → Security → App Passwords saat MFA aktif. Fasil dapat mengirim `{ "action": "email_test" }` ke endpoint `/api/notifications` untuk menguji pengiriman ke email akun Fasil yang sedang login. Semua percobaan tetap dicatat pada `email_outbox`.
 
 ## Teknologi
 

@@ -304,7 +304,7 @@ test('mentor assignments open in the same rich inline mentee workspace', async (
 
 test('real notifications, Zoho email, calendar, reports and health monitoring have server endpoints', async () => {
   const email = await text('api/_email.js');
-  const emailTest = await text('api/email-test.js');
+  const notifications = await text('api/notifications.js');
   const reminders = await text('api/cron-reminders.js');
   const calendar = await text('api/calendar.js');
   const reports = await text('api/reports.js');
@@ -313,8 +313,8 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   assert.match(email, /ZOHO_SMTP_APP_PASSWORD/);
   assert.match(email, /disableFileAccess: true/);
   assert.match(email, /minVersion: 'TLSv1\.2'/);
-  assert.match(emailTest, /requireRole\(req, res, \['admin'\]\)/);
-  assert.match(emailTest, /Tes notifikasi email berhasil/);
+  assert.match(notifications, /auth\.profile\.role !== 'admin'/);
+  assert.match(notifications, /Tes notifikasi email berhasil/);
   assert.match(reminders, /reminder_days: \[3, 1, 0\]/);
   assert.match(reminders, /Tugas terlambat/);
   assert.match(calendar, /BEGIN:VCALENDAR/);

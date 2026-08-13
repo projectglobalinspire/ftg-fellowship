@@ -6,6 +6,16 @@ module.exports = async function handler(req, res) {
   try {
     const auth = await requireRole(req, res, ['mentor', 'admin']);
     if (!auth) return;
+    if (req.body && req.body.action === 'email_test') {
+      if (auth.profile.role !== 'admin') return send(res, 403, { error:'Hanya Fasil yang dapat menguji provider email' });
+      const result = await deliverEmail({ id:auth.profile.id, email:auth.profile.email || auth.user.email }, {
+        title:'Tes notifikasi email berhasil',
+        body:'Zoho Mail telah tersambung ke FTG Fellowship. Email tugas, pengingat, feedback, dan revisi siap dikirim dari server.',
+        href:'admin-dashboard.html'
+      }, null);
+      if (result.status !== 'sent') return send(res, 502, { ok:false, provider:result.provider, error:result.reason || 'Pengiriman gagal', outbox_id:result.outbox_id });
+      return send(res, 200, { ok:true, provider:result.provider, sent_to:auth.profile.email || auth.user.email, provider_id:result.provider_id, outbox_id:result.outbox_id });
+    }
     const items = Array.isArray(req.body && req.body.notifications) ? req.body.notifications : [req.body || {}];
     if (!items.length || items.length > 100) return send(res, 400, { error: 'Jumlah notifikasi tidak valid' });
     const targets = [...new Set(items.map(item => item.user_id).filter(Boolean))];
