@@ -311,10 +311,16 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   const app = await text('app.js');
   assert.match(email, /smtppro\.zoho\.com/);
   assert.match(email, /ZOHO_SMTP_APP_PASSWORD/);
+  assert.match(email, /EMAIL_STYLES/);
+  assert.match(email, /deadline_3/);
+  assert.match(email, /PERMINTAAN REVISI/);
+  assert.match(email, /SERTIFIKAT TERSEDIA/);
+  assert.match(email, /role="presentation"/);
   assert.match(email, /disableFileAccess: true/);
   assert.match(email, /minVersion: 'TLSv1\.2'/);
   assert.match(notifications, /auth\.profile\.role !== 'admin'/);
   assert.match(notifications, /requestedRecipient/);
+  assert.match(notifications, /test_type/);
   assert.match(notifications, /Tes notifikasi email berhasil/);
   assert.match(reminders, /reminder_days: \[3, 1, 0\]/);
   assert.match(reminders, /Tugas terlambat/);
