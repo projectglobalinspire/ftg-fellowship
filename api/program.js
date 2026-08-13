@@ -5,6 +5,7 @@ const { deliverEmail } = require('./_email');
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
 function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
 const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
+function mentorApplicationComplete(application) { return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60); }
 
 function safeUrl(value) {
   const input = clean(value, 500);
@@ -74,11 +75,25 @@ async function completeGoogleProfile(req, res) {
   return send(res, 200, { profile: updated && updated[0], pending_review: true, email_delivery:delivery.status });
 }
 
+async function prepareIncompleteMentor(req, res) {
+  const user = await currentUser(req);
+  if (!user) return send(res, 401, { error:'Sesi mentor tidak valid atau berakhir' });
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`);
+  const profile = rows && rows[0];
+  if (!profile || profile.role !== 'mentor') return send(res, 403, { error:'Akun ini bukan mentor' });
+  if (mentorApplicationComplete(user.user_metadata && user.user_metadata.mentor_application)) return send(res, 200, { complete:true });
+  await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ status:'invited', onboarding_completed:false, path:'Senior Mentor', updated_at:new Date().toISOString() }) });
+  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { requested_role:'mentor', role:'mentee', profile_completed:false, registration_decision:'pending' }) }) });
+  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'registration.mentor_profile_required', entity_type:'profile', entity_id:user.id, detail:{ previous_status:profile.status } }) }).catch(() => null);
+  return send(res, 200, { complete:false, redirected:true });
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
     if (req.body && req.body.action === 'google_login') return googleLogin(req, res);
     if (req.body && req.body.action === 'complete_google_profile') return completeGoogleProfile(req, res);
+    if (req.body && req.body.action === 'prepare_incomplete_mentor') return prepareIncompleteMentor(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};

@@ -1134,6 +1134,19 @@
       }
     }
 
+    if (ses.role === 'mentor') {
+      var mentorFirstName = displayName.trim().split(/\s+/)[0] || 'Mentor';
+      var mentorHeader = $('main header h1');
+      if (mentorHeader && (/Halo,/.test(mentorHeader.textContent) || /Pak Faris|Bapak Faris/.test(mentorHeader.textContent))) mentorHeader.textContent = 'Halo, ' + mentorFirstName + '! 👋';
+      $all('main header div.rounded-full').forEach(function (avatar) {
+        if (/^[A-Z]{1,3}$/.test(avatar.textContent.trim())) { avatar.textContent = displayInitials; avatar.style.background = color; }
+      });
+      $all('aside p, main header p').forEach(function (node) {
+        if (/^(Pak|Bapak) Faris$/.test(node.textContent.trim())) node.textContent = displayName;
+      });
+      document.title = 'Dashboard Mentor · ' + displayName + ' · FTG Fellowship';
+      return;
+    }
     if (ses.role !== 'mentee') return;
     // sapaan header + avatar header (halaman mentee)
     var h1 = $('main header h1');
@@ -1477,6 +1490,11 @@
     }).then(function (result) {
       if (result.error || !result.data || result.data.status !== 'active') throw new Error('Profil tidak aktif');
       AUTH.profile = result.data;
+      var mentorApplication = AUTH.user && AUTH.user.user_metadata && AUTH.user.user_metadata.mentor_application;
+      var mentorComplete = mentorApplication && mentorApplication.commitment_confirmed && mentorApplication.phone && mentorApplication.job_title && mentorApplication.company_or_institution && mentorApplication.years_of_experience && Array.isArray(mentorApplication.expertise_tags) && mentorApplication.expertise_tags.length && String(mentorApplication.bio || '').length >= 40 && mentorApplication.availability_hours && mentorApplication.mentoring_format && String(mentorApplication.motivation || '').length >= 60;
+      if (AUTH.profile.role === 'mentor' && !mentorComplete) {
+        return apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'prepare_incomplete_mentor' }) }).then(function () { location.replace('profile-setup.html'); return false; });
+      }
       var expectedRole = PAGE.indexOf('admin-') === 0 ? 'admin' : (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) ? 'mentor' : (/^(mentee-dashboard|design-thinking|assignment-submission|progress-tracker|mentor-feedback|jurnal)/.test(PAGE) ? 'mentee' : ''));
       if (PAGE.indexOf('workshop-library') === 0 && !/^(mentee|mentor)$/.test(AUTH.profile.role)) expectedRole = 'mentee';
       if (expectedRole && AUTH.profile.role !== expectedRole) {
@@ -1484,9 +1502,12 @@
         location.replace(safeHome); return false;
       }
       var local = mySession();
-      if (!local || local.id !== AUTH.user.id || local.role !== AUTH.profile.role) {
+      if (!local || local.id !== AUTH.user.id || local.role !== AUTH.profile.role || local.name !== AUTH.profile.full_name || local.initials !== AUTH.profile.initials || local.path !== AUTH.profile.path) {
         localStorage.setItem('ftgSession', JSON.stringify({ id: AUTH.user.id, email: AUTH.user.email, name: AUTH.profile.full_name, role: AUTH.profile.role, initials: AUTH.profile.initials, path: AUTH.profile.path, menteeId: AUTH.profile.mentee_number, cohortId: AUTH.profile.cohort_id, mentorId: AUTH.profile.mentor_id, at: new Date().toISOString() }));
       }
+      // Profil server adalah sumber kebenaran. Personalisasi ulang agar nama
+      // mentor lama dari cache tidak tertinggal di header atau sidebar.
+      personalize();
       return loadStructuredData().then(function () { return true; });
     }).catch(function (error) {
       console.warn('FTG auth:', error.message); secureLogout(); return false;
@@ -4433,7 +4454,7 @@
   }
   function secureAccountManage(profile, done) {
     if (!profile) return;
-    modal('<h3 style="font-weight:800;color:#1e293b">Kelola ' + esc(profile.full_name) + '</h3><p style="font-size:10px;color:#64748b;margin:4px 0 10px">' + esc(profile.email) + '</p><div style="background:#f8fafc;border-radius:9px;padding:8px;margin-bottom:9px;font-size:10px;color:#475569">Login: <b>' + esc(profile.login_provider === 'google' ? 'Google' : 'Email & password') + '</b>' + (profile.status === 'invited' ? ' · Meminta akses sebagai <b>' + esc(profile.requested_role || 'mentee') + '</b>' : '') + '</div><label style="font-size:10px;font-weight:800">Role</label><select id="smRole" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Panitia</option></select><label style="font-size:10px;font-weight:800">Status</label><select id="smStatus" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="invited">Menunggu Verifikasi</option><option value="active">Aktif</option><option value="suspended">Terkunci</option><option value="dropped">Gugur</option><option value="graduated">Lulus</option></select><label style="font-size:10px;font-weight:800">Reset password sementara</label><input id="smPassword" type="password" placeholder="Kosongkan bila tidak diubah" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;margin-top:4px"><button id="smSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Perubahan</button>', function(box,close){$('#smRole',box).value=profile.status==='invited'?(profile.requested_role||'mentee'):profile.role;$('#smStatus',box).value=profile.status;$('#smSave',box).addEventListener('click',function(){var payload={id:profile.id,role:$('#smRole',box).value,status:$('#smStatus',box).value};var pw=$('#smPassword',box).value;if(pw)payload.password=pw;apiRequest('/api/admin-users',{method:'PATCH',body:JSON.stringify(payload)}).then(function(){close();toast('Akun diperbarui','✅');done();}).catch(function(e){toast(e.message,'⚠️');});});});
+    modal('<h3 style="font-weight:800;color:#1e293b">Kelola ' + esc(profile.full_name) + '</h3><p style="font-size:10px;color:#64748b;margin:4px 0 10px">' + esc(profile.email) + '</p><div style="background:#f8fafc;border-radius:9px;padding:8px;margin-bottom:9px;font-size:10px;color:#475569">Login: <b>' + esc(profile.login_provider === 'google' ? 'Google' : 'Email & password') + '</b>' + (profile.status === 'invited' ? ' · Meminta akses sebagai <b>' + esc(profile.requested_role || 'mentee') + '</b>' : '') + '</div><label style="font-size:10px;font-weight:800">Role</label><select id="smRole" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Fasil</option></select><div id="smMentorNotice" hidden style="background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:9px;padding:9px;margin:0 0 9px;font-size:10px;line-height:1.5"><b>Profil Mentor wajib lengkap.</b><br>Akun akan berstatus Menunggu Verifikasi sampai formulir profesional diisi dan disetujui Fasil.</div><label style="font-size:10px;font-weight:800">Status</label><select id="smStatus" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;background:#fff;margin:4px 0 8px"><option value="invited">Menunggu Verifikasi</option><option value="active">Aktif</option><option value="suspended">Terkunci</option><option value="dropped">Gugur</option><option value="graduated">Lulus</option></select><label style="font-size:10px;font-weight:800">Reset password sementara</label><input id="smPassword" type="password" placeholder="Kosongkan bila tidak diubah" style="width:100%;border:1px solid #cbd5e1;border-radius:9px;padding:8px;margin-top:4px"><button id="smSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Simpan Perubahan</button>', function(box,close){var role=$('#smRole',box),status=$('#smStatus',box),notice=$('#smMentorNotice',box);role.value=profile.status==='invited'?(profile.requested_role||'mentee'):profile.role;status.value=profile.status;function syncMentorRequirement(){var incomplete=role.value==='mentor'&&!profile.mentor_application;notice.hidden=!incomplete;$all('option',status).forEach(function(option){option.disabled=incomplete&&option.value==='active';});if(incomplete)status.value='invited';}role.addEventListener('change',syncMentorRequirement);syncMentorRequirement();$('#smSave',box).addEventListener('click',function(){var payload={id:profile.id,role:role.value,status:status.value};var pw=$('#smPassword',box).value;if(pw)payload.password=pw;apiRequest('/api/admin-users',{method:'PATCH',body:JSON.stringify(payload)}).then(function(data){close();toast(data.mentor_profile_required?'Role Mentor disimpan · profil wajib dilengkapi':'Akun diperbarui','✅');done();}).catch(function(e){toast(e.message,'⚠️');});});});
   }
   function openProgramSettings() {
     var p = G.programSettings;

@@ -226,6 +226,24 @@ test('mentor applicants complete professional screening before Fasil approval', 
   assert.match(app, /Setujui sebagai Mentor/);
 });
 
+test('mentor identity follows the authenticated profile and incomplete mentors are gated', async () => {
+  const app = await text('app.js');
+  const adminApi = await text('api/admin-users.js');
+  const programApi = await text('api/program.js');
+  assert.match(app, /mentorFirstName = displayName/);
+  assert.match(app, /mentorHeader\.textContent = 'Halo, ' \+ mentorFirstName/);
+  assert.match(app, /local\.name !== AUTH\.profile\.full_name/);
+  assert.match(app, /Profil server adalah sumber kebenaran/);
+  assert.match(app, /prepare_incomplete_mentor/);
+  assert.match(adminApi, /mentorProfileRequired/);
+  assert.match(adminApi, /profilePatch\.status = 'invited'/);
+  assert.match(adminApi, /Lengkapi profil Mentor/);
+  assert.match(programApi, /prepareIncompleteMentor/);
+  for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
+    assert.match(await text(file), /app\.js\?v=48/);
+  }
+});
+
 test('Fasil approval labels and one-week mentor deadlines are complete', async () => {
   const app = await text('app.js');
   const login = await text('login.html');
