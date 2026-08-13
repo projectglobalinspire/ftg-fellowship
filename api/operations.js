@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { send, adminFetch, requireRole, method } = require('./_lib');
 const { deliverEmail } = require('./_email');
+const learningHandler = require('./_learning');
 
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex');
 const safe = (value, max = 500) => String(value || '').trim().slice(0, max);
@@ -46,6 +47,10 @@ async function eligibility(menteeId) {
 }
 
 module.exports = async function handler(req, res) {
+  if ((req.method === 'GET' && String(req.query && req.query.resource || '') === 'learning') ||
+      (req.method === 'POST' && ['config_save','progress_save'].includes(req.body && req.body.action))) {
+    return learningHandler(req, res);
+  }
   if (!method(req, res, ['GET','POST'])) return;
   try {
     const auth = await requireRole(req, res, ['mentee','mentor','admin']);
