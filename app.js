@@ -4238,6 +4238,10 @@
   function mountRecordingLibrary() {
     var host = $('main > div.px-8');
     if (!host || byId('ftg-recording-library')) return;
+    var pageTitle=$('main header h1'),pageSubtitle=$('main header p');
+    if(pageTitle)pageTitle.textContent='LMS & Rekaman Program';
+    if(pageSubtitle)pageSubtitle.textContent='Pusat rekaman mentoring, workshop, dan materi pembelajaran fellowship.';
+    $all('aside nav a').forEach(function(link){if(link.textContent.indexOf('Workshop Library')>-1)link.childNodes[link.childNodes.length-1].textContent=' LMS & Rekaman';});
     var section = document.createElement('section');
     section.id = 'ftg-recording-library'; section.className = 'ftg-lms-shell';
     section.innerHTML = '<div class="ftg-lms-heading"><div><span class="ftg-lms-kicker"><i class="fa-solid fa-circle-play"></i> LMS REKAMAN</span><h2>Belajar ulang kapan saja</h2><p>Rekaman mentoring dan workshop resmi dari Fasil tersedia untuk mentee dan mentor.</p></div><span class="ftg-lms-role">' + (myRole() === 'mentor' ? 'Akses Mentor' : 'Akses Mentee') + '</span></div><div id="ftgLmsBody" class="ftg-lms-loading"><i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan video pembelajaran…</span></div>';
@@ -4247,7 +4251,7 @@
     function render(rows) {
       if (!rows.length) { body.className='ftg-lms-empty'; body.innerHTML='<i class="fa-solid fa-video-slash"></i><b>Belum ada rekaman</b><span>Fasil akan menambahkan video setelah sesi selesai.</span>'; return; }
       body.className='ftg-lms-layout';
-      body.innerHTML='<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe id="ftgLmsIframe" title="Pemutar rekaman LMS" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><span id="ftgLmsSession"></span><h3 id="ftgLmsTitle"></h3><p id="ftgLmsDescription"></p><small id="ftgLmsDate"></small></div></div><div class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><b>Daftar Rekaman</b><span>'+rows.length+' video</span></div><div id="ftgLmsItems"></div></div>';
+      body.innerHTML='<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe id="ftgLmsIframe" title="Pemutar rekaman LMS" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><div class="ftg-lms-meta"><span id="ftgLmsSession"></span><small id="ftgLmsDate"></small></div><h3 id="ftgLmsTitle"></h3><p id="ftgLmsDescription"></p></div></div><aside class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><div><small>VIDEO PEMBELAJARAN</small><b>Daftar Rekaman</b></div><span>'+rows.length+' video</span></div><label class="ftg-lms-search"><i class="fa-solid fa-magnifying-glass"></i><input id="ftgLmsSearch" type="search" placeholder="Cari judul atau sesi…" aria-label="Cari rekaman"></label><div id="ftgLmsItems"></div></aside>';
       var list=byId('ftgLmsItems'), frame=byId('ftgLmsIframe');
       function select(row, button) {
         frame.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(row.youtube_id)+'?rel=0&modestbranding=1';
@@ -4260,10 +4264,11 @@
     function load(){body.className='ftg-lms-loading';body.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan video pembelajaran…</span>';apiRequest('/api/operations?resource=recordings').then(function(data){render(data.recordings||[]);}).catch(function(e){showError(e.message);});}
     function fastLoad(){
       var fallback=[{id:'featured-mentoring-1',title:'Mentoring Sesi 1 FBF',youtube_id:'fmu6RKmoXAc',location:'Mentoring',starts_at:'2026-08-13T19:00:00+08:00',description:'Rekaman Mentoring Sesi 1 Future Builders Fellowship. Tonton ulang pembahasan sesi dan catat poin penting untuk tindak lanjut.'}],cached=null;
+      function bindSearch(){var search=byId('ftgLmsSearch'),list=byId('ftgLmsItems');if(!search||!list)return;search.addEventListener('input',function(){var q=search.value.trim().toLowerCase();$all('.ftg-lms-item',list).forEach(function(item){item.style.display=!q||item.textContent.toLowerCase().indexOf(q)>-1?'':'none';});});}
       try{cached=JSON.parse(localStorage.getItem('ftgRecordingsCache')||'null');}catch(_){cached=null;}
-      render(Array.isArray(cached)&&cached.length?cached:fallback);
+      render(Array.isArray(cached)&&cached.length?cached:fallback);bindSearch();
       var controller=typeof AbortController!=='undefined'?new AbortController():null,timer=controller?setTimeout(function(){controller.abort();},8000):null;
-      apiRequest('/api/operations?resource=recordings',controller?{signal:controller.signal}:{}).then(function(data){var rows=data.recordings||[];if(timer)clearTimeout(timer);try{localStorage.setItem('ftgRecordingsCache',JSON.stringify(rows));}catch(_){}render(rows);}).catch(function(){if(timer)clearTimeout(timer);});
+      apiRequest('/api/operations?resource=recordings',controller?{signal:controller.signal}:{}).then(function(data){var rows=data.recordings||[];if(timer)clearTimeout(timer);try{localStorage.setItem('ftgRecordingsCache',JSON.stringify(rows));}catch(_){}render(rows);bindSearch();}).catch(function(){if(timer)clearTimeout(timer);});
     }
     fastLoad();
   }
