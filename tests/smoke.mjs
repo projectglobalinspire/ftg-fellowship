@@ -314,6 +314,7 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   assert.match(email, /disableFileAccess: true/);
   assert.match(email, /minVersion: 'TLSv1\.2'/);
   assert.match(notifications, /auth\.profile\.role !== 'admin'/);
+  assert.match(notifications, /requestedRecipient/);
   assert.match(notifications, /Tes notifikasi email berhasil/);
   assert.match(reminders, /reminder_days: \[3, 1, 0\]/);
   assert.match(reminders, /Tugas terlambat/);
