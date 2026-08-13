@@ -11,9 +11,9 @@
   <script src="ftg-config.js?v=30"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script defer src="app.js?v=43"></script>
+  <script defer src="app.js?v=44"></script>
   <meta name="theme-color" content="#2c3e50">
-  <link rel="stylesheet" href="responsive.css?v=43">
+  <link rel="stylesheet" href="responsive.css?v=44">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="manifest" href="manifest.json">
@@ -321,13 +321,13 @@
   </main>
   <script>
     (function () {
-      var repairKey = 'ftg-lms-cache-repair-v43';
+      var repairKey = 'ftg-lms-cache-repair-v44';
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller && !sessionStorage.getItem(repairKey)) {
         sessionStorage.setItem(repairKey, '1');
         Promise.all([
           navigator.serviceWorker.getRegistrations().then(function (items) { return Promise.all(items.map(function (item) { return item.unregister(); })); }),
           'caches' in window ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (key) { return caches.delete(key); })); }) : Promise.resolve()
-        ]).then(function () { location.replace('workshop-library.html?fresh=43'); });
+        ]).then(function () { location.replace('workshop-library.html?fresh=44'); });
       }
     })();
   </script>

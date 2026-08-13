@@ -4271,6 +4271,7 @@
       apiRequest('/api/operations?resource=recordings',controller?{signal:controller.signal}:{}).then(function(data){var rows=data.recordings||[];if(timer)clearTimeout(timer);try{localStorage.setItem('ftgRecordingsCache',JSON.stringify(rows));}catch(_){}render(rows);bindSearch();}).catch(function(){if(timer)clearTimeout(timer);});
     }
     fastLoad();
+    [50,500,1500,3000].forEach(function(delay){setTimeout(function(){if(body.classList.contains('ftg-lms-loading'))fastLoad();},delay);});
   }
   function assignmentHistoryHtml(sub) {
     var versions = sub.versions || [], reviews = sub.reviewHistory || [];
