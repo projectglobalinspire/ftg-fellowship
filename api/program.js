@@ -88,12 +88,27 @@ async function prepareIncompleteMentor(req, res) {
   return send(res, 200, { complete:false, redirected:true });
 }
 
+async function profileContext(req, res) {
+  const user = await currentUser(req);
+  if (!user) return send(res, 401, { error:'Sesi pengguna tidak valid atau berakhir' });
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status`);
+  const profile = rows && rows[0];
+  if (!profile) return send(res, 404, { error:'Profil pengguna tidak ditemukan' });
+  let mentor = null;
+  if (profile.mentor_id) {
+    const mentors = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(profile.mentor_id)}&select=id,full_name,initials,path,status`);
+    mentor = mentors && mentors[0] || null;
+  }
+  return send(res, 200, { profile, mentor });
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
     if (req.body && req.body.action === 'google_login') return googleLogin(req, res);
     if (req.body && req.body.action === 'complete_google_profile') return completeGoogleProfile(req, res);
     if (req.body && req.body.action === 'prepare_incomplete_mentor') return prepareIncompleteMentor(req, res);
+    if (req.body && req.body.action === 'profile_context') return profileContext(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};

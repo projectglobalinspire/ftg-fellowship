@@ -240,7 +240,27 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=48/);
+    assert.match(await text(file), /app\.js\?v=49/);
+  }
+});
+
+test('all authenticated identities and mentor pairings come from profile data', async () => {
+  const app = await text('app.js');
+  const adminApi = await text('api/admin-users.js');
+  const programApi = await text('api/program.js');
+  assert.match(app, /return Number\(s\.menteeId\) \|\| menteeIdByEmail/);
+  assert.match(app, /return 0;/);
+  assert.match(app, /MENTEES\[number\] = Object\.assign/);
+  assert.match(app, /mentorNameForMentee/);
+  assert.match(app, /value\.replace\(\/Arya Ramadhan\/g, displayName\)/);
+  assert.match(app, /reviewer \? reviewer\.full_name : 'Mentor'/);
+  assert.match(adminApi, /async function nextMenteeNumber/);
+  assert.match(adminApi, /patch\.mentee_number = await nextMenteeNumber/);
+  assert.match(programApi, /async function profileContext/);
+  assert.match(programApi, /action === 'profile_context'/);
+  assert.match(app, /action:'profile_context'/);
+  for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
+    assert.match(await text(file), /app\.js\?v=49/);
   }
 });
 

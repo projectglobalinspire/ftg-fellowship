@@ -80,7 +80,7 @@
   };
   function menteeIdByEmail(email) {
     for (var k in MENTEES) if (MENTEES[k].email === email) return +k;
-    return 1;
+    return 0;
   }
 
   function lightSeed(id) {
@@ -121,8 +121,18 @@
   function myRole() { var s = mySession(); return (s && s.role) || ''; }
   function myMenteeId() {
     var s = mySession();
-    if (s && s.role === 'mentee') return s.menteeId || menteeIdByEmail(s.email);
+    if (s && s.role === 'mentee') return Number(s.menteeId) || menteeIdByEmail(s.email);
     return 1;
+  }
+  function mentorNameForMentee(menteeNumber) {
+    var mentee = AUTH.profilesByNumber[Number(menteeNumber)] || {};
+    var mentor = mentee.mentor_id && AUTH.profilesById[mentee.mentor_id];
+    return mentor && mentor.full_name ? mentor.full_name : '';
+  }
+  function currentMentorName() {
+    var ses = mySession() || {};
+    if (ses.role === 'mentor') return ses.name || 'Mentor';
+    return mentorNameForMentee(myMenteeId()) || 'Mentor kamu';
   }
   function myTag() {
     var r = myRole();
@@ -353,7 +363,7 @@
     var today = new Date();
     var defDate = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10);
     var opts = '';
-    for (var i = 1; i <= 5; i++) opts += '<option value="' + i + '">' + MENTEES[i].name + ' (' + MENTEES[i].path + ')</option>';
+    menteeIds().forEach(function (i) { opts += '<option value="' + i + '">' + MENTEES[i].name + ' (' + MENTEES[i].path + ')</option>'; });
     modal(
       '<h3 style="font-weight:800;color:#2c3e50;font-size:16px;margin-bottom:2px">🗓 Jadwalkan Sesi 1-on-1</h3>' +
       '<p style="font-size:12px;color:#64748b;margin-bottom:14px">Undangan otomatis terkirim ke mentee terpilih</p>' +
@@ -372,13 +382,14 @@
           var target = +($('#ssMentee', box).value || 1);
           if (!dt || !tm) { toast('Pilih tanggal & jam dulu ya', '✏️'); return; }
           var st = mstate(target);
-          st.session1on1 = { date: dt, time: tm, note: $('#ssNote', box).value.trim(), by: 'Pak Faris', at: new Date().toISOString() };
+          var mentorActor = currentMentorName();
+          st.session1on1 = { date: dt, time: tm, note: $('#ssNote', box).value.trim(), by: mentorActor, at: new Date().toISOString() };
           st.sessions = st.sessions || [];
-          var scheduledSession = { id: 'session-' + Date.now(), date: dt, time: tm, note: $('#ssNote', box).value.trim(), status: 'scheduled', by: 'Pak Faris', at: new Date().toISOString() };
+          var scheduledSession = { id: 'session-' + Date.now(), date: dt, time: tm, note: $('#ssNote', box).value.trim(), status: 'scheduled', by: mentorActor, at: new Date().toISOString() };
           st.sessions.unshift(scheduledSession);
           structuredSessionSchedule(target, scheduledSession);
           var label = new Date(dt + 'T' + tm).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' }) + ' ' + tm + ' WIB';
-          pushEventTo(target, '🗓', 'Pak Faris menjadwalkan sesi 1-on-1: ' + label, 'mentee');
+          pushEventTo(target, '🗓', mentorActor + ' menjadwalkan sesi 1-on-1: ' + label, 'mentee');
           addAudit('session.schedule', label, target);
           saveState(); close();
           toast('Undangan terkirim ke ' + MENTEES[target].name.split(' ')[0] + ' — ' + label, '🗓');
@@ -1155,6 +1166,31 @@
     $all('main header div.rounded-full, aside div.rounded-full').forEach(function (d) {
       if (d.textContent.trim() === 'AR') { d.textContent = ses.initials; d.style.background = color; }
     });
+    // Halaman rancangan awal memakai Arya/Pak Faris sebagai placeholder.
+    // Pada akun nyata, semua salinan identitas itu mengikuti profil dan pairing.
+    if (PAGE.indexOf('kpi-leaderboard') !== 0) {
+      var firstName = displayName.trim().split(/\s+/)[0] || displayName;
+      var mentorProfile = (AUTH.profilesByNumber[myMenteeId()] || {}).mentor_id;
+      mentorProfile = mentorProfile && AUTH.profilesById[mentorProfile];
+      var mentorName = mentorProfile && mentorProfile.full_name;
+      $all('main, aside').forEach(function (root) {
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        var nodes = [], node;
+        while ((node = walker.nextNode())) nodes.push(node);
+        nodes.forEach(function (textNode) {
+          if (!textNode.parentElement || /^(SCRIPT|STYLE|TEXTAREA|OPTION)$/.test(textNode.parentElement.tagName)) return;
+          var value = textNode.nodeValue;
+          value = value.replace(/Arya Ramadhan/g, displayName).replace(/\bArya\b/g, firstName);
+          if (mentorName) value = value.replace(/Bapak Faris|Pak Faris/g, mentorName);
+          textNode.nodeValue = value;
+        });
+      });
+      $all('main .rounded-full, aside .rounded-full').forEach(function (avatar) {
+        if (avatar.textContent.trim() === 'AR') { avatar.textContent = displayInitials; avatar.style.background = color; }
+        if (mentorProfile && /^(BF|PF)$/.test(avatar.textContent.trim())) { avatar.textContent = mentorProfile.initials || initialsOf(mentorName); avatar.style.background = '#1a5f4f'; }
+      });
+      document.title = document.title.replace(/Arya Ramadhan|Arya/g, displayName);
+    }
     // leaderboard: baris "(← Kamu)" mengikuti akun yang login
     var meRow = byId('lb-row-arya');
     if (meRow) {
@@ -1502,7 +1538,7 @@
         location.replace(safeHome); return false;
       }
       var local = mySession();
-      if (!local || local.id !== AUTH.user.id || local.role !== AUTH.profile.role || local.name !== AUTH.profile.full_name || local.initials !== AUTH.profile.initials || local.path !== AUTH.profile.path) {
+      if (!local || local.id !== AUTH.user.id || local.role !== AUTH.profile.role || local.name !== AUTH.profile.full_name || local.initials !== AUTH.profile.initials || local.path !== AUTH.profile.path || Number(local.menteeId || 0) !== Number(AUTH.profile.mentee_number || 0) || local.mentorId !== AUTH.profile.mentor_id || local.cohortId !== AUTH.profile.cohort_id) {
         localStorage.setItem('ftgSession', JSON.stringify({ id: AUTH.user.id, email: AUTH.user.email, name: AUTH.profile.full_name, role: AUTH.profile.role, initials: AUTH.profile.initials, path: AUTH.profile.path, menteeId: AUTH.profile.mentee_number, cohortId: AUTH.profile.cohort_id, mentorId: AUTH.profile.mentor_id, at: new Date().toISOString() }));
       }
       // Profil server adalah sumber kebenaran. Personalisasi ulang agar nama
@@ -1519,9 +1555,10 @@
     return Promise.all([
       sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status,warning_level,absence_count,last_active_at,graduation_eligible'),
       sb.from('program_settings').select('*').eq('id', 1).maybeSingle(),
-      sb.from('cohorts').select('*').order('created_at', { ascending: false })
+      sb.from('cohorts').select('*').order('created_at', { ascending: false }),
+      apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'profile_context' }) }).catch(function () { return null; })
     ]).then(function (results) {
-      var p = results[0], settings = results[1] && results[1].data, cohorts = results[2] && results[2].data;
+      var p = results[0], settings = results[1] && results[1].data, cohorts = results[2] && results[2].data, context = results[3];
       if (settings) Object.assign(G.programSettings, {
         programName: settings.program_name, currentMonth: settings.current_month, currentWeek: settings.current_week,
         passingScore: settings.passing_score, activePhase: settings.active_phase || 'DEFINE',
@@ -1530,8 +1567,22 @@
         featureFlags: settings.feature_flags || {}, kpiWeights: settings.kpi_weights || {}, rubricTemplates: settings.rubric_templates || []
       });
       if (cohorts && cohorts.length) G.cohorts = cohorts.map(function (c) { return { id:c.id, name:c.name, status:c.status, startDate:c.start_date || '', endDate:c.end_date || '' }; });
-      (p.data || []).forEach(function (x) { AUTH.profilesById[x.id] = x; if (x.mentee_number) { AUTH.profilesByNumber[x.mentee_number] = x; if (x.mentor_id) G.pairings[x.mentee_number] = x.mentor_id; } });
+      (p.data || []).forEach(function (x) {
+        AUTH.profilesById[x.id] = x;
+        if (x.mentee_number) {
+          var number = Number(x.mentee_number);
+          AUTH.profilesByNumber[number] = x;
+          MENTEES[number] = Object.assign({}, MENTEES[number] || {}, { name:x.full_name, initials:x.initials || initialsOf(x.full_name), path:x.path || 'Career Path', email:x.email, color:(MENTEES[number] || {}).color || COLORS[number % COLORS.length], baseProgress:(MENTEES[number] || {}).baseProgress || 5 });
+          if (x.mentor_id) G.pairings[number] = x.mentor_id;
+        }
+      });
+      if (context && context.profile) {
+        AUTH.profilesById[context.profile.id] = context.profile;
+        if (context.profile.mentee_number) AUTH.profilesByNumber[Number(context.profile.mentee_number)] = context.profile;
+      }
+      if (context && context.mentor) AUTH.profilesById[context.mentor.id] = context.mentor;
       if (AUTH.profile.mentee_number) AUTH.profilesByNumber[AUTH.profile.mentee_number] = AUTH.profile;
+      personalize();
       var taskQuery = AUTH.profile.role === 'mentee'
         ? sb.from('assignment_targets').select('assignment_id,assignments(*)').eq('mentee_id', AUTH.user.id)
         : sb.from('assignments').select('*,assignment_targets(mentee_id)').eq('is_template', false);
@@ -1563,7 +1614,8 @@
       (subResult.data || []).forEach(function (row) {
         var p = AUTH.profilesById[row.mentee_id]; if (!p || !p.mentee_number) return;
         var review = row.status === 'submitted' ? null : (row.reviews && row.reviews[0]);
-        mstate(p.mentee_number).assignmentSubmissions[row.assignment_id] = { text: row.text_content || '', link: row.link_url || '', files: row.files || [], checks: row.checklist_state || {}, submittedAt: row.submitted_at, status: row.status, versions: versionsBySubmission[row.id] || [], reviewHistory: historyBySubmission[row.id] || [], discussion: (row.task_discussions || []).map(function (d) { var author = AUTH.profilesById[d.author_id]; return { from: author ? author.full_name : 'Pengguna', role: author ? author.role : '', text: d.message, at: d.created_at }; }), review: review ? { score: review.score, text: review.feedback, decision: review.decision, rubricScores: review.rubric_scores || [], at: review.updated_at, by: 'Mentor' } : null };
+        var reviewer = review && AUTH.profilesById[review.reviewer_id];
+        mstate(p.mentee_number).assignmentSubmissions[row.assignment_id] = { text: row.text_content || '', link: row.link_url || '', files: row.files || [], checks: row.checklist_state || {}, submittedAt: row.submitted_at, status: row.status, versions: versionsBySubmission[row.id] || [], reviewHistory: historyBySubmission[row.id] || [], discussion: (row.task_discussions || []).map(function (d) { var author = AUTH.profilesById[d.author_id]; return { from: author ? author.full_name : 'Pengguna', role: author ? author.role : '', text: d.message, at: d.created_at }; }), review: review ? { score: review.score, text: review.feedback, decision: review.decision, rubricScores: review.rubric_scores || [], at: review.updated_at, by: reviewer ? reviewer.full_name : 'Mentor' } : null };
       });
       persistLocal(); return true;
     });
@@ -1798,7 +1850,7 @@
           var t = ta.value.trim();
           if (!t) { toast('Tulis pesan dulu ya', '✏️'); return; }
           var st = mstate(tid);
-          st.messages.push({ from: me, fromName: ses.name || (me === 'mentor' ? 'Bapak Faris' : MENTEES[tid].name), text: t, at: new Date().toISOString() });
+          st.messages.push({ from: me, fromName: ses.name || (me === 'mentor' ? 'Mentor' : MENTEES[tid].name), text: t, at: new Date().toISOString() });
           if (st.messages.length > 60) st.messages.splice(0, st.messages.length - 60);
           pushEventTo(tid, '💬', 'Pesan baru dari ' + (ses.name || me), me === 'mentor' ? 'mentee' : 'mentor');
           saveState();
@@ -3205,7 +3257,7 @@
           if (!rubricRows.length || weightTotal !== 100) { toast('Total bobot rubrik harus tepat 100%', '⚠️'); return; }
           var isNew = !task;
           if (isNew) {
-            task = { id: 'task-' + Date.now(), createdAt: new Date().toISOString(), createdBy: (mySession() || {}).name || 'Pak Faris', active: true };
+            task = { id: 'task-' + Date.now(), createdAt: new Date().toISOString(), createdBy: (mySession() || {}).name || 'Mentor', active: true };
             mentorAssignments().unshift(task);
           }
           task.title = title; task.description = desc; task.deadline = deadlineAt.toISOString();
@@ -3214,7 +3266,7 @@
           task.checklist = checklist; task.rubric = rubricRows;
           task.updatedAt = new Date().toISOString();
           targets.forEach(function (id) {
-            pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari Pak Faris: ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
+            pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari ' + currentMentorName() + ': ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
           });
           saveState(); close(); toast(isNew ? 'Tugas diberikan dan notifikasi terkirim' : 'Perubahan tugas tersimpan', '✅');
           if ($('#mentorTaskTemplate', box).checked) {
@@ -3345,13 +3397,13 @@
           var text = $('#customFeedback', box).value.trim() || 'Kerja bagus! Pertahankan dan terus tingkatkan kualitasnya.';
           var decision = $('#customDecision', box).value;
           var rubricScores = $all('[data-rubric-score]', box).map(function (inp, i) { return { label: task.rubric[i].label, weight: task.rubric[i].weight, max:task.rubric[i].max || 100, score: +inp.value || 0 }; });
-          sub.review = { score: +range.value, text: text, decision: decision, rubricScores: rubricScores, at: new Date().toISOString(), by: (mySession() || {}).name || 'Pak Faris' };
+          sub.review = { score: +range.value, text: text, decision: decision, rubricScores: rubricScores, at: new Date().toISOString(), by: (mySession() || {}).name || 'Mentor' };
           var reply = $('#customMentorReply', box).value.trim();
-          if (reply) { sub.discussion = sub.discussion || []; sub.discussion.push({ from: (mySession() || {}).name || 'Pak Faris', role: 'mentor', text: reply, at: new Date().toISOString() }); }
+          if (reply) { sub.discussion = sub.discussion || []; sub.discussion.push({ from: (mySession() || {}).name || 'Mentor', role: 'mentor', text: reply, at: new Date().toISOString() }); }
           sub.status = decision === 'revision' ? 'revision' : 'approved';
           st.assignmentSubmissions[task.id] = sub;
           addAudit(decision === 'revision' ? 'assignment.revision_requested' : 'assignment.approved', task.title, menteeId);
-          pushEventTo(menteeId, '⭐', 'Tugas "' + task.title + '" dinilai ' + range.value + '/100 oleh Pak Faris', 'mentee');
+          pushEventTo(menteeId, '⭐', 'Tugas "' + task.title + '" dinilai ' + range.value + '/100 oleh ' + currentMentorName(), 'mentee');
           saveState(); structuredReviewSave(menteeId, task, sub); close(); toast('Penilaian ' + name + ' tersimpan', '⭐'); confetti();
           if (onDone) onDone();
         });
@@ -3431,7 +3483,7 @@
           st.reviews[week] = { score: +range.value, text: text, at: new Date().toISOString() };
           if (week === 'w2') {
             st.reviewW2 = st.reviews[week];
-            pushEventTo(menteeId, '⭐', 'Tugas W2 kamu dinilai ' + range.value + '/100 oleh Pak Faris', 'mentee');
+            pushEventTo(menteeId, '⭐', 'Tugas W2 kamu dinilai ' + range.value + '/100 oleh ' + currentMentorName(), 'mentee');
             pushEventTo(menteeId, '🔓', 'Minggu 3 (IDEATE) terbuka! Materi & canvas baru menantimu', 'mentee');
           }
           saveState(); close();
@@ -3619,7 +3671,7 @@
     if (sr) sr.addEventListener('click', function () { var q = byId('pending-reviews'); if (q) q.scrollIntoView({ behavior: 'smooth' }); });
     var rem = byId('btn-send-reminder');
     if (rem) rem.addEventListener('click', function () {
-      pushEventTo(3, '⏰', 'Pengingat dari Pak Faris: segera selesaikan tugas mingguanmu!', 'mentee');
+      pushEventTo(3, '⏰', 'Pengingat dari ' + currentMentorName() + ': segera selesaikan tugas mingguanmu!', 'mentee');
       saveState();
       toast('Pengingat terkirim ke Muhammad Rizky', '📨');
     });
@@ -3657,7 +3709,7 @@
      ================================================================ */
   function initMentorFeedback() {
     var msgBtn = byId('btn-msg-mentor-mf');
-    if (msgBtn) msgBtn.addEventListener('click', function () { messageModal('Pak Faris'); });
+    if (msgBtn) msgBtn.addEventListener('click', function () { messageModal(currentMentorName()); });
 
     // balasan thread W1
     var reply = byId('btn-reply-feedback');
@@ -3674,7 +3726,7 @@
         saveState();
         appendReply(thread, reply, t);
         inp.value = '';
-        toast('Balasan terkirim ke Pak Faris', '📨');
+        toast('Balasan terkirim ke ' + currentMentorName(), '📨');
       });
     }
 
@@ -3708,7 +3760,7 @@
       if (pend2) {
         $all('p', pend2).forEach(function (p) {
           if (/belum dikumpulkan/i.test(p.textContent)) p.textContent = 'Tugas Minggu 2 sudah dikumpulkan 🎉';
-          if (/Kumpulkan tugasmu/.test(p.textContent)) p.textContent = 'Menunggu review dari Pak Faris (biasanya < 24 jam)';
+          if (/Kumpulkan tugasmu/.test(p.textContent)) p.textContent = 'Menunggu review dari ' + currentMentorName() + ' (biasanya < 24 jam)';
         });
         var cta = $('a', pend2); if (cta) cta.remove();
       }
@@ -3882,7 +3934,7 @@
       var k = liveKpi(i <= 5 ? i : 1);
       if (i > 5) k = liveKpi(i); // mentee tambahan pakai basis default
       var m = MENTEES[i];
-      rowsData.push({ live: true, id: i, name: m.name, path: /Entrep/.test(m.path) ? 'Entrep.' : 'Career', mentor: 'Pak Faris',
+      rowsData.push({ live: true, id: i, name: m.name, path: /Entrep/.test(m.path) ? 'Entrep.' : 'Career', mentor: mentorNameForMentee(i) || 'Belum ditentukan',
         c: k.c, q: k.q, e: k.e, n: k.n, total: k.total, trend: (k.delta >= 0 ? '↑ +' : '↓ ') + Math.abs(k.delta).toFixed(1), color: m.color, initials: m.initials });
     });
     LB_OTHERS.concat(LB_EXTRA.map(function (p) { return [p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8]]; })).forEach(function (p) {
@@ -4227,7 +4279,7 @@
         drawCertificate(cv);
         $('#certDl', box).addEventListener('click', function () {
           var a = document.createElement('a');
-          a.download = 'Sertifikat-FTGxGI-Arya-Ramadhan.png';
+          a.download = 'Sertifikat-FTGxGI-' + ((mySession() || {}).name || 'Peserta').replace(/[^a-z0-9]+/gi, '-') + '.png';
           a.href = cv.toDataURL('image/png');
           a.click();
           toast('Sertifikat diunduh', '🎓');
@@ -4266,7 +4318,7 @@
     ctx.fillStyle = '#64748b'; ctx.font = '400 22px Inter, Arial';
     ctx.fillText('Diberikan kepada', W / 2, 350);
     ctx.fillStyle = '#1a5f4f'; ctx.font = '800 68px Inter, Arial';
-    ctx.fillText('Arya Ramadhan', W / 2, 435);
+    ctx.fillText((mySession() || {}).name || 'Peserta FTG Fellowship', W / 2, 435);
     ctx.strokeStyle = '#1a5f4f'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(W / 2 - 280, 458); ctx.lineTo(W / 2 + 280, 458); ctx.stroke();
     // deskripsi

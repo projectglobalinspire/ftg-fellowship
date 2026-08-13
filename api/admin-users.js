@@ -5,6 +5,11 @@ function mentorApplicationComplete(application) {
   return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60);
 }
 
+async function nextMenteeNumber() {
+  const rows = await adminFetch('/rest/v1/profiles?role=eq.mentee&select=mentee_number');
+  return (rows || []).reduce((max, row) => Math.max(max, Number(row.mentee_number) || 0), 0) + 1;
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST', 'PATCH', 'DELETE'])) return;
   try {
@@ -22,8 +27,9 @@ module.exports = async function handler(req, res) {
       const accountEmail = String(body.email).trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail) || accountEmail.length > 254) return send(res, 400, { error:'Format email akun tidak valid' });
       const password = body.password || `${crypto.randomUUID().slice(0, 10)}Aa1!`;
-      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role:body.role === 'mentor' ? 'mentee' : body.role, requested_role:body.role, initials: body.initials || '', path: body.path || '', mentee_number: body.mentee_number || null } }) });
-      if (body.mentor_id || body.cohort_id || body.role === 'mentor') await adminFetch(`/rest/v1/profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ mentor_id: body.mentor_id || null, cohort_id: body.cohort_id || null }, body.role === 'mentor' ? { role:'mentor', status:'invited', path:'Senior Mentor', onboarding_completed:false } : {})) });
+      const menteeNumber = body.role === 'mentee' ? (Number(body.mentee_number) || await nextMenteeNumber()) : null;
+      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role:body.role === 'mentor' ? 'mentee' : body.role, requested_role:body.role, initials: body.initials || '', path: body.path || '', mentee_number: menteeNumber } }) });
+      if (body.mentor_id || body.cohort_id || body.role === 'mentor' || menteeNumber) await adminFetch(`/rest/v1/profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ mentor_id: body.mentor_id || null, cohort_id: body.cohort_id || null, mentee_number:menteeNumber }, body.role === 'mentor' ? { role:'mentor', status:'invited', path:'Senior Mentor', onboarding_completed:false } : {})) });
       await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.create', entity_type: 'profile', entity_id: user.id, detail: { email: accountEmail, role: body.role } }) });
       return send(res, 201, { user, temporary_password: body.password ? undefined : password });
     }
@@ -31,7 +37,7 @@ module.exports = async function handler(req, res) {
     if (!id) return send(res, 400, { error: 'ID pengguna wajib ada' });
     if (req.method === 'PATCH') {
       if (['approve_registration', 'reject_registration'].includes(body.action)) {
-        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path`);
+        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
         const applicant = rows && rows[0];
         if (!applicant || applicant.status !== 'invited') return send(res, 409, { error: 'Pendaftaran ini sudah diproses' });
         const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
@@ -46,6 +52,7 @@ module.exports = async function handler(req, res) {
         const patch = approved
           ? { status:'active', role:requestedRole, path:requestedRole === 'mentor' ? 'Senior Mentor' : applicant.path, updated_at:new Date().toISOString() }
           : { status:'suspended', discipline_note:String(body.note || 'Pendaftaran belum dapat disetujui').slice(0,1000), updated_at:new Date().toISOString() };
+        if (approved && requestedRole === 'mentee' && !applicant.mentee_number) patch.mentee_number = await nextMenteeNumber();
         await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify(patch) });
         await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify({ ban_duration:approved ? 'none' : '876000h', user_metadata:Object.assign({}, metadata, { role:approved ? requestedRole : metadata.role, profile_completed:approved, registration_decision:approved ? 'approved' : 'rejected', registration_decided_at:new Date().toISOString() }) }) });
         const notification = { type:'registration', title:approved ? 'Pendaftaran disetujui' : 'Pendaftaran belum disetujui', body:approved ? `Akses ${requestedRole === 'mentor' ? 'mentor' : 'mentee'} kamu sudah aktif.` : patch.discipline_note, href:approved ? (requestedRole === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html') : 'login.html' };
