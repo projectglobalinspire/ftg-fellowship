@@ -115,7 +115,7 @@ module.exports = async function handler(req, res) {
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       const authPatch = {};
-      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status`);
+      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,mentee_number`);
       const currentProfile = currentRows && currentRows[0];
       const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
       const currentAuthUser = (listed.users || listed || []).find(user => user.id === id);
@@ -123,9 +123,12 @@ module.exports = async function handler(req, res) {
       const mentorProfileRequired = body.role === 'mentor' && !mentorApplicationComplete(currentMetadata.mentor_application);
       const notifyMentorRequirement = mentorProfileRequired && (currentProfile.role !== 'mentor' || currentProfile.status !== 'invited' || currentMetadata.requested_role !== 'mentor');
       if (mentorProfileRequired) {
-        profilePatch.role = 'mentor'; profilePatch.status = 'invited'; profilePatch.path = 'Senior Mentor'; profilePatch.onboarding_completed = false;
+        profilePatch.role = 'mentor'; profilePatch.status = 'invited'; profilePatch.path = 'Senior Mentor'; profilePatch.onboarding_completed = false; profilePatch.mentee_number = null; profilePatch.mentor_id = null;
         authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:'mentor', registration_decision:'pending', role:'mentee', profile_completed:false });
+      } else if (body.role === 'mentor') {
+        profilePatch.mentee_number = null; profilePatch.mentor_id = null;
       } else if (body.role && body.role !== 'mentor' && currentProfile && currentProfile.role !== body.role) {
+        if (body.role === 'mentee') profilePatch.mentee_number = currentProfile.mentee_number || await nextMenteeNumber();
         authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:body.role, role:body.role });
       }
       if (body.email) {

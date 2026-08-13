@@ -256,6 +256,8 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(app, /reviewer \? reviewer\.full_name : 'Mentor'/);
   assert.match(adminApi, /async function nextMenteeNumber/);
   assert.match(adminApi, /patch\.mentee_number = await nextMenteeNumber/);
+  assert.match(adminApi, /profilePatch\.mentee_number = null/);
+  assert.match(adminApi, /profilePatch\.mentee_number = currentProfile\.mentee_number \|\| await nextMenteeNumber/);
   assert.match(programApi, /async function profileContext/);
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
