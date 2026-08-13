@@ -24,6 +24,30 @@ module.exports = async function handler(req, res) {
     const id = body.id || req.query.id;
     if (!id) return send(res, 400, { error: 'ID pengguna wajib ada' });
     if (req.method === 'PATCH') {
+      if (['approve_registration', 'reject_registration'].includes(body.action)) {
+        const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path`);
+        const applicant = rows && rows[0];
+        if (!applicant || applicant.status !== 'invited') return send(res, 409, { error: 'Pendaftaran ini sudah diproses' });
+        const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
+        const authUser = (listed.users || listed || []).find(user => user.id === id);
+        const metadata = authUser && authUser.user_metadata || {};
+        const requestedRole = ['mentee', 'mentor'].includes(metadata.requested_role) ? metadata.requested_role : 'mentee';
+        if (body.action === 'approve_registration' && requestedRole === 'mentor') {
+          const application = metadata.mentor_application;
+          if (!application || !application.commitment_confirmed || !application.job_title || !application.motivation) return send(res, 400, { error: 'Form calon mentor belum lengkap' });
+        }
+        const approved = body.action === 'approve_registration';
+        const patch = approved
+          ? { status:'active', role:requestedRole, path:requestedRole === 'mentor' ? 'Senior Mentor' : applicant.path, updated_at:new Date().toISOString() }
+          : { status:'suspended', discipline_note:String(body.note || 'Pendaftaran belum dapat disetujui').slice(0,1000), updated_at:new Date().toISOString() };
+        await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify(patch) });
+        await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify({ ban_duration:approved ? 'none' : '876000h', user_metadata:Object.assign({}, metadata, { registration_decision:approved ? 'approved' : 'rejected', registration_decided_at:new Date().toISOString() }) }) });
+        const notification = { type:'registration', title:approved ? 'Pendaftaran disetujui' : 'Pendaftaran belum disetujui', body:approved ? `Akses ${requestedRole === 'mentor' ? 'mentor' : 'mentee'} kamu sudah aktif.` : patch.discipline_note, href:approved ? (requestedRole === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html') : 'login.html' };
+        const notices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:id, delivery:{ in_app:'sent', email:'queued' } }, notification)) }).catch(() => []);
+        await deliverEmail(applicant, notification, notices[0] && notices[0].id).catch(() => null);
+        await adminFetch('/rest/v1/audit_logs', { method:'POST', body:JSON.stringify({ actor_id:auth.user.id, action:approved ? 'registration.approve' : 'registration.reject', entity_type:'profile', entity_id:id, detail:{ requested_role:requestedRole, reason:approved ? null : patch.discipline_note } }) });
+        return send(res, 200, { ok:true, status:patch.status, role:approved ? requestedRole : applicant.role });
+      }
       if (body.action && ['record_absence', 'correct_absence', 'lock', 'unlock', 'drop', 'restore'].includes(body.action)) {
         const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,absence_count,warning_level,discipline_note`);
         const participant = rows && rows[0];

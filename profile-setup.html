@@ -24,9 +24,9 @@
         <div class="inline-flex items-center gap-3 bg-white rounded-2xl px-5 py-3 mb-10">
           <img src="assets/ftg-logo.png" alt="FTG" class="h-9"><span class="text-slate-300">×</span><img src="assets/gi-logo.png" alt="GI" class="h-8">
         </div>
-        <p class="text-emerald-200 text-xs font-bold tracking-[.25em] mb-4">WELCOME, FUTURE BUILDER</p>
-        <h1 class="text-4xl font-black leading-tight mb-5">Langkah pertamamu dimulai dari sini.</h1>
-        <p class="text-white/65 leading-relaxed">Lengkapi profil dengan data yang benar. Fasil akan mencocokkan pendaftaranmu dengan daftar peserta sebelum akses program dibuka.</p>
+        <p id="asideEyebrow" class="text-emerald-200 text-xs font-bold tracking-[.25em] mb-4">WELCOME, FUTURE BUILDER</p>
+        <h1 id="asideTitle" class="text-4xl font-black leading-tight mb-5">Langkah pertamamu dimulai dari sini.</h1>
+        <p id="asideCopy" class="text-white/65 leading-relaxed">Lengkapi profil dengan data yang benar. Fasil akan mencocokkan pendaftaranmu dengan daftar peserta sebelum akses program dibuka.</p>
       </div>
       <p class="text-white/35 text-xs">FTG × Global Inspire · Future Builders Fellowship 2026</p>
     </aside>
@@ -41,11 +41,27 @@
         <div id="setupView" class="hidden">
           <span class="inline-flex bg-orange-50 text-orange-600 text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded-full mb-4">PROFIL PENDAFTARAN</span>
           <h2 class="text-2xl md:text-3xl font-black text-slate-800">Selamat datang, <span id="welcomeName">Future Builder</span>! 👋</h2>
-          <p class="text-sm text-slate-500 mt-2 mb-7 leading-relaxed">Ceritakan sedikit tentang dirimu agar Fasil dapat memverifikasi bahwa akun ini benar milik peserta FTG.</p>
+          <p id="setupIntro" class="text-sm text-slate-500 mt-2 mb-7 leading-relaxed">Ceritakan sedikit tentang dirimu agar Fasil dapat memverifikasi bahwa akun ini benar milik peserta FTG.</p>
           <form id="profileForm" class="space-y-4">
             <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nama lengkap sesuai pendaftaran</label><input id="fullName" class="field" required minlength="3" maxlength="120" autocomplete="name"></div>
             <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Email Google</label><input id="googleEmail" class="field bg-slate-50 text-slate-400" readonly></div>
-            <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white" required><option value="">Pilih jalur</option><option>Career Path</option><option>Entrepreneur Path</option></select></div>
+            <div id="menteeFields"><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white"><option value="">Pilih jalur</option><option>Career Path</option><option>Entrepreneur Path</option></select></div>
+            <div id="mentorFields" class="hidden space-y-5">
+              <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4"><p class="text-xs font-black tracking-wider text-emerald-800">A. PROFIL PROFESIONAL</p><p class="text-[11px] text-emerald-700 mt-1">Data ini membantu Fasil menilai kecocokan mentor dengan kebutuhan mentee.</p></div>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nomor WhatsApp *</label><input id="mentorPhone" class="field" type="tel" placeholder="08xxxxxxxxxx"></div>
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">LinkedIn <span class="font-normal text-slate-400">(opsional)</span></label><input id="mentorLinkedin" class="field" type="url" placeholder="https://linkedin.com/in/namamu"></div>
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Jabatan / role saat ini *</label><input id="mentorJobTitle" class="field" placeholder="Product Manager, Founder, dll."></div>
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Perusahaan / institusi *</label><input id="mentorCompany" class="field" placeholder="Nama perusahaan atau institusi"></div>
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Pengalaman profesional *</label><select id="mentorExperience" class="field bg-white"><option value="">Pilih pengalaman</option><option value="1-3">1–3 tahun</option><option value="4-6">4–6 tahun</option><option value="7-10">7–10 tahun</option><option value="10+">Lebih dari 10 tahun</option></select></div>
+                <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Kesediaan waktu per bulan *</label><select id="mentorAvailability" class="field bg-white"><option value="">Pilih waktu</option><option value="2-4">2–4 jam/bulan</option><option value="4-6">4–6 jam/bulan</option><option value="6+">6+ jam/bulan</option></select></div>
+              </div>
+              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Bidang keahlian * <span class="font-normal text-slate-400">(pilih maksimal 5)</span></label><div id="mentorExpertise" class="grid grid-cols-2 gap-2"></div></div>
+              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Bio profesional singkat *</label><textarea id="mentorBio" class="field" rows="3" minlength="40" maxlength="600" placeholder="Ceritakan pengalaman dan fokus kontribusi Anda..."></textarea></div>
+              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Format mentoring *</label><div class="grid grid-cols-3 gap-2"><label class="rounded-xl border p-3 text-xs font-bold text-center"><input type="radio" name="mentorFormat" value="online"> Online</label><label class="rounded-xl border p-3 text-xs font-bold text-center"><input type="radio" name="mentorFormat" value="offline"> Offline</label><label class="rounded-xl border p-3 text-xs font-bold text-center"><input type="radio" name="mentorFormat" value="hybrid"> Hybrid</label></div></div>
+              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Motivasi menjadi mentor *</label><textarea id="mentorMotivation" class="field" rows="4" minlength="60" maxlength="1000" placeholder="Mengapa Anda ingin mendampingi Future Builders dan dampak apa yang ingin diberikan?"></textarea></div>
+              <label class="flex gap-3 rounded-xl bg-slate-50 border border-slate-200 p-4 text-xs leading-relaxed"><input id="mentorCommitment" type="checkbox" class="mt-1"> <span>Saya bersedia menjaga kerahasiaan data mentee, mengikuti kode etik, memenuhi komitmen waktu, dan memberi pendampingan yang profesional.</span></label>
+            </div>
             <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 text-[11px] leading-relaxed text-amber-800">Data akan masuk ke dashboard Fasil dengan status <b>Menunggu Verifikasi</b>. Akses tugas dibuka setelah nama dan identitasmu disetujui.</div>
             <p id="formError" class="hidden text-xs font-semibold text-red-500"></p>
             <button id="saveProfile" class="w-full bg-[#1a5f4f] hover:bg-[#134b3f] text-white rounded-xl py-3.5 font-extrabold">Simpan Profil & Kirim Verifikasi</button>
@@ -56,7 +72,7 @@
           <div class="w-20 h-20 rounded-3xl bg-amber-50 text-amber-500 grid place-items-center text-4xl mx-auto mb-5">⏳</div>
           <span class="inline-flex bg-amber-50 text-amber-700 text-[10px] font-extrabold tracking-widest px-3 py-1.5 rounded-full mb-3">MENUNGGU VERIFIKASI</span>
           <h2 class="text-2xl font-black text-slate-800">Profilmu sudah diterima</h2>
-          <p class="text-sm text-slate-500 mt-3 leading-relaxed">Halo, <b id="pendingName"></b>. Fasil sedang mencocokkan nama dan akun Google kamu dengan daftar peserta. Silakan kembali setelah akun disetujui.</p>
+          <p id="pendingCopy" class="text-sm text-slate-500 mt-3 leading-relaxed">Halo, <b id="pendingName"></b>. Fasil sedang mencocokkan nama dan akun Google kamu dengan daftar peserta. Silakan kembali setelah akun disetujui.</p>
           <button id="checkStatus" class="w-full bg-[#1a5f4f] text-white rounded-xl py-3 font-extrabold mt-7">Periksa Status</button>
           <button id="logout" class="w-full border border-slate-200 text-slate-500 rounded-xl py-3 font-bold mt-2">Keluar / Ganti Akun Google</button>
         </div>
@@ -73,7 +89,9 @@
   <script>
     (function () {
       var sb = window.supabase.createClient(FTG_CONF.url, FTG_CONF.anonKey);
-      var session = null, profile = null;
+      var session = null, profile = null, requestedRole = 'mentee';
+      var expertiseOptions = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
+      document.getElementById('mentorExpertise').innerHTML = expertiseOptions.map(function (item) { return '<label class="rounded-xl border border-slate-200 p-2.5 text-[11px] font-semibold text-slate-600"><input type="checkbox" name="mentorExpertise" value="' + item + '" class="mr-1.5">' + item + '</label>'; }).join('');
       function show(id) { ['loading','setupView','pendingView','blockedView'].forEach(function (name) { document.getElementById(name).classList.toggle('hidden', name !== id); }); }
       function home(role) { return role === 'admin' ? 'admin-dashboard.html' : role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'; }
       function logout() { sb.auth.signOut({ scope:'local' }).finally(function () { localStorage.removeItem('ftgSession'); location.replace('login.html'); }); }
@@ -81,11 +99,35 @@
         if (profile.status === 'active') { location.replace(home(profile.role)); return; }
         if (profile.status === 'invited') {
           var completed = !!profile.onboarding_completed;
+          requestedRole = (session.user.user_metadata && session.user.user_metadata.requested_role) || profile.role || 'mentee';
+          var mentor = requestedRole === 'mentor';
           document.getElementById('welcomeName').textContent = profile.full_name || 'Future Builder';
           document.getElementById('fullName').value = profile.full_name || '';
           document.getElementById('googleEmail').value = profile.google_email || session.user.email || '';
           document.getElementById('path').value = profile.path || '';
           document.getElementById('pendingName').textContent = profile.full_name || 'Future Builder';
+          document.getElementById('menteeFields').classList.toggle('hidden', mentor);
+          document.getElementById('mentorFields').classList.toggle('hidden', !mentor);
+          document.getElementById('asideEyebrow').textContent = mentor ? 'WELCOME, GROWTH PARTNER' : 'WELCOME, FUTURE BUILDER';
+          document.getElementById('asideTitle').textContent = mentor ? 'Pengalamanmu dapat membuka jalan generasi berikutnya.' : 'Langkah pertamamu dimulai dari sini.';
+          document.getElementById('asideCopy').textContent = mentor ? 'Lengkapi profil profesional dan komitmen mentoring. Fasil akan meninjau kecocokan sebelum dashboard mentor dibuka.' : 'Lengkapi profil dengan data yang benar. Fasil akan mencocokkan pendaftaranmu dengan daftar peserta sebelum akses program dibuka.';
+          document.getElementById('setupIntro').textContent = mentor ? 'Isi data mentor berikut dengan lengkap. Informasi ini hanya digunakan Fasil untuk proses seleksi, pairing, dan keamanan program.' : 'Ceritakan sedikit tentang dirimu agar Fasil dapat memverifikasi bahwa akun ini benar milik peserta FTG.';
+          document.getElementById('pendingCopy').innerHTML = mentor ? 'Halo, <b id="pendingNameMentor"></b>. Pengajuan mentor Anda sedang ditinjau oleh Fasil. Dashboard mentor akan terbuka setelah disetujui.' : 'Halo, <b>' + (profile.full_name || 'Future Builder') + '</b>. Fasil sedang mencocokkan akun dengan daftar peserta.';
+          if (mentor) document.getElementById('pendingNameMentor').textContent = profile.full_name || 'Calon Mentor';
+          var application = (session.user.user_metadata && session.user.user_metadata.mentor_application) || {};
+          if (mentor && application.phone) {
+            document.getElementById('mentorPhone').value = application.phone || '';
+            document.getElementById('mentorLinkedin').value = application.linkedin_url || '';
+            document.getElementById('mentorJobTitle').value = application.job_title || '';
+            document.getElementById('mentorCompany').value = application.company_or_institution || '';
+            document.getElementById('mentorExperience').value = application.years_of_experience || '';
+            document.getElementById('mentorAvailability').value = application.availability_hours || '';
+            document.getElementById('mentorBio').value = application.bio || '';
+            document.getElementById('mentorMotivation').value = application.motivation || '';
+            document.getElementById('mentorCommitment').checked = !!application.commitment_confirmed;
+            document.querySelectorAll('[name="mentorExpertise"]').forEach(function (box) { box.checked = (application.expertise_tags || []).indexOf(box.value) > -1; });
+            var format = document.querySelector('[name="mentorFormat"][value="' + application.mentoring_format + '"]'); if (format) format.checked = true;
+          }
           show(completed ? 'pendingView' : 'setupView'); return;
         }
         show('blockedView');
@@ -104,8 +146,16 @@
       document.getElementById('profileForm').addEventListener('submit', function (event) {
         event.preventDefault();
         var button = document.getElementById('saveProfile'), error = document.getElementById('formError');
+        var mentor = requestedRole === 'mentor', payload = { action:'complete_google_profile', full_name:document.getElementById('fullName').value, path:document.getElementById('path').value };
+        if (mentor) {
+          var tags = Array.from(document.querySelectorAll('[name="mentorExpertise"]:checked')).map(function (box) { return box.value; });
+          var format = document.querySelector('[name="mentorFormat"]:checked');
+          payload.mentor_application = { phone:document.getElementById('mentorPhone').value, linkedin_url:document.getElementById('mentorLinkedin').value, job_title:document.getElementById('mentorJobTitle').value, company_or_institution:document.getElementById('mentorCompany').value, years_of_experience:document.getElementById('mentorExperience').value, expertise_tags:tags, bio:document.getElementById('mentorBio').value, availability_hours:document.getElementById('mentorAvailability').value, mentoring_format:format ? format.value : '', motivation:document.getElementById('mentorMotivation').value, commitment_confirmed:document.getElementById('mentorCommitment').checked };
+          if (!/^((\+62|62|0)8)[0-9]{8,12}$/.test(payload.mentor_application.phone.replace(/[\s-]/g,''))) { error.textContent='Nomor WhatsApp Indonesia belum valid.'; error.classList.remove('hidden'); return; }
+          if (!payload.mentor_application.job_title.trim() || !payload.mentor_application.company_or_institution.trim() || !payload.mentor_application.years_of_experience || tags.length < 1 || tags.length > 5 || payload.mentor_application.bio.trim().length < 40 || !payload.mentor_application.availability_hours || !payload.mentor_application.mentoring_format || payload.mentor_application.motivation.trim().length < 60 || !payload.mentor_application.commitment_confirmed) { error.textContent='Lengkapi seluruh data wajib, pilih 1–5 keahlian, dan setujui komitmen mentor.'; error.classList.remove('hidden'); return; }
+        }
         button.disabled = true; button.textContent = 'Mengirim profil...'; error.classList.add('hidden');
-        fetch('/api/program', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + session.access_token }, body:JSON.stringify({ action:'complete_google_profile', full_name:document.getElementById('fullName').value, path:document.getElementById('path').value }) })
+        fetch('/api/program', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + session.access_token }, body:JSON.stringify(payload) })
           .then(function (response) { return response.json().then(function (body) { if (!response.ok) throw new Error(body.error || 'Profil gagal disimpan'); return body; }); })
           .then(function (body) { profile = body.profile; route(); })
           .catch(function (reason) { error.textContent = reason.message; error.classList.remove('hidden'); button.disabled = false; button.textContent = 'Simpan Profil & Kirim Verifikasi'; });

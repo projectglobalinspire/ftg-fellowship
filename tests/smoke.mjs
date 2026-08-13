@@ -205,6 +205,27 @@ test('new Google users complete a pending profile and require admin approval', a
   assert.match(app, /login_provider/);
 });
 
+test('mentor applicants complete professional screening before Fasil approval', async () => {
+  const setup = await text('profile-setup.html');
+  const program = await text('api/program.js');
+  const adminApi = await text('api/admin-users.js');
+  const app = await text('app.js');
+  assert.match(setup, /id="mentorFields"/);
+  for (const id of ['mentorPhone','mentorLinkedin','mentorJobTitle','mentorCompany','mentorExperience','mentorExpertise','mentorBio','mentorAvailability','mentorMotivation','mentorCommitment']) assert.match(setup, new RegExp(`id="${id}"`));
+  assert.match(setup, /name="mentorFormat"/);
+  assert.match(setup, /requestedRole === 'mentor'/);
+  assert.match(program, /function mentorApplication/);
+  assert.match(program, /MENTOR_EXPERTISE/);
+  assert.match(program, /registration\.mentor_submitted/);
+  assert.match(adminApi, /approve_registration/);
+  assert.match(adminApi, /reject_registration/);
+  assert.match(adminApi, /registration\.approve/);
+  assert.match(adminApi, /Form calon mentor belum lengkap/);
+  assert.match(app, /function openMentorApplicationReview/);
+  assert.match(app, /data-registration-detail/);
+  assert.match(app, /Setujui sebagai Mentor/);
+});
+
 test('Fasil approval labels and one-week mentor deadlines are complete', async () => {
   const app = await text('app.js');
   const login = await text('login.html');

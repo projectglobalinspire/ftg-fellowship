@@ -3,6 +3,32 @@ const googleLogin = require('./_google-login');
 
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
 function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
+const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
+
+function safeUrl(value) {
+  const input = clean(value, 500);
+  if (!input) return '';
+  try { const url = new URL(input); return ['http:', 'https:'].includes(url.protocol) ? url.toString() : ''; } catch (_) { return ''; }
+}
+
+function mentorApplication(body) {
+  const source = body && body.mentor_application || {};
+  const phone = clean(source.phone, 24).replace(/[\s-]/g, '');
+  const tags = Array.isArray(source.expertise_tags) ? [...new Set(source.expertise_tags.filter(item => MENTOR_EXPERTISE.includes(item)))].slice(0, 5) : [];
+  const data = {
+    phone, linkedin_url: safeUrl(source.linkedin_url), job_title: clean(source.job_title, 120),
+    company_or_institution: clean(source.company_or_institution, 160), years_of_experience: clean(source.years_of_experience, 12),
+    expertise_tags: tags, bio: clean(source.bio, 600), availability_hours: clean(source.availability_hours, 12),
+    mentoring_format: clean(source.mentoring_format, 12), motivation: clean(source.motivation, 1000),
+    commitment_confirmed: source.commitment_confirmed === true, submitted_at: new Date().toISOString()
+  };
+  if (!/^(?:\+62|62|0)8\d{8,12}$/.test(data.phone)) throw new Error('Nomor WhatsApp Indonesia belum valid');
+  if (!data.job_title || !data.company_or_institution || !['1-3','4-6','7-10','10+'].includes(data.years_of_experience)) throw new Error('Jabatan, institusi, dan pengalaman wajib diisi');
+  if (!tags.length || data.bio.length < 40) throw new Error('Pilih bidang keahlian dan isi bio minimal 40 karakter');
+  if (!['2-4','4-6','6+'].includes(data.availability_hours) || !['online','offline','hybrid'].includes(data.mentoring_format)) throw new Error('Kesediaan waktu dan format mentoring wajib dipilih');
+  if (data.motivation.length < 60 || !data.commitment_confirmed) throw new Error('Motivasi minimal 60 karakter dan komitmen mentor wajib disetujui');
+  return data;
+}
 
 async function completeGoogleProfile(req, res) {
   const user = await currentUser(req);
@@ -12,19 +38,22 @@ async function completeGoogleProfile(req, res) {
   if (!profile) return send(res, 404, { error: 'Profil pendaftaran tidak ditemukan' });
   if (profile.status !== 'invited') return send(res, 409, { error: 'Profil ini sudah diproses panitia' });
   const body = req.body || {};
+  const requestedRole = ['mentee', 'mentor'].includes(user.user_metadata && user.user_metadata.requested_role) ? user.user_metadata.requested_role : 'mentee';
   const fullName = clean(body.full_name, 120);
-  const path = ['Career Path', 'Entrepreneur Path'].includes(body.path) ? body.path : '';
+  const path = requestedRole === 'mentor' ? 'Senior Mentor' : (['Career Path', 'Entrepreneur Path'].includes(body.path) ? body.path : '');
   if (fullName.length < 3 || !path) return send(res, 400, { error: 'Nama lengkap dan jalur program wajib diisi' });
+  let application = null;
+  if (requestedRole === 'mentor') application = mentorApplication(body);
   const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, {
     method: 'PATCH', headers: { Prefer: 'return=representation' },
     body: JSON.stringify({ full_name: fullName, initials: initials(fullName), path, onboarding_completed: true, updated_at: new Date().toISOString() })
   });
   await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, {
-    method: 'PUT', body: JSON.stringify({ user_metadata: Object.assign({}, user.user_metadata || {}, { full_name: fullName, initials: initials(fullName), path, profile_completed: true }) })
+    method: 'PUT', body: JSON.stringify({ user_metadata: Object.assign({}, user.user_metadata || {}, { full_name: fullName, initials: initials(fullName), path, profile_completed: true, mentor_application: application }) })
   });
   await adminFetch('/rest/v1/audit_logs', {
     method: 'POST', headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ actor_id: user.id, action: 'registration.profile_completed', entity_type: 'profile', entity_id: user.id, detail: { path, provider: 'google' } })
+    body: JSON.stringify({ actor_id: user.id, action: requestedRole === 'mentor' ? 'registration.mentor_submitted' : 'registration.profile_completed', entity_type: 'profile', entity_id: user.id, detail: { path, provider: 'google', requested_role: requestedRole, expertise: application && application.expertise_tags } })
   }).catch(() => null);
   return send(res, 200, { profile: updated && updated[0], pending_review: true });
 }
