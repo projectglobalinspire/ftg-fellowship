@@ -331,6 +331,22 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   assert.match(app, /Audit Log/);
 });
 
+test('Fasil can manually send synchronized email and dashboard notifications', async () => {
+  const app = await text('app.js');
+  const api = await text('api/notifications.js');
+  const css = await text('responsive.css');
+  assert.match(app, /Email & Notifikasi/);
+  assert.match(app, /function openAdminNotificationCenter/);
+  assert.match(app, /action:'manual_send'/);
+  assert.match(app, /Email \+ notifikasi dashboard/);
+  assert.match(app, /Riwayat Pengiriman Terbaru/);
+  assert.match(api, /async function manualSend/);
+  assert.match(api, /notification\.manual_send/);
+  assert.match(api, /Hanya Fasil yang dapat mengirim pesan manual/);
+  assert.match(api, /email_outbox\?select=/);
+  assert.match(css, /\.ftg-mail-compose/);
+});
+
 test('LMS recordings are playable for mentees and mentors but managed only by Fasil', async () => {
   const app = await text('app.js');
   const operations = await text('api/operations.js');

@@ -1,15 +1,82 @@
 const { send, adminFetch, requireRole, method } = require('./_lib');
-const { deliverEmail } = require('./_email');
+const { deliverEmail, emailProvider, senderAddress } = require('./_email');
+
+const MANUAL_TYPES = new Set(['general', 'assignment', 'deadline:manual:3', 'deadline:manual:1', 'deadline:manual:0', 'late:manual', 'review', 'session', 'registration', 'account_restored', 'certificate']);
+
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim()) && String(value || '').length <= 254;
+}
+
+function cleanHref(value) {
+  const href = String(value || 'mentee-dashboard.html').trim().slice(0, 240);
+  if (/^(?:[a-z0-9-]+\.html(?:[?#].*)?|https:\/\/ftg-fellowship\.vercel\.app\/)/i.test(href)) return href;
+  return 'mentee-dashboard.html';
+}
+
+async function adminConsole(req, res, auth) {
+  if (auth.profile.role !== 'admin') return send(res, 403, { error:'Hanya Fasil yang dapat membuka pusat email' });
+  const [profiles, outbox] = await Promise.all([
+    adminFetch('/rest/v1/profiles?select=id,full_name,email,role,status&email=not.is.null&order=role.asc,full_name.asc&limit=1000'),
+    adminFetch('/rest/v1/email_outbox?select=id,recipient,subject,status,error,attempts,sent_at,created_at&order=created_at.desc&limit=50')
+  ]);
+  return send(res, 200, {
+    profiles:(profiles || []).filter(profile => validEmail(profile.email)),
+    outbox:outbox || [],
+    email_provider:emailProvider(),
+    email_sender:senderAddress()
+  });
+}
+
+async function manualSend(req, res, auth) {
+  if (auth.profile.role !== 'admin') return send(res, 403, { error:'Hanya Fasil yang dapat mengirim pesan manual' });
+  const body = req.body || {};
+  const ids = [...new Set((Array.isArray(body.user_ids) ? body.user_ids : []).map(String).filter(Boolean))];
+  const role = ['mentee', 'mentor', 'admin', 'all'].includes(body.target_role) ? body.target_role : '';
+  if (!ids.length && !role) return send(res, 400, { error:'Pilih minimal satu penerima atau grup penerima' });
+  if (ids.length > 250) return send(res, 400, { error:'Maksimal 250 penerima per pengiriman' });
+  const title = String(body.title || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 160);
+  const message = String(body.body || '').trim().slice(0, 1000);
+  if (title.length < 3 || message.length < 3) return send(res, 400, { error:'Subjek dan isi pesan wajib diisi dengan jelas' });
+  const type = MANUAL_TYPES.has(String(body.type || '')) ? String(body.type) : 'general';
+  const channel = ['both', 'email', 'in_app'].includes(body.channel) ? body.channel : 'both';
+  let profiles = await adminFetch('/rest/v1/profiles?select=id,full_name,email,role,status,notification_preferences&email=not.is.null&limit=1000');
+  profiles = (profiles || []).filter(profile => profile.status === 'active' && validEmail(profile.email));
+  if (ids.length) { const allowed = new Set(ids); profiles = profiles.filter(profile => allowed.has(profile.id)); }
+  else if (role !== 'all') profiles = profiles.filter(profile => profile.role === role);
+  if (!profiles.length) return send(res, 400, { error:'Tidak ada akun aktif dengan email valid pada pilihan penerima' });
+  if (profiles.length > 250) return send(res, 400, { error:'Grup berisi lebih dari 250 akun. Pilih penerima yang lebih spesifik.' });
+
+  const notices = profiles.map(profile => ({
+    user_id:profile.id, type, title, body:message, href:cleanHref(body.href),
+    delivery:{ in_app:channel === 'email' ? 'skipped' : 'sent', email:channel === 'in_app' ? 'skipped' : 'queued', manual:true }
+  }));
+  let inserted = [];
+  if (channel !== 'email') inserted = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(notices) });
+  let sent = 0, failed = 0;
+  const results = [];
+  for (const profile of profiles) {
+    if (channel === 'in_app') { sent++; results.push({ user_id:profile.id, recipient:profile.email, status:'in_app' }); continue; }
+    const notice = inserted.find(item => item.user_id === profile.id);
+    const result = await deliverEmail(profile, notices.find(item => item.user_id === profile.id), notice && notice.id);
+    if (result.status === 'sent') sent++; else failed++;
+    results.push({ user_id:profile.id, recipient:profile.email, status:result.status, error:result.reason || null });
+    if (notice) await adminFetch(`/rest/v1/notifications?id=eq.${notice.id}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:result.status, manual:true } }) });
+  }
+  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:auth.user.id, action:'notification.manual_send', entity_type:'notification', detail:{ channel, type, title, recipients:profiles.length, sent, failed } }) }).catch(() => null);
+  return send(res, failed ? 207 : 201, { ok:failed === 0, recipients:profiles.length, sent, failed, channel, results });
+}
 
 module.exports = async function handler(req, res) {
-  if (!method(req, res, ['POST'])) return;
+  if (!method(req, res, ['GET', 'POST'])) return;
   try {
     const auth = await requireRole(req, res, ['mentor', 'admin']);
     if (!auth) return;
+    if (req.method === 'GET') return adminConsole(req, res, auth);
+    if (req.body && req.body.action === 'manual_send') return manualSend(req, res, auth);
     if (req.body && req.body.action === 'email_test') {
       if (auth.profile.role !== 'admin') return send(res, 403, { error:'Hanya Fasil yang dapat menguji provider email' });
       const requestedRecipient = String(req.body.recipient || auth.profile.email || auth.user.email || '').trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedRecipient) || requestedRecipient.length > 254) return send(res, 400, { error:'Email tujuan tes tidak valid' });
+      if (!validEmail(requestedRecipient)) return send(res, 400, { error:'Email tujuan tes tidak valid' });
       const samples = {
         general:{type:'general',title:'Tes notifikasi email berhasil',body:'Zoho Mail telah tersambung ke FTG Fellowship dan siap mengirim notifikasi program.',href:'admin-dashboard.html'},
         assignment:{type:'assignment',title:'Tugas baru dari Mentor',body:'Riset Masalah Pengguna · Deadline Kamis, 20 Agustus 2026 pukul 23.59 WITA.',href:'assignment-submission.html'},
