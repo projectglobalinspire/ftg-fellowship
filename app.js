@@ -1039,6 +1039,7 @@
     function home(r) { return r === 'admin' ? 'admin-dashboard.html' : (r === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'); }
     if (PAGE.indexOf('admin-') === 0 && ses.role !== 'admin') { location.replace(home(ses.role)); return false; }
     if (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) && ses.role !== 'mentor') { location.replace(home(ses.role)); return false; }
+    if (PAGE.indexOf('workshop-library') === 0 && !/^(mentee|mentor)$/.test(ses.role)) { location.replace(home(ses.role)); return false; }
     if (PAGE.indexOf('jurnal') === 0 && ses.role !== 'mentee') { location.replace(home(ses.role)); return false; }
     if (PAGE.indexOf('mentee-dashboard') === 0 && ses.role !== 'mentee') { location.replace(home(ses.role)); return false; }
     // panitia hanya memantau: halaman kerja mentee dialihkan ke dashboard panitia
@@ -1068,7 +1069,7 @@
     }
 
     // halaman bersama (leaderboard/ceremony) memakai menu milik peran yang login
-    if (SHARED_PAGES.test(PAGE) && ses.role !== 'mentee') {
+    if ((SHARED_PAGES.test(PAGE) || PAGE.indexOf('workshop-library') === 0) && ses.role !== 'mentee') {
       var nav = $('aside nav');
       if (nav && !nav.getAttribute('data-ftg-personalized')) {
         nav.setAttribute('data-ftg-personalized', '1');
@@ -1079,6 +1080,7 @@
               ['fa-house', 'Dashboard', 'mentor-dashboard.html', ''],
               ['fa-users', 'Mentee Saya', 'mentor-mentee.html', '<span class="ml-auto bg-[#f97316] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">5</span>'],
               ['fa-file-lines', 'Tugas & Review', 'mentor-review.html', pending ? '<span class="ml-auto bg-[#ef4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">' + pending + '</span>' : ''],
+              ['fa-circle-play', 'LMS & Rekaman', 'workshop-library.html', ''],
               ['fa-comments', 'Berikan Feedback', 'mentor-dashboard.html#feedback', ''],
               ['fa-chart-bar', 'Progress Grup', 'mentor-dashboard.html#group-progress', ''],
               ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
@@ -1475,7 +1477,8 @@
     }).then(function (result) {
       if (result.error || !result.data || result.data.status !== 'active') throw new Error('Profil tidak aktif');
       AUTH.profile = result.data;
-      var expectedRole = PAGE.indexOf('admin-') === 0 ? 'admin' : (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) ? 'mentor' : (/^(mentee-dashboard|design-thinking|assignment-submission|progress-tracker|mentor-feedback|workshop-library|jurnal)/.test(PAGE) ? 'mentee' : ''));
+      var expectedRole = PAGE.indexOf('admin-') === 0 ? 'admin' : (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE) ? 'mentor' : (/^(mentee-dashboard|design-thinking|assignment-submission|progress-tracker|mentor-feedback|jurnal)/.test(PAGE) ? 'mentee' : ''));
+      if (PAGE.indexOf('workshop-library') === 0 && !/^(mentee|mentor)$/.test(AUTH.profile.role)) expectedRole = 'mentee';
       if (expectedRole && AUTH.profile.role !== expectedRole) {
         var safeHome = AUTH.profile.role === 'admin' ? 'admin-dashboard.html' : (AUTH.profile.role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html');
         location.replace(safeHome); return false;
@@ -3890,6 +3893,7 @@
      ================================================================ */
   function initWorkshopLibrary() {
     var main = $('main');
+    mountRecordingLibrary();
     var sections = $all('main .px-8 > div.mb-6, main .px-8 > div:not(.mb-6)', main).filter(function (d) {
       return /Career Path — 4 Workshop|Entrepreneur Path — 4 Workshop/.test(d.textContent);
     });
@@ -4226,6 +4230,36 @@
     var done = Object.keys((sub && sub.checks) || {}).filter(function (k) { return sub.checks[k]; }).length;
     return Math.round(done / total * 100);
   }
+
+  function recordingDate(value) {
+    if (!value) return 'Rekaman program';
+    try { return new Date(value).toLocaleDateString('id-ID', { day:'numeric',month:'long',year:'numeric' }); } catch (_) { return 'Rekaman program'; }
+  }
+  function mountRecordingLibrary() {
+    var host = $('main > div.px-8');
+    if (!host || byId('ftg-recording-library')) return;
+    var section = document.createElement('section');
+    section.id = 'ftg-recording-library'; section.className = 'ftg-lms-shell';
+    section.innerHTML = '<div class="ftg-lms-heading"><div><span class="ftg-lms-kicker"><i class="fa-solid fa-circle-play"></i> LMS REKAMAN</span><h2>Belajar ulang kapan saja</h2><p>Rekaman mentoring dan workshop resmi dari Fasil tersedia untuk mentee dan mentor.</p></div><span class="ftg-lms-role">' + (myRole() === 'mentor' ? 'Akses Mentor' : 'Akses Mentee') + '</span></div><div id="ftgLmsBody" class="ftg-lms-loading"><i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan video pembelajaran…</span></div>';
+    host.insertBefore(section, host.firstChild);
+    var body = byId('ftgLmsBody');
+    function showError(message) { body.className='ftg-lms-empty'; body.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i><b>Rekaman belum dapat dimuat</b><span>'+esc(message || 'Coba muat ulang halaman.')+'</span><button id="retryRecordings" type="button">Coba lagi</button>'; $('#retryRecordings',body).addEventListener('click',load); }
+    function render(rows) {
+      if (!rows.length) { body.className='ftg-lms-empty'; body.innerHTML='<i class="fa-solid fa-video-slash"></i><b>Belum ada rekaman</b><span>Fasil akan menambahkan video setelah sesi selesai.</span>'; return; }
+      body.className='ftg-lms-layout';
+      body.innerHTML='<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe id="ftgLmsIframe" title="Pemutar rekaman LMS" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><span id="ftgLmsSession"></span><h3 id="ftgLmsTitle"></h3><p id="ftgLmsDescription"></p><small id="ftgLmsDate"></small></div></div><div class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><b>Daftar Rekaman</b><span>'+rows.length+' video</span></div><div id="ftgLmsItems"></div></div>';
+      var list=byId('ftgLmsItems'), frame=byId('ftgLmsIframe');
+      function select(row, button) {
+        frame.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(row.youtube_id)+'?rel=0&modestbranding=1';
+        byId('ftgLmsSession').textContent=row.location || 'Rekaman Program'; byId('ftgLmsTitle').textContent=row.title;
+        byId('ftgLmsDescription').textContent=row.description || 'Tonton kembali materi dan catat poin penting dari sesi ini.'; byId('ftgLmsDate').textContent=recordingDate(row.starts_at);
+        $all('.ftg-lms-item',list).forEach(function(b){b.classList.toggle('is-active',b===button);b.setAttribute('aria-pressed',b===button?'true':'false');});
+      }
+      rows.forEach(function(row,index){var b=document.createElement('button');b.type='button';b.className='ftg-lms-item';b.innerHTML='<span class="ftg-lms-thumb"><img src="https://i.ytimg.com/vi/'+encodeURIComponent(row.youtube_id)+'/mqdefault.jpg" alt="" loading="lazy"><i class="fa-solid fa-play"></i></span><span><b>'+esc(row.title)+'</b><small>'+esc(row.location||'Rekaman Program')+' · '+esc(recordingDate(row.starts_at))+'</small></span>';b.addEventListener('click',function(){select(row,b);});list.appendChild(b);if(index===0)select(row,b);});
+    }
+    function load(){body.className='ftg-lms-loading';body.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan video pembelajaran…</span>';apiRequest('/api/operations?resource=recordings').then(function(data){render(data.recordings||[]);}).catch(function(e){showError(e.message);});}
+    load();
+  }
   function assignmentHistoryHtml(sub) {
     var versions = sub.versions || [], reviews = sub.reviewHistory || [];
     if (!versions.length && !reviews.length) return '';
@@ -4363,6 +4397,19 @@
   }
   function openAuditSuite(){apiRequest('/api/operations?resource=audit').then(function(d){modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Audit Log</h3><div style="max-height:450px;overflow:auto">'+(d.logs||[]).map(function(a){return '<p style="font-size:10px;border-bottom:1px solid #f1f5f9;padding:7px"><b>'+esc(a.action)+'</b> · '+esc((a.profiles&&a.profiles.full_name)||'Sistem')+'<br><span style="color:#94a3b8">'+new Date(a.created_at).toLocaleString('id-ID')+' · '+esc(a.entity_type||'')+'</span></p>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});}
   function mountMenteeProgramSuite(){if(PAGE.indexOf('mentee-dashboard')!==0||!AUTH.profile)return;var host=$('main > div.px-8'),old=byId('mentee-program-suite');if(!host||old)return;var sec=document.createElement('section');sec.id='mentee-program-suite';sec.className='bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';sec.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="font-size:15px;font-weight:800">🗓️ Agenda, Presensi & Sertifikat</h2><p style="font-size:11px;color:#64748b">Satu tempat untuk kegiatan program dan kelulusanmu.</p></div><div style="display:flex;gap:6px"><a href="/api/calendar?public=1" class="ftg-suite-secondary">Kalender</a><button id="myAttendance" class="ftg-suite-secondary">Presensi</button><button id="myCertificate" class="ftg-suite-primary">Sertifikat</button></div></div>';host.insertBefore(sec,host.firstChild);$('#myAttendance',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=attendance').then(function(d){modal('<h3 style="font-weight:800">Riwayat Kehadiran</h3>'+((d.records||[]).map(function(r){return '<p style="padding:7px;border-bottom:1px solid #f1f5f9;font-size:11px"><b>'+esc((r.attendance_sessions||{}).title||'Kegiatan')+'</b><span style="float:right">'+esc(r.status)+'</span></p>';}).join('')||'<p style="color:#64748b">Belum ada data presensi.</p>'));});});$('#myCertificate',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=certificate').then(function(d){if(d.certificate){var u='certificate.html?code='+encodeURIComponent(d.certificate.verification_code);modal('<div style="text-align:center"><h3 style="font-weight:800">🎓 Sertifikat '+esc(d.certificate.certificate_number)+'</h3><p style="margin:8px">'+esc(d.certificate.recipient_name)+'</p><a href="'+u+'" target="_blank" class="ftg-suite-primary">Lihat & cetak sertifikat</a></div>');}else{var e=d.eligibility||{};modal('<h3 style="font-weight:800">Syarat Sertifikat</h3><p>Tugas: '+(e.completion||0)+'% / '+((e.requirements||{}).completion||80)+'%</p><p>Kehadiran: '+(e.attendance||0)+'% / '+((e.requirements||{}).attendance||80)+'%</p><p>Nilai: '+(e.quality||0)+' / '+((e.requirements||{}).quality||75)+'</p><p style="margin-top:8px;color:#b45309">Sertifikat diterbitkan panitia setelah seluruh syarat terpenuhi.</p>');}});});}
+  function openRecordingManager() {
+    apiRequest('/api/operations?resource=recordings').then(function(data){
+      var rows=data.recordings||[];
+      modal('<div class="ftg-recording-admin-head"><div><small>KONTEN LMS</small><h3><i class="fa-brands fa-youtube"></i> Kelola Rekaman Program</h3><p>Tambahkan link YouTube. Video otomatis muncul untuk mentee dan mentor.</p></div></div><div class="ftg-recording-admin-grid"><form id="recordingForm"><input id="recordingId" type="hidden"><label>Judul rekaman *</label><input id="recordingTitle" maxlength="160" required placeholder="Contoh: Mentoring Sesi 1 FBF"><label>Link YouTube *</label><input id="recordingUrl" type="url" required placeholder="https://youtu.be/..."><label>Nama sesi / kategori</label><input id="recordingSession" maxlength="120" placeholder="Mentoring, Workshop, atau kelas"><label>Tanggal rekaman</label><input id="recordingDate" type="datetime-local"><label>Deskripsi</label><textarea id="recordingDescription" maxlength="1500" rows="3" placeholder="Ringkasan materi untuk peserta"></textarea><div class="ftg-recording-form-actions"><button id="recordingReset" type="button" class="ftg-suite-secondary">Bersihkan</button><button id="recordingSave" type="submit" class="ftg-suite-primary"><i class="fa-solid fa-cloud-arrow-up"></i> Publikasikan</button></div></form><div class="ftg-recording-admin-list"><div><b>Rekaman terbit</b><span>'+rows.length+' video</span></div><div id="recordingAdminItems">'+(rows.map(function(r){return '<article data-recording-row="'+esc(r.id)+'"><img src="https://i.ytimg.com/vi/'+esc(r.youtube_id)+'/mqdefault.jpg" alt=""><div><b>'+esc(r.title)+'</b><small>'+esc(r.location||'Rekaman Program')+' · '+esc(recordingDate(r.starts_at))+'</small><div><button type="button" data-recording-edit="'+esc(r.id)+'">Edit</button><button type="button" data-recording-delete="'+esc(r.id)+'">Hapus</button></div></div></article>';}).join('')||'<div class="ftg-recording-none">Belum ada rekaman. Tambahkan video pertama dari formulir.</div>')+'</div></div></div>',function(box,close){
+        var form=byId('recordingForm'),save=byId('recordingSave');
+        function reset(){form.reset();byId('recordingId').value='';save.innerHTML='<i class="fa-solid fa-cloud-arrow-up"></i> Publikasikan';}
+        byId('recordingReset').addEventListener('click',reset);
+        $all('[data-recording-edit]',box).forEach(function(b){b.addEventListener('click',function(){var row=rows.filter(function(r){return String(r.id)===b.getAttribute('data-recording-edit');})[0];if(!row)return;byId('recordingId').value=row.id;byId('recordingTitle').value=row.title||'';byId('recordingUrl').value=row.meeting_link||'';byId('recordingSession').value=row.location||'';byId('recordingDescription').value=row.description||'';byId('recordingDate').value=row.starts_at?new Date(row.starts_at).toISOString().slice(0,16):'';save.textContent='Simpan Perubahan';form.scrollIntoView({behavior:'smooth',block:'start'});});});
+        $all('[data-recording-delete]',box).forEach(function(b){b.addEventListener('click',function(){if(!confirm('Hapus rekaman ini dari LMS? Video asli di YouTube tidak ikut terhapus.'))return;b.disabled=true;apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'recording_delete',id:b.getAttribute('data-recording-delete')})}).then(function(){toast('Rekaman dihapus dari LMS','✅');close();openRecordingManager();}).catch(function(e){toast(e.message,'⚠️');b.disabled=false;});});});
+        form.addEventListener('submit',function(e){e.preventDefault();var url=byId('recordingUrl').value.trim();if(!/(youtu\.be\/|youtube\.com\/(watch|embed|shorts))/.test(url)){toast('Masukkan link video YouTube yang valid','⚠️');return;}save.disabled=true;save.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan…';apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'recording_save',id:byId('recordingId').value||null,title:byId('recordingTitle').value,youtube_url:url,session_name:byId('recordingSession').value,recorded_at:byId('recordingDate').value||null,description:byId('recordingDescription').value})}).then(function(){toast('Rekaman dipublikasikan ke LMS','✅');close();openRecordingManager();}).catch(function(e){toast(e.message,'⚠️');save.disabled=false;save.textContent='Coba Lagi';});});
+      });
+    }).catch(function(e){toast(e.message,'⚠️');});
+  }
   function mountAdminOperations() {
     if (PAGE.indexOf('admin-') !== 0) return;
     var host = $('main > div.px-8'); if (!host || document.getElementById('admin-operations')) return;
@@ -4370,6 +4417,10 @@
     var sec = document.createElement('section'); sec.id = 'admin-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
     sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🏛️ Pusat Operasi Program</h2><p style="font-size:11px;color:#64748b">Semua kendali program, peserta, pembelajaran, kehadiran, dan pelaporan.</p></div><button id="adminGlobalTask" class="ftg-suite-primary">+ Tugas Global</button></div><div class="ftg-suite-grid"><button id="adminCohort">👥<b>Cohort & Pairing</b></button><button id="adminSettings">⚙️<b>Pengaturan</b></button><button id="adminRubrics">🎯<b>Rubrik</b></button><button id="adminCalendar">🗓️<b>Kalender</b></button><button id="adminAttendance">📷<b>Presensi QR</b></button><button id="adminCertificates">🎓<b>Sertifikat</b></button><button id="adminHealth">❤️<b>Kesehatan Program</b></button><button id="adminAudit">🛡️<b>Audit Log</b></button><button id="adminExcel">📊<b>Unduh Excel</b></button><button id="adminPdf">📄<b>Laporan PDF</b></button></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px"><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#1a5f4f">' + G.cohorts.length + '</b><p style="font-size:9px;color:#64748b">Cohort</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#8b5cf6">' + Object.keys(G.pairings || {}).length + '</b><p style="font-size:9px;color:#64748b">Pairing</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#f97316">' + submitted + '/' + total + '</b><p style="font-size:9px;color:#64748b">Terkumpul</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#16a34a">' + reviewed + '</b><p style="font-size:9px;color:#64748b">Dinilai</p></div></div>';
     host.insertBefore(sec, host.firstChild); $('#adminCohort', sec).addEventListener('click', openCohortManager); $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); }); $('#adminSettings', sec).addEventListener('click', openProgramSettingsSuite); $('#adminRubrics',sec).addEventListener('click',openRubricSuite);$('#adminCalendar',sec).addEventListener('click',openEventSuite);$('#adminAttendance',sec).addEventListener('click',openAttendanceSuite);$('#adminCertificates',sec).addEventListener('click',openCertificateSuite);$('#adminHealth',sec).addEventListener('click',openHealthSuite);$('#adminAudit',sec).addEventListener('click',openAuditSuite);$('#adminExcel',sec).addEventListener('click',function(){downloadProtected('/api/reports?format=xls','laporan-ftg-fellowship.xls');});$('#adminPdf',sec).addEventListener('click',function(){openProtectedReport('/api/reports?format=html');});
+    var suiteGrid=$('.ftg-suite-grid',sec),recordingButton=document.createElement('button');
+    recordingButton.id='adminRecordings';recordingButton.innerHTML='<i class="fa-solid fa-circle-play"></i><b>LMS & Rekaman</b>';
+    if(suiteGrid)suiteGrid.insertBefore(recordingButton,suiteGrid.children[1]||null);
+    recordingButton.addEventListener('click',openRecordingManager);
   }
 
   function disciplineStatus(status) {

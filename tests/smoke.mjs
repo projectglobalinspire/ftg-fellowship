@@ -316,3 +316,25 @@ test('real notifications, calendar, reports and health monitoring have server en
   assert.match(app, /Kesehatan Program/);
   assert.match(app, /Audit Log/);
 });
+
+test('LMS recordings are playable for mentees and mentors but managed only by Fasil', async () => {
+  const app = await text('app.js');
+  const operations = await text('api/operations.js');
+  const responsive = await text('responsive.css');
+  const vercel = await text('vercel.json');
+  assert.match(app, /function mountRecordingLibrary/);
+  assert.match(app, /youtube-nocookie\.com\/embed/);
+  assert.match(app, /LMS & Rekaman/);
+  assert.match(app, /function openRecordingManager/);
+  assert.match(app, /recording_save/);
+  assert.match(app, /recording_delete/);
+  assert.match(app, /workshop-library[\s\S]*mentee\|mentor|mentee\|mentor[\s\S]*workshop-library/);
+  assert.match(operations, /resource === 'recordings'/);
+  assert.match(operations, /const youtubeId/);
+  assert.match(operations, /action === 'recording_save'/);
+  assert.match(operations, /action === 'recording_delete'/);
+  assert.match(operations, /auth\.profile\.role !== 'admin'/);
+  assert.match(responsive, /\.ftg-lms-frame/);
+  assert.match(responsive, /aspect-ratio:16\/9/);
+  assert.match(vercel, /frame-src[^\"]*youtube-nocookie\.com/);
+});

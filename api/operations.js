@@ -4,6 +4,19 @@ const { deliverEmail } = require('./_email');
 
 const hash = value => crypto.createHash('sha256').update(String(value)).digest('hex');
 const safe = (value, max = 500) => String(value || '').trim().slice(0, max);
+const youtubeId = value => {
+  try {
+    const url = new URL(String(value || '').trim());
+    const host = url.hostname.replace(/^www\./, '').toLowerCase();
+    let id = '';
+    if (host === 'youtu.be') id = url.pathname.split('/').filter(Boolean)[0] || '';
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (url.pathname === '/watch') id = url.searchParams.get('v') || '';
+      else if (/^\/(embed|shorts)\//.test(url.pathname)) id = url.pathname.split('/')[2] || '';
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : '';
+  } catch (_) { return ''; }
+};
 
 async function audit(actor, action, entityType, entityId, detail = {}) {
   await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:actor, action, entity_type:entityType, entity_id:String(entityId || ''), detail }) });
@@ -42,6 +55,10 @@ module.exports = async function handler(req, res) {
       if (resource === 'events') {
         const rows = await adminFetch('/rest/v1/program_events?select=*&order=starts_at.asc');
         return send(res, 200, { events:rows });
+      }
+      if (resource === 'recordings') {
+        const rows = await adminFetch('/rest/v1/program_events?event_type=eq.other&select=*&order=starts_at.desc');
+        return send(res, 200, { recordings:rows.filter(row => String(row.location || '').startsWith('LMS · ')).map(row => Object.assign({}, row, { location:String(row.location).slice(6),youtube_id:youtubeId(row.meeting_link) })).filter(row => row.youtube_id) });
       }
       if (resource === 'certificate') {
         const target = auth.profile.role === 'mentee' ? auth.user.id : req.query.mentee_id;
@@ -99,6 +116,36 @@ module.exports = async function handler(req, res) {
       else rows = await adminFetch('/rest/v1/program_events', { method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload) });
       await audit(auth.user.id,'event.save','program_event',rows[0].id,{ title:payload.title });
       return send(res, 200, { event:rows[0] });
+    }
+    if (action === 'recording_save') {
+      const videoId = youtubeId(body.youtube_url);
+      if (!safe(body.title, 160)) return send(res, 400, { error:'Judul rekaman wajib diisi' });
+      if (!videoId) return send(res, 400, { error:'Link YouTube tidak valid. Gunakan link video youtu.be atau youtube.com.' });
+      const now = new Date().toISOString();
+      const payload = {
+        title:safe(body.title,160), event_type:'other', starts_at:body.recorded_at || now, ends_at:null,
+        location:`LMS · ${safe(body.session_name,110) || 'Rekaman Program'}`, meeting_link:`https://www.youtube.com/watch?v=${videoId}`,
+        description:safe(body.description,1500) || null, visibility:'all', cohort_id:null,
+        created_by:auth.user.id, updated_at:now
+      };
+      let rows;
+      if (body.id) {
+        const current = await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}&event_type=eq.other&select=id,location`);
+        if (current[0] && !String(current[0].location || '').startsWith('LMS · ')) return send(res, 404, { error:'Rekaman tidak ditemukan' });
+        if (!current[0]) return send(res, 404, { error:'Rekaman tidak ditemukan' });
+        rows = await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}`, { method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload) });
+      } else rows = await adminFetch('/rest/v1/program_events', { method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload) });
+      await audit(auth.user.id,'recording.save','program_event',rows[0].id,{ title:payload.title,youtube_id:videoId });
+      return send(res, body.id ? 200 : 201, { recording:Object.assign({}, rows[0], { youtube_id:videoId }) });
+    }
+    if (action === 'recording_delete') {
+      if (!body.id) return send(res, 400, { error:'Rekaman wajib dipilih' });
+      const current = await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}&event_type=eq.other&select=id,title,location`);
+      if (current[0] && !String(current[0].location || '').startsWith('LMS · ')) return send(res, 404, { error:'Rekaman tidak ditemukan' });
+      if (!current[0]) return send(res, 404, { error:'Rekaman tidak ditemukan' });
+      await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}`, { method:'DELETE',headers:{Prefer:'return=minimal'} });
+      await audit(auth.user.id,'recording.delete','program_event',body.id,{ title:current[0].title });
+      return send(res, 200, { ok:true });
     }
     if (action === 'attendance_create') {
       const token = crypto.randomBytes(18).toString('base64url');
