@@ -333,10 +333,8 @@ test('LMS recordings are playable for mentees and mentors but managed only by Fa
   assert.doesNotMatch(app, /serviceWorker\.register\(/);
   assert.match(app, /getRegistrations\(\)/);
   const workshop = await text('workshop-library.html');
-  assert.match(workshop, /ftg-lms-cache-repair-v42/);
-  assert.match(workshop, /classList\.contains\('ftg-lms-loading'\)/);
-  assert.match(workshop, /window\.setTimeout[\s\S]*1500/);
-  assert.match(workshop, /ftg-lms-playlist/);
+  assert.match(workshop, /ftg-lms-cache-repair-v43/);
+  assert.doesNotMatch(workshop, /classList\.contains\('ftg-lms-loading'\)/);
   assert.match(responsive, /Professional LMS composition/);
   assert.match(responsive, /SEDANG DIPUTAR/);
   assert.match(app, /LMS & Rekaman/);

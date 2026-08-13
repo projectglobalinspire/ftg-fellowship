@@ -11,9 +11,9 @@
   <script src="ftg-config.js?v=30"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script defer src="app.js?v=42"></script>
+  <script defer src="app.js?v=43"></script>
   <meta name="theme-color" content="#2c3e50">
-  <link rel="stylesheet" href="responsive.css?v=42">
+  <link rel="stylesheet" href="responsive.css?v=43">
   <link rel="icon" type="image/png" href="assets/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <link rel="manifest" href="manifest.json">
@@ -321,20 +321,14 @@
   </main>
   <script>
     (function () {
-      var repairKey = 'ftg-lms-cache-repair-v42';
+      var repairKey = 'ftg-lms-cache-repair-v43';
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller && !sessionStorage.getItem(repairKey)) {
         sessionStorage.setItem(repairKey, '1');
         Promise.all([
           navigator.serviceWorker.getRegistrations().then(function (items) { return Promise.all(items.map(function (item) { return item.unregister(); })); }),
           'caches' in window ? caches.keys().then(function (keys) { return Promise.all(keys.map(function (key) { return caches.delete(key); })); }) : Promise.resolve()
-        ]).then(function () { location.replace('workshop-library.html?fresh=42'); });
+        ]).then(function () { location.replace('workshop-library.html?fresh=43'); });
       }
-      window.setTimeout(function () {
-        var body = document.getElementById('ftgLmsBody');
-        if (!body || !body.classList.contains('ftg-lms-loading')) return;
-        body.className = 'ftg-lms-layout';
-        body.innerHTML = '<div class="ftg-lms-player"><div class="ftg-lms-frame"><iframe title="Mentoring Sesi 1 FBF" src="https://www.youtube-nocookie.com/embed/fmu6RKmoXAc?rel=0&modestbranding=1" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><div class="ftg-lms-now"><div class="ftg-lms-meta"><span>Mentoring</span><small>13 Agustus 2026</small></div><h3>Mentoring Sesi 1 FBF</h3><p>Rekaman Mentoring Sesi 1 Future Builders Fellowship.</p></div></div><aside class="ftg-lms-playlist"><div class="ftg-lms-playlist-head"><div><small>VIDEO PEMBELAJARAN</small><b>Daftar Rekaman</b></div><span>1 video</span></div><label class="ftg-lms-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="Cari judul atau sesi…" disabled></label><div><button type="button" class="ftg-lms-item is-active" aria-pressed="true"><span class="ftg-lms-thumb"><img src="https://i.ytimg.com/vi/fmu6RKmoXAc/mqdefault.jpg" alt=""><i class="fa-solid fa-play"></i></span><span><b>Mentoring Sesi 1 FBF</b><small>Mentoring · 13 Agustus 2026</small></span></button></div></aside>';
-      }, 1500);
     })();
   </script>
 </body>
