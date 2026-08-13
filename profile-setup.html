@@ -105,15 +105,14 @@
           document.getElementById('fullName').value = profile.full_name || '';
           document.getElementById('googleEmail').value = profile.google_email || session.user.email || '';
           document.getElementById('path').value = profile.path || '';
-          document.getElementById('pendingName').textContent = profile.full_name || 'Future Builder';
           document.getElementById('menteeFields').classList.toggle('hidden', mentor);
           document.getElementById('mentorFields').classList.toggle('hidden', !mentor);
           document.getElementById('asideEyebrow').textContent = mentor ? 'WELCOME, GROWTH PARTNER' : 'WELCOME, FUTURE BUILDER';
           document.getElementById('asideTitle').textContent = mentor ? 'Pengalamanmu dapat membuka jalan generasi berikutnya.' : 'Langkah pertamamu dimulai dari sini.';
           document.getElementById('asideCopy').textContent = mentor ? 'Lengkapi profil profesional dan komitmen mentoring. Fasil akan meninjau kecocokan sebelum dashboard mentor dibuka.' : 'Lengkapi profil dengan data yang benar. Fasil akan mencocokkan pendaftaranmu dengan daftar peserta sebelum akses program dibuka.';
           document.getElementById('setupIntro').textContent = mentor ? 'Isi data mentor berikut dengan lengkap. Informasi ini hanya digunakan Fasil untuk proses seleksi, pairing, dan keamanan program.' : 'Ceritakan sedikit tentang dirimu agar Fasil dapat memverifikasi bahwa akun ini benar milik peserta FTG.';
-          document.getElementById('pendingCopy').innerHTML = mentor ? 'Halo, <b id="pendingNameMentor"></b>. Pengajuan mentor Anda sedang ditinjau oleh Fasil. Dashboard mentor akan terbuka setelah disetujui.' : 'Halo, <b>' + (profile.full_name || 'Future Builder') + '</b>. Fasil sedang mencocokkan akun dengan daftar peserta.';
-          if (mentor) document.getElementById('pendingNameMentor').textContent = profile.full_name || 'Calon Mentor';
+          document.getElementById('pendingCopy').innerHTML = mentor ? 'Halo, <b id="pendingName"></b>. Pengajuan mentor Anda sedang ditinjau oleh Fasil. Dashboard mentor akan terbuka setelah disetujui.' : 'Halo, <b id="pendingName"></b>. Fasil sedang mencocokkan akun dengan daftar peserta.';
+          document.getElementById('pendingName').textContent = profile.full_name || (mentor ? 'Calon Mentor' : 'Future Builder');
           var application = (session.user.user_metadata && session.user.user_metadata.mentor_application) || {};
           if (mentor && application.phone) {
             document.getElementById('mentorPhone').value = application.phone || '';
