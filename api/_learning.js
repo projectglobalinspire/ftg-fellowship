@@ -18,7 +18,7 @@ function defaultConfig(settings = {}) {
   ];
   return {
     version: 1,
-    title: 'GI Design Thinking Canvas — Prophetic Method',
+    title: 'GI Design Thinking Canvas: Prophetic Method',
     instructions: 'Isi canvas secara bertahap. Setiap perubahan tersimpan otomatis dan dapat dipantau mentor serta Fasil.',
     active_week: active,
     weeks: phases.map((row, index) => ({
