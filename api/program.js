@@ -126,7 +126,9 @@ async function updateOwnProfile(req, res) {
     email:prefs.email !== false,
     deadline:prefs.deadline !== false,
     review:prefs.review !== false,
-    session:prefs.session !== false
+    session:prefs.session !== false,
+    profile_bio:bio,
+    avatar_url:avatarUrl
   };
   const patch = { full_name:fullName, initials:initials(fullName), path, notification_preferences:notificationPreferences, updated_at:new Date().toISOString() };
   const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=representation' }, body:JSON.stringify(patch) });

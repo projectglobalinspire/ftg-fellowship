@@ -18,8 +18,15 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const page = Math.max(1, +(req.query.page || 1));
       const users = await adminFetch(`/auth/v1/admin/users?page=${page}&per_page=100`);
+      const authUsers = users.users || users;
       const profiles = await adminFetch('/rest/v1/profiles?select=*&order=created_at.desc');
-      return send(res, 200, { users: users.users || users, profiles });
+      const hydratedProfiles = (profiles || []).map(profile => {
+        const account = (authUsers || []).find(user => user.id === profile.id) || {};
+        const metadata = account.user_metadata || {};
+        const preferences = profile.notification_preferences || {};
+        return Object.assign({}, profile, { bio:metadata.bio || preferences.profile_bio || '', avatar_url:metadata.avatar_url || preferences.avatar_url || '' });
+      });
+      return send(res, 200, { users: authUsers, profiles:hydratedProfiles });
     }
     const body = req.body || {};
     if (req.method === 'POST') {

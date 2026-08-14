@@ -101,6 +101,7 @@
 
   var sb = null, lastAppliedAt = 0, pushTimer = null, pollStarted = false;
   var AUTH = { user: null, profile: null, accessToken: '', profilesByNumber: {}, profilesById: {} };
+  var profileLiveChannel = null, profilePollTimer = null, profileLiveReady = false;
 
   function mySession() {
     try { return JSON.parse(localStorage.getItem('ftgSession') || 'null'); } catch (e) { return null; }
@@ -1015,6 +1016,52 @@
     }
   }
 
+  function hydrateProfileRecord(profile) {
+    if (!profile) return profile;
+    var preferences = profile.notification_preferences || {};
+    profile.bio = profile.bio || preferences.profile_bio || '';
+    profile.avatar_url = profile.avatar_url || preferences.avatar_url || '';
+    return profile;
+  }
+  function patchVisibleProfileIdentity(previous, profile) {
+    if (!profile) return;
+    var oldName = previous && previous.full_name, oldPath = previous && previous.path, oldInitials = previous && previous.initials;
+    if (oldName && oldName !== profile.full_name) {
+      $all('main,aside').forEach(function(root){var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),nodes=[],node;while((node=walker.nextNode()))nodes.push(node);nodes.forEach(function(textNode){if(!textNode.parentElement||/^(SCRIPT|STYLE|TEXTAREA|INPUT|OPTION)$/.test(textNode.parentElement.tagName))return;if(textNode.nodeValue.indexOf(oldName)>-1)textNode.nodeValue=textNode.nodeValue.split(oldName).join(profile.full_name);});});
+    }
+    if (oldPath && oldPath !== profile.path) $all('main p,main small,aside p,aside small').forEach(function(node){if(node.textContent.trim()===oldPath)node.textContent=profile.path||'';});
+    if (oldInitials && oldInitials !== profile.initials) $all('main .rounded-full,aside .rounded-full').forEach(function(node){if(node.textContent.trim()===oldInitials)node.textContent=profile.initials||initialsOf(profile.full_name);});
+    $all('[data-profile-avatar="'+profile.id+'"]').forEach(function(node){node.innerHTML=profile.avatar_url?'<img src="'+esc(profile.avatar_url)+'" alt="Foto '+esc(profile.full_name)+'">':esc(profile.initials||initialsOf(profile.full_name));node.classList.toggle('ftg-profile-photo',Boolean(profile.avatar_url));});
+  }
+  function handleProfileRealtime(payload, quiet) {
+    var eventType = payload.eventType || payload.event || 'UPDATE', next = payload['new'] || payload.new || null, old = payload.old || {};
+    var id = (next && next.id) || old.id; if (!id) return;
+    var previous = AUTH.profilesById[id] && Object.assign({},AUTH.profilesById[id]);
+    if (eventType === 'DELETE') {
+      delete AUTH.profilesById[id];
+      Object.keys(AUTH.profilesByNumber).forEach(function(number){if(AUTH.profilesByNumber[number]&&AUTH.profilesByNumber[number].id===id){delete AUTH.profilesByNumber[number];delete MENTEES[number];}});
+    } else {
+      next = hydrateProfileRecord(Object.assign({},next));
+      AUTH.profilesById[id] = Object.assign({},previous||{},next);
+      var profile = AUTH.profilesById[id], number = Number(profile.mentee_number||0);
+      if (number) { AUTH.profilesByNumber[number]=profile;MENTEES[number]=Object.assign({},MENTEES[number]||{},{name:profile.full_name,initials:profile.initials||initialsOf(profile.full_name),path:profile.path||'Career Path',email:profile.email});if(profile.mentor_id)G.pairings[number]=profile.mentor_id; }
+      patchVisibleProfileIdentity(previous,profile);
+      if (AUTH.user && id === AUTH.user.id) {
+        AUTH.profile=Object.assign({},AUTH.profile,profile);
+        var local=mySession()||{};local.name=profile.full_name;local.initials=profile.initials;local.path=profile.path;localStorage.setItem('ftgSession',JSON.stringify(local));
+        personalize();applyOwnProfilePhoto();
+      }
+    }
+    document.dispatchEvent(new CustomEvent('ftg:profiles-changed',{detail:{eventType:eventType,id:id,profile:next,previous:previous}}));
+    if (!quiet && (!AUTH.user || id !== AUTH.user.id)) toast('Profil '+((next&&next.full_name)||(previous&&previous.full_name)||'pengguna')+' diperbarui','👤');
+  }
+  function startProfileRealtime() {
+    if (!sb || profileLiveReady) return; profileLiveReady=true;
+    try { profileLiveChannel=sb.channel('ftg-profiles-live').on('postgres_changes',{event:'*',schema:'public',table:'profiles'},function(payload){handleProfileRealtime(payload,false);}).subscribe(); } catch(e) { console.warn(e); }
+    function pollProfiles(){if(document.hidden)return;sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status,warning_level,absence_count,last_active_at,graduation_eligible,notification_preferences,updated_at').then(function(result){if(result.error)return;var seen={};(result.data||[]).forEach(function(profile){seen[profile.id]=true;var known=AUTH.profilesById[profile.id];if(!known||String(known.updated_at||'')!==String(profile.updated_at||''))handleProfileRealtime({eventType:known?'UPDATE':'INSERT',new:profile,old:known||{}},true);});if(AUTH.profile&&AUTH.profile.role==='admin')Object.keys(AUTH.profilesById).forEach(function(id){if(!seen[id])handleProfileRealtime({eventType:'DELETE',old:{id:id}},true);});}).catch(function(){});}
+    profilePollTimer=setInterval(pollProfiles,3000);document.addEventListener('visibilitychange',function(){if(!document.hidden)pollProfiles();});
+  }
+
   function startRealtime() {
     if (!sb || !IS_APP_PAGE) return;
     try {
@@ -1027,6 +1074,7 @@
         })
         .subscribe();
     } catch (e) { /* polling di bawah tetap jalan */ }
+    startProfileRealtime();
     startPolling();
   }
 
@@ -1562,7 +1610,7 @@
   function loadStructuredData() {
     if (!sb || !AUTH.profile) return Promise.resolve(false);
     return Promise.all([
-      sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status,warning_level,absence_count,last_active_at,graduation_eligible'),
+      sb.from('profiles').select('id,email,full_name,role,initials,path,cohort_id,mentee_number,mentor_id,status,warning_level,absence_count,last_active_at,graduation_eligible,notification_preferences,updated_at'),
       sb.from('program_settings').select('*').eq('id', 1).maybeSingle(),
       sb.from('cohorts').select('*').order('created_at', { ascending: false }),
       apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'profile_context' }) }).catch(function () { return null; })
@@ -1577,6 +1625,7 @@
       });
       if (cohorts && cohorts.length) G.cohorts = cohorts.map(function (c) { return { id:c.id, name:c.name, status:c.status, startDate:c.start_date || '', endDate:c.end_date || '' }; });
       (p.data || []).forEach(function (x) {
+        x = hydrateProfileRecord(x);
         AUTH.profilesById[x.id] = x;
         if (x.mentee_number) {
           var number = Number(x.mentee_number);
@@ -4529,9 +4578,8 @@
       $('#profileEditSave', box).addEventListener('click', function () {
         var button = this; button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
         apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'profile_update', full_name:$('#profileEditName',box).value.trim(), bio:$('#profileEditBio',box).value.trim(), avatar_data:avatarData, remove_avatar:removeAvatar, path:path ? path.value : profile.path, notification_preferences:{ email:$('#profileEmailNotif',box).checked, deadline:$('#profileDeadlineNotif',box).checked, review:$('#profileReviewNotif',box).checked, session:$('#profileSessionNotif',box).checked } }) }).then(function (data) {
-          AUTH.profile = Object.assign(AUTH.profile, data.profile || {});
-          var local = mySession() || {}; local.name=AUTH.profile.full_name;local.initials=AUTH.profile.initials;local.path=AUTH.profile.path;localStorage.setItem('ftgSession',JSON.stringify(local));
-          close(); personalize(); applyOwnProfilePhoto(); toast('Profil berhasil diperbarui','✅');
+          handleProfileRealtime({eventType:'UPDATE',new:data.profile||{},old:AUTH.profile},true);
+          close(); toast('Profil berhasil diperbarui dan tersinkron real-time','✅');
         }).catch(function (error) { button.disabled=false;button.innerHTML='<i class="fa-solid fa-floppy-disk"></i> Simpan Profil';toast(error.message,'⚠️'); });
       });
       $('#profilePasswordSave',box).addEventListener('click',function(){var button=this,password=$('#profileNewPassword',box).value,confirm=$('#profileConfirmPassword',box).value;if(password!==confirm){toast('Konfirmasi password tidak sama','⚠️');return;}button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';apiRequest('/api/program',{method:'POST',body:JSON.stringify({action:'profile_password',password:password})}).then(function(){button.innerHTML='<i class="fa-solid fa-check"></i> Password tersimpan';$('#profileNewPassword',box).value='';$('#profileConfirmPassword',box).value='';toast('Password login berhasil disimpan','✅');}).catch(function(error){button.disabled=false;button.innerHTML='<i class="fa-solid fa-shield-halved"></i> Simpan Password';toast(error.message,'⚠️');});});
@@ -4569,11 +4617,12 @@
       var q = ($('#accountSearch').value || '').toLowerCase(), role = $('#accountRoleFilter').value;
       var rows = profiles.filter(function (p) { return (!q || (p.full_name + ' ' + p.email).toLowerCase().indexOf(q) > -1) && (!role || p.role === role); });
       var count = $('#accountCount'); if (count) count.textContent = rows.length + ' akun ditemukan';
-      wrap.innerHTML = rows.length ? rows.map(function (p) { var active = p.status === 'active', statusLabel = p.status === 'invited' ? 'MENUNGGU' : p.status === 'suspended' ? 'TERKUNCI' : p.status === 'dropped' ? 'GUGUR' : p.status === 'graduated' ? 'LULUS' : 'AKTIF'; var provider = p.login_provider === 'google' ? 'Google' : 'Email'; return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50"><div class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[10px]" style="background:' + (p.role === 'mentor' ? '#1a5f4f' : p.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + esc(p.initials || initialsOf(p.full_name)) + '</div><div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(p.full_name) + '</p><p class="text-slate-400 text-[10px] truncate">' + esc(p.email) + ' · ' + esc(p.path || '') + '</p></div><span style="background:' + (provider === 'Google' ? '#eff6ff;color:#1d4ed8' : '#f1f5f9;color:#475569') + ';font-size:9px;font-weight:800;padding:4px 7px;border-radius:999px">' + (provider === 'Google' ? 'G Google' : '✉ Email') + '</span>' + accountRoleChip(p.role) + '<span style="font-size:9px;font-weight:800;color:' + (active ? '#16a34a' : p.status === 'invited' ? '#d97706' : '#ef4444') + '">' + statusLabel + '</span><button data-account-edit="' + p.id + '" style="border:0;background:#f1f5f9;color:#475569;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:800">Kelola</button></div>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">Tidak ada akun yang cocok.</p>';
+      wrap.innerHTML = rows.length ? rows.map(function (p) { var active = p.status === 'active', statusLabel = p.status === 'invited' ? 'MENUNGGU' : p.status === 'suspended' ? 'TERKUNCI' : p.status === 'dropped' ? 'GUGUR' : p.status === 'graduated' ? 'LULUS' : 'AKTIF'; var provider = p.login_provider === 'google' ? 'Google' : 'Email', avatar=p.avatar_url?'<img src="'+esc(p.avatar_url)+'" alt="Foto '+esc(p.full_name)+'" style="width:100%;height:100%;object-fit:cover">':esc(p.initials||initialsOf(p.full_name)); return '<div class="px-5 py-3 flex items-center gap-3 border-b border-slate-50"><div data-profile-avatar="'+p.id+'" class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[10px] '+(p.avatar_url?'ftg-profile-photo':'')+'" style="background:' + (p.role === 'mentor' ? '#1a5f4f' : p.role === 'admin' ? '#8b5cf6' : '#f97316') + '">' + avatar + '</div><div class="flex-1 min-w-0"><p class="text-[#2c3e50] text-xs font-semibold truncate">' + esc(p.full_name) + '</p><p class="text-slate-400 text-[10px] truncate">' + esc(p.email) + ' · ' + esc(p.path || '') + '</p>'+(p.bio?'<p class="text-slate-500 text-[9px] truncate">'+esc(p.bio)+'</p>':'')+'</div><span style="background:' + (provider === 'Google' ? '#eff6ff;color:#1d4ed8' : '#f1f5f9;color:#475569') + ';font-size:9px;font-weight:800;padding:4px 7px;border-radius:999px">' + (provider === 'Google' ? 'G Google' : '✉ Email') + '</span>' + accountRoleChip(p.role) + '<span style="font-size:9px;font-weight:800;color:' + (active ? '#16a34a' : p.status === 'invited' ? '#d97706' : '#ef4444') + '">' + statusLabel + '</span><button data-account-edit="' + p.id + '" style="border:0;background:#f1f5f9;color:#475569;border-radius:8px;padding:6px 8px;font-size:9px;font-weight:800">Kelola</button></div>'; }).join('') : '<p style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">Tidak ada akun yang cocok.</p>';
       $all('[data-account-edit]', wrap).forEach(function (b) { b.addEventListener('click', function () { secureAccountManage(profiles.filter(function (p) { return p.id === b.getAttribute('data-account-edit'); })[0], load); }); });
     }
     function load() { wrap.innerHTML = '<p style="padding:24px;text-align:center;color:#64748b;font-size:12px">Memuat akun aman...</p>'; apiRequest('/api/admin-users').then(function (data) { var users=data.users||[];profiles=(data.profiles||[]).map(function(p){var u=users.filter(function(x){return x.id===p.id;})[0]||{},meta=u.user_metadata||{};p.login_provider=(meta.signup_provider||((u.app_metadata||{}).provider)||'email');p.requested_role=meta.requested_role||p.role;p.mentor_application=meta.mentor_application||null;return p;}); render(); }).catch(function (e) { wrap.innerHTML = '<p style="padding:18px;color:#dc2626;font-size:11px">' + esc(e.message) + '</p>'; }); }
     $('#accountSearch').addEventListener('input', render); $('#accountRoleFilter').addEventListener('change', render); load();
+    if(!wrap.getAttribute('data-profile-live')){wrap.setAttribute('data-profile-live','1');var accountRefreshTimer;document.addEventListener('ftg:profiles-changed',function(){clearTimeout(accountRefreshTimer);accountRefreshTimer=setTimeout(load,180);});}
   }
   function secureAccountModal(role, done) {
     var isMentee = role === 'mentee';
@@ -4802,12 +4851,13 @@
         $('#disciplineSummary', sec).innerHTML = '<span><b>' + mentees.length + '</b> Peserta</span><span class="is-warning"><b>' + warnings + '</b> Perlu perhatian</span><span class="is-locked"><b>' + locked + '</b> Terkunci</span><span class="is-dropped"><b>' + dropped + '</b> Gugur</span>';
         $('#disciplineRows', sec).innerHTML = mentees.map(function (p) {
           var absence = Math.max(0, Number(p.absence_count || 0)), status = disciplineStatus(p.status);
-          return '<button type="button" data-discipline-user="' + p.id + '" class="ftg-discipline-card"><span class="ftg-discipline-card-avatar">' + esc(p.initials || initialsOf(p.full_name)) + '</span><span class="ftg-discipline-card-person"><b>' + esc(p.full_name) + '</b><small>' + esc(p.path || 'Mentee') + '</small></span><span class="ftg-discipline-absence ' + (absence >= 3 ? 'is-critical' : absence >= 2 ? 'is-warning' : '') + '"><b>' + absence + '/3</b><small>Tidak hadir</small></span><span class="ftg-discipline-status" style="background:' + status.bg + ';color:' + status.color + '"><i class="fa-solid ' + status.icon + '"></i> ' + status.label + '</span><i class="fa-solid fa-chevron-right"></i></button>';
+          return '<button type="button" data-discipline-user="' + p.id + '" class="ftg-discipline-card"><span data-profile-avatar="'+p.id+'" class="ftg-discipline-card-avatar '+(p.avatar_url?'ftg-profile-photo':'')+'">' + (p.avatar_url?'<img src="'+esc(p.avatar_url)+'" alt="Foto '+esc(p.full_name)+'">':esc(p.initials || initialsOf(p.full_name))) + '</span><span class="ftg-discipline-card-person"><b>' + esc(p.full_name) + '</b><small>' + esc(p.path || 'Mentee') + (p.bio?' · '+esc(p.bio):'') + '</small></span><span class="ftg-discipline-absence ' + (absence >= 3 ? 'is-critical' : absence >= 2 ? 'is-warning' : '') + '"><b>' + absence + '/3</b><small>Tidak hadir</small></span><span class="ftg-discipline-status" style="background:' + status.bg + ';color:' + status.color + '"><i class="fa-solid ' + status.icon + '"></i> ' + status.label + '</span><i class="fa-solid fa-chevron-right"></i></button>';
         }).join('') || '<p class="ftg-discipline-loading">Belum ada mentee.</p>';
         $all('[data-discipline-user]', sec).forEach(function (button) { button.addEventListener('click', function () { openDisciplineParticipant(mentees.filter(function (p) { return p.id === button.getAttribute('data-discipline-user'); })[0], load); }); });
       }).catch(function (error) { $('#disciplineRows', sec).innerHTML = '<p class="ftg-discipline-loading" style="color:#dc2626">' + esc(error.message) + '</p>'; });
     }
     load();
+    var disciplineRefreshTimer;document.addEventListener('ftg:profiles-changed',function(){if(!document.body.contains(sec))return;clearTimeout(disciplineRefreshTimer);disciplineRefreshTimer=setTimeout(load,220);});
   }
 
   function openDrivePreview(link, name, download) {
