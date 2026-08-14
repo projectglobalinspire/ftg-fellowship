@@ -171,6 +171,7 @@ module.exports = async function handler(req, res) {
     ]);
     await adminFetch(`/rest/v1/mentor_sessions?or=(mentor_id.eq.${encodeURIComponent(id)},mentee_id.eq.${encodeURIComponent(id)})`, { method:'DELETE', headers:{ Prefer:'return=minimal' } }).catch(() => null);
     await adminFetch(`/rest/v1/mentor_notes?or=(mentor_id.eq.${encodeURIComponent(id)},mentee_id.eq.${encodeURIComponent(id)})`, { method:'DELETE', headers:{ Prefer:'return=minimal' } }).catch(() => null);
+    await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/profile-photos/${id}/avatar.jpg`, { method:'DELETE', headers:{ apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` } }).catch(() => null);
     await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}?should_soft_delete=true`, { method: 'DELETE' });
     return send(res, 200, { ok: true, recoverable: false });
   } catch (error) { return send(res, 500, { error: error.message }); }

@@ -281,6 +281,7 @@ test('dashboards do not flicker and users can edit profile while Fasil can delet
   assert.match(program, /action === 'profile_update'/);
   assert.match(program, /action === 'profile_password'/);
   assert.match(program, /async function uploadProfilePhoto/);
+  assert.match(program, /async function deleteProfilePhoto/);
   assert.match(app, /function resizeProfilePhoto/);
   assert.match(app, /Bio singkat/);
   assert.match(app, /Tambahkan password login/);

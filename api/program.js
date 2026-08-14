@@ -120,7 +120,7 @@ async function updateOwnProfile(req, res) {
   let avatarUrl = clean(user.user_metadata && user.user_metadata.avatar_url, 1000);
   const avatarData = String(req.body && req.body.avatar_data || '');
   if (avatarData) avatarUrl = await uploadProfilePhoto(user.id, avatarData);
-  if (req.body && req.body.remove_avatar === true) avatarUrl = '';
+  if (req.body && req.body.remove_avatar === true) { await deleteProfilePhoto(user.id); avatarUrl = ''; }
   const notificationPreferences = {
     in_app:true,
     email:prefs.email !== false,
@@ -151,6 +151,11 @@ async function uploadProfilePhoto(userId, dataUrl) {
   const upload = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/profile-photos/${objectPath}`, { method:'POST', headers:Object.assign({ 'Content-Type':match[1], 'x-upsert':'true' }, headers), body:bytes });
   if (!upload.ok) throw new Error('Foto profil gagal diunggah');
   return `${process.env.SUPABASE_URL}/storage/v1/object/public/profile-photos/${objectPath}?v=${Date.now()}`;
+}
+
+async function deleteProfilePhoto(userId) {
+  const headers = { apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+  await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/profile-photos/${userId}/avatar.jpg`, { method:'DELETE', headers }).catch(() => null);
 }
 
 async function updateOwnPassword(req, res) {
