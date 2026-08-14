@@ -1071,8 +1071,8 @@
   function personalize() {
     var ses = mySession();
     if (!ses || !ses.name) return;
-    var displayName = ses.role === 'admin' ? 'Fasil' : ses.name;
-    var displayInitials = ses.role === 'admin' ? 'FS' : (ses.initials || displayName.slice(0, 2).toUpperCase());
+    var displayName = ses.name;
+    var displayInitials = ses.initials || displayName.slice(0, 2).toUpperCase();
     var color = ses.role === 'mentor' ? '#1a5f4f' : (ses.role === 'admin' ? '#8b5cf6' : (MENTEES[myMenteeId()] || {}).color || '#f97316');
 
     // pill identitas di sidebar
@@ -1531,7 +1531,10 @@
       return sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
     }).then(function (result) {
       if (result.error || !result.data || result.data.status !== 'active') throw new Error('Profil tidak aktif');
-      AUTH.profile = result.data;
+      AUTH.profile = Object.assign({}, result.data, {
+        bio:(AUTH.user.user_metadata && AUTH.user.user_metadata.bio) || '',
+        avatar_url:(AUTH.user.user_metadata && AUTH.user.user_metadata.avatar_url) || ''
+      });
       var mentorApplication = AUTH.user && AUTH.user.user_metadata && AUTH.user.user_metadata.mentor_application;
       var mentorComplete = mentorApplication && mentorApplication.commitment_confirmed && mentorApplication.phone && mentorApplication.job_title && mentorApplication.company_or_institution && mentorApplication.years_of_experience && Array.isArray(mentorApplication.expertise_tags) && mentorApplication.expertise_tags.length && String(mentorApplication.bio || '').length >= 40 && mentorApplication.availability_hours && mentorApplication.mentoring_format && String(mentorApplication.motivation || '').length >= 60;
       if (AUTH.profile.role === 'mentor' && !mentorComplete) {
@@ -4482,20 +4485,56 @@
     options = options || {}; options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
     return fetch(path, options).then(function (r) { return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || 'Permintaan gagal'); return data; }); });
   }
+  function profileAvatarMarkup(profile, size) {
+    size = size || 48;
+    var url = profile && profile.avatar_url;
+    return '<span class="ftg-profile-photo" style="width:'+size+'px;height:'+size+'px">' + (url ? '<img src="'+esc(url)+'" alt="Foto profil">' : esc((profile && profile.initials) || initialsOf(profile && profile.full_name || 'FTG'))) + '</span>';
+  }
+  function applyOwnProfilePhoto() {
+    if (!AUTH.profile) return;
+    var targets = [], pill = $('aside .mx-4.mt-4');
+    if (pill) { var side = $('div.rounded-full', pill); if (side) targets.push(side); }
+    var header = $('main header'), actions = header && $('.ftg-header-actions', header), control = actions && $('.ftg-profile-control', actions);
+    if (control) targets.push(control);
+    targets.forEach(function (target) {
+      target.classList.add('ftg-profile-photo');
+      target.style.background = AUTH.profile.avatar_url ? 'transparent' : (AUTH.profile.role === 'mentor' ? '#1a5f4f' : AUTH.profile.role === 'admin' ? '#8b5cf6' : '#f97316');
+      target.innerHTML = AUTH.profile.avatar_url ? '<img src="'+esc(AUTH.profile.avatar_url)+'" alt="Foto '+esc(AUTH.profile.full_name)+'">' : esc(AUTH.profile.initials || initialsOf(AUTH.profile.full_name));
+    });
+  }
+  function resizeProfilePhoto(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type)) return reject(new Error('Pilih foto JPG, PNG, atau WebP'));
+      if (file.size > 8 * 1024 * 1024) return reject(new Error('File foto maksimal 8MB'));
+      var reader = new FileReader();
+      reader.onerror = function(){reject(new Error('Foto tidak dapat dibaca'));};
+      reader.onload = function(){var image=new Image();image.onerror=function(){reject(new Error('Foto tidak valid'));};image.onload=function(){var max=512,scale=Math.min(1,max/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.84));};image.src=reader.result;};
+      reader.readAsDataURL(file);
+    });
+  }
   function openProfileEditor() {
     if (!AUTH.profile || !AUTH.user) return;
     var profile = AUTH.profile, prefs = profile.notification_preferences || {};
     var roleLabel = profile.role === 'admin' ? 'Fasil' : profile.role === 'mentor' ? 'Mentor' : 'Mentee';
     modal('<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:48px;height:48px;border-radius:15px;background:#1a5f4f;color:#fff;display:grid;place-items:center;font-weight:900">' + esc(profile.initials || initialsOf(profile.full_name)) + '</div><div><small style="font-size:9px;color:#64748b;font-weight:800">PROFIL ' + roleLabel.toUpperCase() + '</small><h3 style="font-weight:850;color:#1e293b;font-size:17px">Edit profil saya</h3></div></div><label style="display:block;font-size:10px;font-weight:800;color:#334155;margin-bottom:4px">Nama lengkap</label><input id="profileEditName" maxlength="120" value="' + esc(profile.full_name || '') + '" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:9px"><label style="display:block;font-size:10px;font-weight:800;color:#334155;margin-bottom:4px">Email login & notifikasi</label><input value="' + esc(profile.email || AUTH.user.email || '') + '" disabled style="width:100%;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;border-radius:10px;padding:9px;margin-bottom:9px">' + (profile.role === 'mentee' ? '<label style="display:block;font-size:10px;font-weight:800;color:#334155;margin-bottom:4px">Jalur program</label><select id="profileEditPath" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;background:#fff;margin-bottom:10px"><option>Career Path</option><option>Entrepreneur Path</option></select>' : '<div style="background:#f1f5f9;color:#475569;border-radius:10px;padding:9px;font-size:10px;margin-bottom:10px">Role: <b>' + roleLabel + '</b> · ' + esc(profile.path || '') + '</div>') + '<div style="background:#f8fafc;border-radius:11px;padding:10px"><b style="font-size:10px;color:#334155">Notifikasi email</b><label style="display:flex;align-items:center;gap:7px;font-size:10px;color:#475569;margin-top:7px"><input id="profileEmailNotif" type="checkbox" ' + (prefs.email === false ? '' : 'checked') + '> Aktifkan email program</label><label style="display:flex;align-items:center;gap:7px;font-size:10px;color:#475569;margin-top:6px"><input id="profileDeadlineNotif" type="checkbox" ' + (prefs.deadline === false ? '' : 'checked') + '> Pengingat deadline</label><label style="display:flex;align-items:center;gap:7px;font-size:10px;color:#475569;margin-top:6px"><input id="profileReviewNotif" type="checkbox" ' + (prefs.review === false ? '' : 'checked') + '> Feedback dan revisi</label><label style="display:flex;align-items:center;gap:7px;font-size:10px;color:#475569;margin-top:6px"><input id="profileSessionNotif" type="checkbox" ' + (prefs.session === false ? '' : 'checked') + '> Agenda mentoring</label></div><button id="profileEditSave" class="ftg-suite-primary" style="width:100%;margin-top:12px"><i class="fa-solid fa-floppy-disk"></i> Simpan Profil</button>', function (box, close) {
-      var path = $('#profileEditPath', box); if (path) path.value = profile.path || 'Career Path';
+      var path = $('#profileEditPath', box), avatarData = '', removeAvatar = false; if (path) path.value = profile.path || 'Career Path';
+      var firstLabel = $('label',box), photoRow=document.createElement('div');
+      photoRow.className='ftg-profile-photo-row';photoRow.innerHTML='<div id="profilePhotoPreview">'+profileAvatarMarkup(profile,64)+'</div><div><label class="ftg-photo-button"><i class="fa-solid fa-camera"></i> Ganti foto<input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden></label><button id="profilePhotoRemove" type="button" '+(profile.avatar_url?'':'hidden')+'>Hapus foto</button><small>JPG, PNG, atau WebP · otomatis diperkecil</small></div>';
+      box.insertBefore(photoRow,firstLabel);
+      var nameInput=$('#profileEditName',box),bioWrap=document.createElement('div');bioWrap.className='ftg-profile-bio';bioWrap.innerHTML='<label>Bio singkat <span id="profileBioCount">'+String(profile.bio||'').length+'/500</span></label><textarea id="profileEditBio" maxlength="500" rows="3" placeholder="Ceritakan singkat tentang dirimu, minat, atau peranmu di program...">'+esc(profile.bio||'')+'</textarea>';nameInput.parentNode.insertBefore(bioWrap,nameInput.nextSibling);
+      $('#profileEditBio',box).addEventListener('input',function(){$('#profileBioCount',box).textContent=this.value.length+'/500';});
+      $('#profilePhotoInput',box).addEventListener('change',function(){var input=this;if(!input.files[0])return;resizeProfilePhoto(input.files[0]).then(function(data){avatarData=data;removeAvatar=false;$('#profilePhotoPreview',box).innerHTML='<span class="ftg-profile-photo" style="width:64px;height:64px"><img src="'+data+'" alt="Pratinjau foto"></span>';$('#profilePhotoRemove',box).hidden=false;}).catch(function(error){toast(error.message,'⚠️');input.value='';});});
+      $('#profilePhotoRemove',box).addEventListener('click',function(){avatarData='';removeAvatar=true;$('#profilePhotoPreview',box).innerHTML='<span class="ftg-profile-photo" style="width:64px;height:64px">'+esc(profile.initials||initialsOf(profile.full_name))+'</span>';this.hidden=true;});
+      var passwordPanel=document.createElement('details');passwordPanel.className='ftg-password-panel';passwordPanel.innerHTML='<summary><i class="fa-solid fa-key"></i> '+((((AUTH.user.app_metadata||{}).providers||[]).indexOf('email')===-1)?'Tambahkan password login':'Ganti password')+'</summary><p>Password memungkinkan kamu masuk memakai email selain Google.</p><label>Password baru</label><input id="profileNewPassword" type="password" autocomplete="new-password" placeholder="Minimal 8 karakter"><label>Ulangi password</label><input id="profileConfirmPassword" type="password" autocomplete="new-password"><button id="profilePasswordSave" type="button"><i class="fa-solid fa-shield-halved"></i> Simpan Password</button>';box.appendChild(passwordPanel);
       $('#profileEditSave', box).addEventListener('click', function () {
         var button = this; button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
-        apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'profile_update', full_name:$('#profileEditName',box).value.trim(), path:path ? path.value : profile.path, notification_preferences:{ email:$('#profileEmailNotif',box).checked, deadline:$('#profileDeadlineNotif',box).checked, review:$('#profileReviewNotif',box).checked, session:$('#profileSessionNotif',box).checked } }) }).then(function (data) {
+        apiRequest('/api/program', { method:'POST', body:JSON.stringify({ action:'profile_update', full_name:$('#profileEditName',box).value.trim(), bio:$('#profileEditBio',box).value.trim(), avatar_data:avatarData, remove_avatar:removeAvatar, path:path ? path.value : profile.path, notification_preferences:{ email:$('#profileEmailNotif',box).checked, deadline:$('#profileDeadlineNotif',box).checked, review:$('#profileReviewNotif',box).checked, session:$('#profileSessionNotif',box).checked } }) }).then(function (data) {
           AUTH.profile = Object.assign(AUTH.profile, data.profile || {});
           var local = mySession() || {}; local.name=AUTH.profile.full_name;local.initials=AUTH.profile.initials;local.path=AUTH.profile.path;localStorage.setItem('ftgSession',JSON.stringify(local));
-          close(); personalize(); toast('Profil berhasil diperbarui','✅');
+          close(); personalize(); applyOwnProfilePhoto(); toast('Profil berhasil diperbarui','✅');
         }).catch(function (error) { button.disabled=false;button.innerHTML='<i class="fa-solid fa-floppy-disk"></i> Simpan Profil';toast(error.message,'⚠️'); });
       });
+      $('#profilePasswordSave',box).addEventListener('click',function(){var button=this,password=$('#profileNewPassword',box).value,confirm=$('#profileConfirmPassword',box).value;if(password!==confirm){toast('Konfirmasi password tidak sama','⚠️');return;}button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';apiRequest('/api/program',{method:'POST',body:JSON.stringify({action:'profile_password',password:password})}).then(function(){button.innerHTML='<i class="fa-solid fa-check"></i> Password tersimpan';$('#profileNewPassword',box).value='';$('#profileConfirmPassword',box).value='';toast('Password login berhasil disimpan','✅');}).catch(function(error){button.disabled=false;button.innerHTML='<i class="fa-solid fa-shield-halved"></i> Simpan Password';toast(error.message,'⚠️');});});
     });
   }
   function mountProfileControl() {
@@ -4510,6 +4549,7 @@
       control.addEventListener('click',openProfileEditor);
       control.addEventListener('keydown',function(event){if(event.key==='Enter'||event.key===' '){event.preventDefault();openProfileEditor();}});
     }
+    applyOwnProfilePhoto();
   }
   function mountSecureAccountAdmin() {
     if (PAGE.indexOf('admin-akun') !== 0 || !AUTH.profile || AUTH.profile.role !== 'admin') return;

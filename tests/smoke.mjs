@@ -240,7 +240,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=50/);
+    assert.match(await text(file), /app\.js\?v=51/);
   }
 });
 
@@ -262,7 +262,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=50/);
+    assert.match(await text(file), /app\.js\?v=51/);
   }
 });
 
@@ -279,6 +279,11 @@ test('dashboards do not flicker and users can edit profile while Fasil can delet
   assert.match(app, /function mountProfileControl/);
   assert.match(program, /async function updateOwnProfile/);
   assert.match(program, /action === 'profile_update'/);
+  assert.match(program, /action === 'profile_password'/);
+  assert.match(program, /async function uploadProfilePhoto/);
+  assert.match(app, /function resizeProfilePhoto/);
+  assert.match(app, /Bio singkat/);
+  assert.match(app, /Tambahkan password login/);
   assert.match(app, /Hapus User Permanen/);
   assert.match(app, /method:'DELETE'/);
   assert.match(adminUsers, /Fasil tidak dapat menghapus akunnya sendiri/);

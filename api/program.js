@@ -116,6 +116,11 @@ async function updateOwnProfile(req, res) {
     if (!['Career Path','Entrepreneur Path'].includes(path)) return send(res, 400, { error:'Jalur mentee tidak valid' });
   } else if (profile.role === 'mentor') path = 'Senior Mentor';
   const prefs = req.body && req.body.notification_preferences || {};
+  const bio = clean(req.body && req.body.bio, 500);
+  let avatarUrl = clean(user.user_metadata && user.user_metadata.avatar_url, 1000);
+  const avatarData = String(req.body && req.body.avatar_data || '');
+  if (avatarData) avatarUrl = await uploadProfilePhoto(user.id, avatarData);
+  if (req.body && req.body.remove_avatar === true) avatarUrl = '';
   const notificationPreferences = {
     in_app:true,
     email:prefs.email !== false,
@@ -125,9 +130,37 @@ async function updateOwnProfile(req, res) {
   };
   const patch = { full_name:fullName, initials:initials(fullName), path, notification_preferences:notificationPreferences, updated_at:new Date().toISOString() };
   const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=representation' }, body:JSON.stringify(patch) });
-  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { full_name:fullName, initials:patch.initials, path }) }) });
-  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'profile.self_update', entity_type:'profile', entity_id:user.id, detail:{ full_name:fullName, path } }) }).catch(() => null);
-  return send(res, 200, { profile:updated && updated[0] });
+  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { full_name:fullName, initials:patch.initials, path, bio, avatar_url:avatarUrl }) }) });
+  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'profile.self_update', entity_type:'profile', entity_id:user.id, detail:{ full_name:fullName, path, bio_updated:true, avatar_updated:Boolean(avatarData || (req.body && req.body.remove_avatar)) } }) }).catch(() => null);
+  return send(res, 200, { profile:Object.assign({}, updated && updated[0], { bio, avatar_url:avatarUrl }) });
+}
+
+async function uploadProfilePhoto(userId, dataUrl) {
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl);
+  if (!match) throw new Error('Format foto profil tidak didukung');
+  const bytes = Buffer.from(match[2], 'base64');
+  if (!bytes.length || bytes.length > 2 * 1024 * 1024) throw new Error('Ukuran foto profil maksimal 2MB');
+  const headers = { apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` };
+  const bucketUrl = `${process.env.SUPABASE_URL}/storage/v1/bucket/profile-photos`;
+  let bucket = await fetch(bucketUrl, { headers });
+  if (bucket.status === 404) {
+    bucket = await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket`, { method:'POST', headers:Object.assign({ 'Content-Type':'application/json' }, headers), body:JSON.stringify({ id:'profile-photos', name:'profile-photos', public:true, file_size_limit:2097152, allowed_mime_types:['image/jpeg','image/png','image/webp'] }) });
+  }
+  if (!bucket.ok) throw new Error('Penyimpanan foto profil belum tersedia');
+  const objectPath = `${userId}/avatar.jpg`;
+  const upload = await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/profile-photos/${objectPath}`, { method:'POST', headers:Object.assign({ 'Content-Type':match[1], 'x-upsert':'true' }, headers), body:bytes });
+  if (!upload.ok) throw new Error('Foto profil gagal diunggah');
+  return `${process.env.SUPABASE_URL}/storage/v1/object/public/profile-photos/${objectPath}?v=${Date.now()}`;
+}
+
+async function updateOwnPassword(req, res) {
+  const user = await currentUser(req);
+  if (!user) return send(res, 401, { error:'Sesi pengguna tidak valid atau berakhir' });
+  const password = String(req.body && req.body.password || '');
+  if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return send(res, 400, { error:'Password minimal 8 karakter serta berisi huruf besar, huruf kecil, dan angka' });
+  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ password, user_metadata:Object.assign({}, user.user_metadata || {}, { has_password:true }) }) });
+  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'profile.password_update', entity_type:'profile', entity_id:user.id, detail:{ self_service:true } }) }).catch(() => null);
+  return send(res, 200, { ok:true });
 }
 
 module.exports = async function handler(req, res) {
@@ -138,6 +171,7 @@ module.exports = async function handler(req, res) {
     if (req.body && req.body.action === 'prepare_incomplete_mentor') return prepareIncompleteMentor(req, res);
     if (req.body && req.body.action === 'profile_context') return profileContext(req, res);
     if (req.body && req.body.action === 'profile_update') return updateOwnProfile(req, res);
+    if (req.body && req.body.action === 'profile_password') return updateOwnPassword(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
