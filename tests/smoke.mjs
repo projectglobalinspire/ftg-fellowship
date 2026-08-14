@@ -102,6 +102,42 @@ test('every designed button is connected to application or page code', async () 
   }
 });
 
+test('Fasil navigation is split, warm and every program action is wired', async () => {
+  const app = await text('app.js');
+  const css = await text('responsive.css');
+  const dashboard = await text('admin-dashboard.html');
+  const accounts = await text('admin-akun.html');
+  const program = await text('admin-program.html');
+  for (const source of [dashboard, accounts, program]) {
+    assert.match(source, /href="admin-program\.html"/);
+    assert.match(source, /ftgAuthWarm/);
+  }
+  assert.match(app, /PAGE\.indexOf\('admin-program'\)/);
+  assert.doesNotMatch(app, /PAGE\.indexOf\('admin-'\) !== 0/);
+  assert.match(app, /PAGE\.indexOf\('admin-dashboard'\) === 0\) initAdminDashboard/);
+  assert.match(css, /ftg-auth-warm/);
+  for (const id of ['adminGlobalTask','adminCohort','adminSettings','adminRubrics','adminCalendar','adminAttendance','adminCertificates','adminHealth','adminAudit','adminExcel','adminPdf','adminRecordings','adminLearning','adminAssignmentMonitor','adminNotifications']) {
+    assert.match(app, new RegExp(`['"]${id}['"]`), `${id} missing`);
+  }
+  assert.match(app, /\$\('#adminCohort', sec\)\.addEventListener/);
+  assert.match(app, /recordingButton\.addEventListener/);
+  assert.match(app, /learningButton\.addEventListener/);
+  assert.match(app, /assignmentMonitor\.addEventListener/);
+  assert.match(app, /notificationButton\.addEventListener/);
+});
+
+test('secure Fasil account creation has one production handler and visible progress', async () => {
+  const app = await text('app.js');
+  const api = await text('api/admin-users.js');
+  assert.match(app, /Produksi memakai[\s\S]*mountSecureAccountAdmin/);
+  assert.match(app, /id="suStatus"/);
+  assert.match(app, /Membuat akun…/);
+  assert.match(app, /button\.disabled=true/);
+  assert.match(app, /Password sementara minimal 8 karakter/);
+  assert.match(api, /Email ini sudah terdaftar/);
+  assert.match(api, /String\(body\.password\)\.length < 8/);
+});
+
 test('every remaining dummy anchor is an intentional wired action', async () => {
   const wired = [
     /^Dashboard$/, /^Design Thinking$/, /^Workshop Library$/, /^Tugas Saya$/,
@@ -240,7 +276,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=52/);
+    assert.match(await text(file), /app\.js\?v=53/);
   }
 });
 
@@ -262,7 +298,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=52/);
+    assert.match(await text(file), /app\.js\?v=53/);
   }
 });
 
@@ -274,7 +310,7 @@ test('dashboards do not flicker and users can edit profile while Fasil can delet
   assert.doesNotMatch(app, /Update baru dari ' \+ who \+ ' — memuat ulang/);
   assert.match(app, /Data terbaru dari ' \+ who \+ ' sudah disinkronkan/);
   assert.match(app, /classList\.add\('ftg-auth-ready'\)/);
-  assert.match(css, /html:not\(\.ftg-auth-ready\) main\[data-design-id\]/);
+  assert.match(css, /html:not\(\.ftg-auth-ready\):not\(\.ftg-auth-warm\)/);
   assert.match(app, /function openProfileEditor/);
   assert.match(app, /function mountProfileControl/);
   assert.match(program, /async function updateOwnProfile/);

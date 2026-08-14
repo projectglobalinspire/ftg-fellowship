@@ -834,11 +834,15 @@
         }
       );
     }
-    var bAddMe = $('#btnAddMentee');
-    if (bAddMe) bAddMe.addEventListener('click', function () { addAccountModal('mentee'); });
-    var bAddMo = $('#btnAddMentor');
-    if (bAddMo) bAddMo.addEventListener('click', function () { addAccountModal('mentor'); });
-    renderAccounts();
+    // Jalur lokal lama hanya untuk fallback tanpa Supabase. Produksi memakai
+    // mountSecureAccountAdmin sebagai satu-satunya pemilik tombol akun.
+    if (!sb) {
+      var bAddMe = $('#btnAddMentee');
+      if (bAddMe) bAddMe.addEventListener('click', function () { addAccountModal('mentee'); });
+      var bAddMo = $('#btnAddMentor');
+      if (bAddMo) bAddMo.addEventListener('click', function () { addAccountModal('mentor'); });
+      renderAccounts();
+    }
 
     /* ---- Log sistem (gabungan event + log admin) ---- */
     function renderLog() {
@@ -1152,6 +1156,7 @@
             ]
           : [
               ['fa-gauge-high', 'Monitoring', 'admin-dashboard.html', ''],
+              ['fa-building-columns', 'Pusat Program', 'admin-program.html', ''],
               ['fa-user-gear', 'Kelola Akun', 'admin-akun.html', ''],
               ['fa-trophy', 'Leaderboard', 'kpi-leaderboard.html', '']
             ];
@@ -1553,6 +1558,7 @@
   }
   function secureLogout() {
     clearGoogleSession();
+    try { sessionStorage.removeItem('ftgAuthWarm'); } catch (e) {}
     try { localStorage.removeItem('ftgSession'); } catch (e) {}
     var finished = false;
     function finishLogout() {
@@ -1601,6 +1607,15 @@
       // Profil server adalah sumber kebenaran. Personalisasi ulang agar nama
       // mentor lama dari cache tidak tertinggal di header atau sidebar.
       personalize();
+      try { sessionStorage.setItem('ftgAuthWarm', AUTH.profile.role + ':' + AUTH.user.id); } catch (e) {}
+      if (AUTH.profile.role === 'admin') {
+        // Setiap modul Fasil memuat API-nya sendiri. Data pendukung boleh
+        // menyusul di latar agar perpindahan halaman tidak tertahan.
+        loadStructuredData().then(function () {
+          document.dispatchEvent(new CustomEvent('ftg:structured-ready'));
+        }).catch(reportError);
+        return true;
+      }
       return loadStructuredData().then(function () { return true; });
     }).catch(function (error) {
       console.warn('FTG auth:', error.message); secureLogout(); return false;
@@ -4626,7 +4641,25 @@
   }
   function secureAccountModal(role, done) {
     var isMentee = role === 'mentee';
-    modal('<h3 style="font-weight:800;color:#1e293b">' + (isMentee ? '🎓 Tambah Mentee' : '🧑‍🏫 Tambah Mentor') + '</h3><p style="font-size:11px;color:#64748b;margin:4px 0 12px">Akun dibuat di Supabase Auth. Password sementara hanya ditampilkan satu kali.</p><input id="suName" placeholder="Nama lengkap" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px"><input id="suEmail" type="email" placeholder="email@ftg.id" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px"><input id="suPassword" type="password" placeholder="Password sementara (kosongkan untuk otomatis)" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px">' + (isMentee ? '<select id="suPath" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;background:#fff"><option>Career Path</option><option>Entrepreneur Path</option></select>' : '') + '<button id="suSave" style="width:100%;margin-top:10px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:10px;font-weight:800">Buat Akun Aman</button>', function (box, close) { $('#suSave', box).addEventListener('click', function () { var name=$('#suName',box).value.trim(),email=$('#suEmail',box).value.trim(),password=$('#suPassword',box).value; if(!name||!/^[^@]+@[^@]+\.[^@]+$/.test(email)){toast('Nama dan email valid wajib diisi','⚠️');return;} var payload={full_name:name,email:email,role:role,initials:initialsOf(name),path:isMentee?$('#suPath',box).value:'Senior Mentor'}; if(password) payload.password=password; apiRequest('/api/admin-users',{method:'POST',body:JSON.stringify(payload)}).then(function(data){close(); if(data.temporary_password) modal('<h3 style="font-weight:800;color:#1e293b">Akun berhasil dibuat</h3><p style="font-size:11px;color:#64748b;margin:8px 0">Salin password sementara ini dan kirim melalui kanal pribadi.</p><code style="display:block;background:#0f172a;color:#fff;padding:12px;border-radius:10px;font-size:14px">'+esc(data.temporary_password)+'</code>'); toast('Akun Supabase Auth berhasil dibuat','✅'); done();}).catch(function(e){toast(e.message,'⚠️');}); }); });
+    modal('<h3 style="font-weight:800;color:#1e293b">' + (isMentee ? '🎓 Tambah Mentee' : '🧑‍🏫 Tambah Mentor') + '</h3>' +
+      '<p style="font-size:11px;color:#64748b;margin:4px 0 12px">Akun dibuat langsung di Supabase Auth. Password sementara hanya ditampilkan satu kali.</p>' +
+      '<label class="ftg-secure-label" for="suName">Nama lengkap</label><input id="suName" autocomplete="name" placeholder="Contoh: Aisyah Alfiana Dewi" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px">' +
+      '<label class="ftg-secure-label" for="suEmail">Email aktif</label><input id="suEmail" type="email" autocomplete="email" placeholder="nama@gmail.com" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px">' +
+      '<label class="ftg-secure-label" for="suPassword">Password sementara</label><input id="suPassword" type="password" autocomplete="new-password" placeholder="Min. 8 karakter, atau kosongkan untuk otomatis" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;margin-bottom:8px">' +
+      (isMentee ? '<select id="suPath" aria-label="Jalur mentee" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px;background:#fff"><option>Career Path</option><option>Entrepreneur Path</option></select>' : '') +
+      '<p id="suStatus" role="status" aria-live="polite" style="min-height:16px;font-size:10px;color:#64748b;margin-top:8px"></p>' +
+      '<button type="button" id="suSave" style="width:100%;margin-top:4px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:11px;font-weight:800;cursor:pointer">Buat Akun Aman</button>', function (box, close) {
+        var button=$('#suSave',box),status=$('#suStatus',box);
+        button.addEventListener('click', function () {
+          var name=$('#suName',box).value.trim(),email=$('#suEmail',box).value.trim().toLowerCase(),password=$('#suPassword',box).value;
+          if(!name||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){status.style.color='#dc2626';status.textContent='Nama lengkap dan email valid wajib diisi.';return;}
+          if(password&&password.length<8){status.style.color='#dc2626';status.textContent='Password sementara minimal 8 karakter.';return;}
+          var payload={full_name:name,email:email,role:role,initials:initialsOf(name),path:isMentee?$('#suPath',box).value:'Senior Mentor'};if(password)payload.password=password;
+          button.disabled=true;button.style.cursor='wait';button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Membuat akun…';status.style.color='#64748b';status.textContent='Menghubungkan ke Supabase dan menyiapkan profil…';
+          apiRequest('/api/admin-users',{method:'POST',body:JSON.stringify(payload)}).then(function(data){close();if(data.temporary_password)modal('<h3 style="font-weight:800;color:#1e293b">Akun berhasil dibuat</h3><p style="font-size:11px;color:#64748b;margin:8px 0">Salin password sementara ini dan kirim melalui kanal pribadi.</p><code style="display:block;background:#0f172a;color:#fff;padding:12px;border-radius:10px;font-size:14px">'+esc(data.temporary_password)+'</code>');toast(name+' berhasil ditambahkan','✅');done();}).catch(function(e){button.disabled=false;button.style.cursor='pointer';button.textContent='Buat Akun Aman';status.style.color='#dc2626';status.textContent=e.message||'Akun gagal dibuat. Silakan coba lagi.';toast(status.textContent,'⚠️');});
+        });
+        $('#suName',box).focus();
+      });
   }
   function secureAccountManage(profile, done) {
     if (!profile) return;
@@ -4752,7 +4785,7 @@
     });
   }
   function mountAdminOperations() {
-    if (PAGE.indexOf('admin-') !== 0) return;
+    if (PAGE.indexOf('admin-program') !== 0 || !AUTH.profile || AUTH.profile.role !== 'admin') return;
     var host = $('main > div.px-8'); if (!host || document.getElementById('admin-operations')) return;
     var total = 0, submitted = 0, reviewed = 0; mentorAssignments().forEach(function (t) { (t.targets || []).forEach(function (id) { total++; var s = taskSubmission(id, t.id); if (s && s.submittedAt) submitted++; if (s && s.review && s.review.decision !== 'revision') reviewed++; }); });
     var sec = document.createElement('section'); sec.id = 'admin-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
@@ -4768,6 +4801,11 @@
     if(suiteGrid)suiteGrid.insertBefore(assignmentMonitor,suiteGrid.children[2]||null);assignmentMonitor.addEventListener('click',openAssignmentMonitor);
     var notificationButton=document.createElement('button');notificationButton.id='adminNotifications';notificationButton.innerHTML='<i class="fa-solid fa-envelope-open-text"></i><b>Email & Notifikasi</b>';
     if(suiteGrid)suiteGrid.insertBefore(notificationButton,suiteGrid.children[3]||null);notificationButton.addEventListener('click',openAdminNotificationCenter);
+    $all('button',sec).forEach(function(button){button.type='button';if(button.id)button.setAttribute('data-admin-action',button.id);});
+    if(!document.documentElement.getAttribute('data-program-refresh')){
+      document.documentElement.setAttribute('data-program-refresh','1');
+      document.addEventListener('ftg:structured-ready',function(){var current=$('#admin-operations');if(current)current.remove();mountAdminOperations();});
+    }
   }
   function mountMentorLearningMonitor() {
     if (!/^(mentor-dashboard|mentor-mentee)/.test(PAGE) || myRole() !== 'mentor') return;
@@ -4866,7 +4904,7 @@
     modal('<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px"><div><h3 style="font-weight:800;color:#1e293b">📄 ' + esc(name || 'Preview berkas') + '</h3><p style="font-size:10px;color:#64748b">Akses tetap privat sesuai akun Google mentor.</p></div>' + (download ? '<a href="' + esc(download) + '" target="_blank" rel="noopener" style="background:#1a5f4f;color:#fff;border-radius:9px;padding:7px 10px;font-size:10px;font-weight:800;text-decoration:none">Unduh</a>' : '') + '</div><iframe src="' + esc(preview) + '" title="Preview ' + esc(name || 'berkas') + '" style="width:100%;height:58vh;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc"></iframe><a href="' + esc(link) + '" target="_blank" rel="noopener" style="display:block;text-align:center;font-size:10px;color:#8b5cf6;margin-top:8px">Buka langsung di Google Drive ↗</a>');
   }
   function globalSearchModal() {
-    var pages = myRole() === 'mentee' ? [['Dashboard','mentee-dashboard.html'],['Tugas Saya','assignment-submission.html'],['Progress Saya','progress-tracker.html'],['Jurnal Pribadi','jurnal.html'],['Feedback Mentor','mentor-feedback.html'],['Workshop','workshop-library.html']] : myRole() === 'mentor' ? [['Dashboard Mentor','mentor-dashboard.html'],['Tugas & Review','mentor-review.html'],['Mentee Saya','mentor-mentee.html'],['Feedback','mentor-feedback.html'],['Leaderboard','kpi-leaderboard.html']] : [['Dashboard Fasil','admin-dashboard.html'],['Kelola Akun','admin-akun.html'],['Tugas Global','admin-dashboard.html']];
+    var pages = myRole() === 'mentee' ? [['Dashboard','mentee-dashboard.html'],['Tugas Saya','assignment-submission.html'],['Progress Saya','progress-tracker.html'],['Jurnal Pribadi','jurnal.html'],['Feedback Mentor','mentor-feedback.html'],['Workshop','workshop-library.html']] : myRole() === 'mentor' ? [['Dashboard Mentor','mentor-dashboard.html'],['Tugas & Review','mentor-review.html'],['Mentee Saya','mentor-mentee.html'],['Feedback','mentor-feedback.html'],['Leaderboard','kpi-leaderboard.html']] : [['Dashboard Fasil','admin-dashboard.html'],['Pusat Program','admin-program.html'],['Kelola Akun','admin-akun.html'],['Tugas Global','admin-program.html']];
     modal('<h3 style="font-weight:800;color:#1e293b">🔎 Cari di FTG Fellowship</h3><input id="globalSearchInput" autofocus placeholder="Cari halaman, tugas, atau mentee..." style="width:100%;border:1px solid #cbd5e1;border-radius:11px;padding:10px;margin:10px 0"><div id="globalSearchRows"></div>', function (box) {
       var items = pages.map(function (p) { return { title:p[0],meta:'Halaman',href:p[1] }; }).concat(mentorAssignments().map(function (t) { return { title:t.title,meta:'Tugas · '+dueLabel(t.deadline),href:myRole()==='mentee'?'mentee-dashboard.html#tugas':'mentor-review.html' }; })).concat(myRole() !== 'mentee' ? menteeIds().map(function (id) { return { title:MENTEES[id].name,meta:'Mentee · '+MENTEES[id].path,href:'mentor-mentee.html' }; }) : []);
       function render(q) { q=(q||'').toLowerCase(); var rows=items.filter(function(i){return !q||(i.title+' '+i.meta).toLowerCase().indexOf(q)>-1;}).slice(0,12); $('#globalSearchRows',box).innerHTML=rows.map(function(i){return '<a href="'+esc(i.href)+'" style="display:block;padding:9px;border-bottom:1px solid #f1f5f9;text-decoration:none"><b style="font-size:11px;color:#334155">'+esc(i.title)+'</b><p style="font-size:9px;color:#94a3b8">'+esc(i.meta)+'</p></a>';}).join('')||'<p style="padding:18px;text-align:center;color:#94a3b8;font-size:11px">Tidak ditemukan.</p>'; }
@@ -4954,7 +4992,7 @@
       else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
       else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
       else if (PAGE.indexOf('jurnal') === 0) initJournal();
-      else if (PAGE.indexOf('admin-') === 0) initAdminDashboard();
+      else if (PAGE.indexOf('admin-dashboard') === 0) initAdminDashboard();
     } catch (e) { console.error('FTG init error:', e); }
     try { personalize(); } catch (e) { console.warn(e); }
     try { updateStreakUI(); } catch (e) { console.warn(e); }

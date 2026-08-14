@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pusat Program – FTG x GI Fellowship</title>
+  <meta name="theme-color" content="#2c3e50">
+  <link rel="icon" type="image/png" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>body{font-family:'Inter',sans-serif}</style>
+  <script>try{if(sessionStorage.getItem('ftgAuthWarm'))document.documentElement.classList.add('ftg-auth-warm')}catch(e){}</script>
+  <link rel="stylesheet" href="responsive.css?v=53">
+  <script src="ftg-config.js?v=30"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script defer src="app.js?v=53"></script>
+</head>
+<body class="min-h-screen bg-[#f8fafc] flex">
+  <aside data-design-id="sidebar-adminprogram-a1b2c3" class="w-[240px] min-h-[900px] bg-[#2c3e50] flex flex-col fixed left-0 top-0">
+    <div class="px-5 py-5 border-b border-white/10">
+      <div class="flex items-center gap-3"><img src="assets/ftg-logo.png" alt="FTG" class="h-9 w-auto"><span class="text-white/40 text-lg font-thin">×</span><img src="assets/gi-logo.png" alt="GI" class="h-8 w-auto"></div>
+      <p class="text-white/40 text-[10px] font-medium tracking-widest uppercase mt-2">Future Builders Fellowship</p>
+    </div>
+    <div class="mx-4 mt-4 bg-[#8b5cf6]/30 rounded-xl px-3 py-2.5 flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-[#8b5cf6] flex items-center justify-center text-white font-bold text-sm flex-shrink-0">FS</div>
+      <div class="min-w-0"><p class="text-white text-sm font-semibold truncate">Fasil</p><p class="text-[#c4b5fd] text-xs truncate">Pusat Program</p></div>
+    </div>
+    <nav data-design-id="nav-adminprogram-d4e5f6" class="flex-1 px-3 pt-5 space-y-0.5">
+      <a href="admin-dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-gauge-high w-4 text-center"></i> Monitoring</a>
+      <a href="admin-program.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#1a5f4f] text-white text-sm font-medium"><i class="fa-solid fa-building-columns w-4 text-center"></i> Pusat Program</a>
+      <a href="admin-akun.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-user-gear w-4 text-center"></i> Kelola Akun</a>
+      <a href="kpi-leaderboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-trophy w-4 text-center"></i> Leaderboard</a>
+      <div class="pt-3 pb-1"><p class="text-white/25 text-[10px] font-semibold tracking-widest uppercase px-3">Events</p></div>
+      <a href="opening-ceremony.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-star w-4 text-center text-[#f97316]"></i> Opening Ceremony</a>
+      <a href="closing-ceremony.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 text-sm font-medium"><i class="fa-solid fa-award w-4 text-center text-[#f97316]"></i> Closing Ceremony</a>
+    </nav>
+  </aside>
+  <main data-design-id="main-adminprogram-g7h8i9" class="ml-[240px] flex-1 min-h-[900px]">
+    <header data-design-id="header-adminprogram-j1k2l3" class="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between gap-4 flex-wrap">
+      <div><p class="text-[#8b5cf6] text-[10px] font-extrabold tracking-widest uppercase mb-1">Kendali Fasil</p><h1 class="text-[#2c3e50] text-xl font-bold">Pusat Program</h1><p class="text-slate-500 text-sm">Kelola pembelajaran, tugas, agenda, presensi, komunikasi, dan laporan dari satu tempat.</p></div>
+      <a href="admin-dashboard.html" class="border border-slate-200 bg-white text-[#334155] text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-slate-50"><i class="fa-solid fa-chart-line mr-1.5"></i>Lihat Monitoring</a>
+    </header>
+    <div class="px-8 py-6">
+      <section class="bg-gradient-to-r from-[#2c3e50] to-[#1a5f4f] rounded-2xl p-5 text-white mb-5">
+        <div class="flex items-center gap-4"><span class="w-12 h-12 rounded-2xl bg-white/10 grid place-items-center text-xl"><i class="fa-solid fa-wand-magic-sparkles"></i></span><div><h2 class="font-bold text-base">Operasional program tanpa berpindah dashboard</h2><p class="text-white/65 text-xs mt-1">Pilih modul di bawah. Setiap aksi membuka ruang kerja ringan dan data dimuat hanya saat diperlukan.</p></div></div>
+      </section>
+      <section class="grid grid-cols-3 gap-4" aria-label="Panduan pusat program">
+        <div class="bg-white border border-slate-100 rounded-xl p-4"><i class="fa-solid fa-graduation-cap text-[#8b5cf6]"></i><h3 class="text-sm font-bold text-slate-700 mt-2">Pembelajaran</h3><p class="text-[10px] text-slate-400 mt-1">Kurikulum, canvas, LMS, tugas, dan rubrik.</p></div>
+        <div class="bg-white border border-slate-100 rounded-xl p-4"><i class="fa-solid fa-people-group text-[#f97316]"></i><h3 class="text-sm font-bold text-slate-700 mt-2">Kegiatan & peserta</h3><p class="text-[10px] text-slate-400 mt-1">Cohort, pairing, kalender, presensi, dan sertifikat.</p></div>
+        <div class="bg-white border border-slate-100 rounded-xl p-4"><i class="fa-solid fa-shield-halved text-[#1a5f4f]"></i><h3 class="text-sm font-bold text-slate-700 mt-2">Kontrol & laporan</h3><p class="text-[10px] text-slate-400 mt-1">Notifikasi, kesehatan program, audit, Excel, dan PDF.</p></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

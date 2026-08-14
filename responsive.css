@@ -7,9 +7,9 @@ html, body { max-width: 100%; }
 
 /* Jangan tampilkan template statis sebelum sesi dan profil server tervalidasi.
    Ini menghilangkan kilasan nama/role lama serta flicker saat masuk dashboard. */
-html:not(.ftg-auth-ready) main[data-design-id],html:not(.ftg-auth-ready) aside[data-design-id]{visibility:hidden;opacity:0}
-html:not(.ftg-auth-ready) body:has(main[data-design-id])::after{content:'Menyiapkan dashboard…';position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#f8fafc;color:#1a5f4f;font-size:12px;font-weight:850;letter-spacing:.02em}
-html.ftg-auth-ready main[data-design-id],html.ftg-auth-ready aside[data-design-id]{visibility:visible;opacity:1}
+html:not(.ftg-auth-ready):not(.ftg-auth-warm) main[data-design-id],html:not(.ftg-auth-ready):not(.ftg-auth-warm) aside[data-design-id]{visibility:hidden;opacity:0}
+html:not(.ftg-auth-ready):not(.ftg-auth-warm) body:has(main[data-design-id])::after{content:'Menyiapkan dashboard…';position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#f8fafc;color:#1a5f4f;font-size:12px;font-weight:850;letter-spacing:.02em}
+html.ftg-auth-ready main[data-design-id],html.ftg-auth-ready aside[data-design-id],html.ftg-auth-warm main[data-design-id],html.ftg-auth-warm aside[data-design-id]{visibility:visible;opacity:1}
 
 /* Shell sidebar selalu mengikuti tinggi viewport. Menu menjadi area scroll
    tersendiri supaya Keluar, widget, dan status koneksi tidak bertumpuk. */

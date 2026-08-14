@@ -33,6 +33,7 @@ module.exports = async function handler(req, res) {
       if (!body.email || !body.full_name || !['mentee', 'mentor', 'admin'].includes(body.role)) return send(res, 400, { error: 'Email, nama, dan role wajib valid' });
       const accountEmail = String(body.email).trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail) || accountEmail.length > 254) return send(res, 400, { error:'Format email akun tidak valid' });
+      if (body.password && String(body.password).length < 8) return send(res, 400, { error:'Password sementara minimal 8 karakter' });
       const password = body.password || `${crypto.randomUUID().slice(0, 10)}Aa1!`;
       const menteeNumber = body.role === 'mentee' ? (Number(body.mentee_number) || await nextMenteeNumber()) : null;
       const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role:body.role === 'mentor' ? 'mentee' : body.role, requested_role:body.role, initials: body.initials || '', path: body.path || '', mentee_number: menteeNumber } }) });
@@ -181,5 +182,9 @@ module.exports = async function handler(req, res) {
     await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/profile-photos/${id}/avatar.jpg`, { method:'DELETE', headers:{ apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` } }).catch(() => null);
     await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}?should_soft_delete=true`, { method: 'DELETE' });
     return send(res, 200, { ok: true, recoverable: false });
-  } catch (error) { return send(res, 500, { error: error.message }); }
+  } catch (error) {
+    const message = String(error && error.message || 'Permintaan gagal');
+    if (/already|registered|exist|duplicate/i.test(message)) return send(res, 409, { error:'Email ini sudah terdaftar. Gunakan email lain atau kelola akun yang sudah ada.' });
+    return send(res, 500, { error: message });
+  }
 };
