@@ -567,6 +567,7 @@ test('standalone donor portal is bilingual, multi-program and securely managed b
   assert.match(api, /source === 'ftg'/);
   assert.match(api, /manualRecipients/);
   assert.match(api, /donor_message/);
+  assert.match(api, /programIds\.has\(row\.program_id\)&&donorIds\.has\(row\.donor_id\)/);
   assert.doesNotMatch(api, /code_hash:\s*codeHash\(['"][^'"]+['"]\)/);
   assert.match(app, /function openDonorPortalManager/);
   assert.match(app, /Portal Donor Multi-Program/);

@@ -61,6 +61,10 @@ async function loadState() {
   return { portal, flags };
 }
 async function saveState(state, actorId, action) {
+  const programIds=new Set(state.portal.programs.map(program=>program.id));
+  const donorIds=new Set(state.portal.donors.map(donor=>donor.id));
+  state.portal.ratings=state.portal.ratings.filter(row=>programIds.has(row.program_id)&&donorIds.has(row.donor_id));
+  state.portal.messages=state.portal.messages.filter(row=>programIds.has(row.program_id)&&donorIds.has(row.donor_id));
   state.portal.updated_at = nowIso();
   const feature_flags = Object.assign({}, state.flags, { donor_portal:state.portal });
   await adminFetch('/rest/v1/program_settings?id=eq.1', { method:'PATCH', headers:{Prefer:'return=minimal'}, body:JSON.stringify({ feature_flags, updated_by:actorId || null, updated_at:nowIso() }) });
