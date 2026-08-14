@@ -124,6 +124,10 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.match(app, /learningButton\.addEventListener/);
   assert.match(app, /assignmentMonitor\.addEventListener/);
   assert.match(app, /notificationButton\.addEventListener/);
+  assert.match(app, /function openBusy\(button,opener\)/);
+  assert.match(app, /aria-busy/);
+  assert.match(app, /Membuka…/);
+  assert.match(app, /Server terlalu lama merespons/);
 });
 
 test('secure Fasil account creation has one production handler and visible progress', async () => {
@@ -276,7 +280,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=53/);
+    assert.match(await text(file), /app\.js\?v=54/);
   }
 });
 
@@ -298,7 +302,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=53/);
+    assert.match(await text(file), /app\.js\?v=54/);
   }
 });
 
