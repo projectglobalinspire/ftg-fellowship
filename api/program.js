@@ -143,7 +143,7 @@ async function uploadProfilePhoto(userId, dataUrl) {
   const headers = { apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` };
   const bucketUrl = `${process.env.SUPABASE_URL}/storage/v1/bucket/profile-photos`;
   let bucket = await fetch(bucketUrl, { headers });
-  if (bucket.status === 404) {
+  if (!bucket.ok) {
     bucket = await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket`, { method:'POST', headers:Object.assign({ 'Content-Type':'application/json' }, headers), body:JSON.stringify({ id:'profile-photos', name:'profile-photos', public:true, file_size_limit:2097152, allowed_mime_types:['image/jpeg','image/png','image/webp'] }) });
   }
   if (!bucket.ok) throw new Error('Penyimpanan foto profil belum tersedia');
