@@ -5,6 +5,12 @@
 * { -webkit-tap-highlight-color: transparent; }
 html, body { max-width: 100%; }
 
+/* Jangan tampilkan template statis sebelum sesi dan profil server tervalidasi.
+   Ini menghilangkan kilasan nama/role lama serta flicker saat masuk dashboard. */
+html:not(.ftg-auth-ready) main[data-design-id],html:not(.ftg-auth-ready) aside[data-design-id]{visibility:hidden;opacity:0}
+html:not(.ftg-auth-ready) body:has(main[data-design-id])::after{content:'Menyiapkan dashboard…';position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#f8fafc;color:#1a5f4f;font-size:12px;font-weight:850;letter-spacing:.02em}
+html.ftg-auth-ready main[data-design-id],html.ftg-auth-ready aside[data-design-id]{visibility:visible;opacity:1}
+
 /* Shell sidebar selalu mengikuti tinggi viewport. Menu menjadi area scroll
    tersendiri supaya Keluar, widget, dan status koneksi tidak bertumpuk. */
 aside[data-design-id] {
@@ -396,6 +402,8 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .ftg-global-search kbd { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 2px 5px; font-size: 8px; color: #94a3b8; }
 .ftg-header-actions { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 16px; }
 .ftg-header-actions .ftg-global-search { margin-left: 0; }
+.ftg-profile-control{width:42px;height:42px;border:0;border-radius:999px;background:#1a5f4f;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:900;cursor:pointer;box-shadow:0 6px 16px rgba(26,95,79,.16)}
+.ftg-profile-control:hover,.ftg-profile-control:focus-visible{outline:3px solid rgba(26,95,79,.18);transform:translateY(-1px)}
 .ftg-deadline-preset { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 8px; padding: 5px 9px; font-size: 10px; font-weight: 700; cursor: pointer; }
 .ftg-deadline-preset.is-active { border-color: #86d6bd; background: #e8f5ef; color: #166534; box-shadow: 0 0 0 2px rgba(22,101,52,.08); }
 .ftg-inline-task-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px; background:linear-gradient(135deg,#173f39,#1a6b57); color:#fff; }

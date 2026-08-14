@@ -102,6 +102,34 @@ async function profileContext(req, res) {
   return send(res, 200, { profile, mentor });
 }
 
+async function updateOwnProfile(req, res) {
+  const user = await currentUser(req);
+  if (!user) return send(res, 401, { error:'Sesi pengguna tidak valid atau berakhir' });
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,full_name,role,path,status`);
+  const profile = rows && rows[0];
+  if (!profile || profile.status !== 'active') return send(res, 403, { error:'Profil tidak aktif' });
+  const fullName = clean(req.body && req.body.full_name, 120);
+  if (fullName.length < 3) return send(res, 400, { error:'Nama lengkap minimal 3 karakter' });
+  let path = profile.path;
+  if (profile.role === 'mentee') {
+    path = clean(req.body && req.body.path, 40);
+    if (!['Career Path','Entrepreneur Path'].includes(path)) return send(res, 400, { error:'Jalur mentee tidak valid' });
+  } else if (profile.role === 'mentor') path = 'Senior Mentor';
+  const prefs = req.body && req.body.notification_preferences || {};
+  const notificationPreferences = {
+    in_app:true,
+    email:prefs.email !== false,
+    deadline:prefs.deadline !== false,
+    review:prefs.review !== false,
+    session:prefs.session !== false
+  };
+  const patch = { full_name:fullName, initials:initials(fullName), path, notification_preferences:notificationPreferences, updated_at:new Date().toISOString() };
+  const updated = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=representation' }, body:JSON.stringify(patch) });
+  await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { full_name:fullName, initials:patch.initials, path }) }) });
+  await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'profile.self_update', entity_type:'profile', entity_id:user.id, detail:{ full_name:fullName, path } }) }).catch(() => null);
+  return send(res, 200, { profile:updated && updated[0] });
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
@@ -109,6 +137,7 @@ module.exports = async function handler(req, res) {
     if (req.body && req.body.action === 'complete_google_profile') return completeGoogleProfile(req, res);
     if (req.body && req.body.action === 'prepare_incomplete_mentor') return prepareIncompleteMentor(req, res);
     if (req.body && req.body.action === 'profile_context') return profileContext(req, res);
+    if (req.body && req.body.action === 'profile_update') return updateOwnProfile(req, res);
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};

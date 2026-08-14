@@ -240,7 +240,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=49/);
+    assert.match(await text(file), /app\.js\?v=50/);
   }
 });
 
@@ -262,8 +262,27 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=49/);
+    assert.match(await text(file), /app\.js\?v=50/);
   }
+});
+
+test('dashboards do not flicker and users can edit profile while Fasil can delete safely', async () => {
+  const app = await text('app.js');
+  const css = await text('responsive.css');
+  const program = await text('api/program.js');
+  const adminUsers = await text('api/admin-users.js');
+  assert.doesNotMatch(app, /Update baru dari ' \+ who \+ ' — memuat ulang/);
+  assert.match(app, /Data terbaru dari ' \+ who \+ ' sudah disinkronkan/);
+  assert.match(app, /classList\.add\('ftg-auth-ready'\)/);
+  assert.match(css, /html:not\(\.ftg-auth-ready\) main\[data-design-id\]/);
+  assert.match(app, /function openProfileEditor/);
+  assert.match(app, /function mountProfileControl/);
+  assert.match(program, /async function updateOwnProfile/);
+  assert.match(program, /action === 'profile_update'/);
+  assert.match(app, /Hapus User Permanen/);
+  assert.match(app, /method:'DELETE'/);
+  assert.match(adminUsers, /Fasil tidak dapat menghapus akunnya sendiri/);
+  assert.match(adminUsers, /Fasil aktif terakhir tidak boleh dihapus/);
 });
 
 test('Fasil approval labels and one-week mentor deadlines are complete', async () => {

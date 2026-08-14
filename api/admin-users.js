@@ -127,6 +127,7 @@ module.exports = async function handler(req, res) {
         authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:'mentor', registration_decision:'pending', role:'mentee', profile_completed:false });
       } else if (body.role === 'mentor') {
         profilePatch.mentee_number = null; profilePatch.mentor_id = null;
+        authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:'mentor', role:'mentor', profile_completed:true, registration_decision:profilePatch.status === 'active' || body.status === 'active' ? 'approved' : currentMetadata.registration_decision });
       } else if (body.role && body.role !== 'mentor' && currentProfile && currentProfile.role !== body.role) {
         if (body.role === 'mentee') profilePatch.mentee_number = currentProfile.mentee_number || await nextMenteeNumber();
         authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:body.role, role:body.role });
@@ -151,8 +152,16 @@ module.exports = async function handler(req, res) {
       await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.update', entity_type: 'profile', entity_id: id, detail: profilePatch }) });
       return send(res, 200, { ok: true, mentor_profile_required: mentorProfileRequired });
     }
+    if (id === auth.user.id) return send(res, 400, { error:'Fasil tidak dapat menghapus akunnya sendiri' });
+    const deleteRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status`);
+    const deleteTarget = deleteRows && deleteRows[0];
+    if (!deleteTarget) return send(res, 404, { error:'Akun yang akan dihapus tidak ditemukan' });
+    if (deleteTarget.role === 'admin') {
+      const admins = await adminFetch('/rest/v1/profiles?role=eq.admin&status=eq.active&select=id');
+      if ((admins || []).length <= 1) return send(res, 400, { error:'Fasil aktif terakhir tidak boleh dihapus' });
+    }
+    await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.soft_delete', entity_type: 'profile', entity_id: id, detail:{ email:deleteTarget.email, full_name:deleteTarget.full_name, role:deleteTarget.role } }) });
     await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}?should_soft_delete=true`, { method: 'DELETE' });
-    await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.soft_delete', entity_type: 'profile', entity_id: id }) });
     return send(res, 200, { ok: true, recoverable: false });
   } catch (error) { return send(res, 500, { error: error.message }); }
 };
