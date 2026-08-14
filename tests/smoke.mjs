@@ -19,10 +19,11 @@ test('all application pages have responsive metadata and valid local links', asy
 });
 
 test('protected pages use the shared engine or a dedicated authenticated flow', async () => {
-  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html']);
+  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html', 'donor-login.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
-    assert.ok(/app\.js\?v=\d+/.test(source) || (['attendance.html', 'profile-setup.html'].includes(file) && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
+    const donorFlow = file.startsWith('donor-') && /donor\.js\?v=\d+/.test(source);
+    assert.ok(/app\.js\?v=\d+/.test(source) || donorFlow || (['attendance.html', 'profile-setup.html'].includes(file) && /auth\.getSession/.test(source)), `${file}: authenticated engine missing`);
   }
 });
 
@@ -116,7 +117,7 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.doesNotMatch(app, /PAGE\.indexOf\('admin-'\) !== 0/);
   assert.match(app, /PAGE\.indexOf\('admin-dashboard'\) === 0\) initAdminDashboard/);
   assert.match(css, /ftg-auth-warm/);
-  for (const id of ['adminGlobalTask','adminCohort','adminSettings','adminRubrics','adminCalendar','adminAttendance','adminCertificates','adminHealth','adminAudit','adminExcel','adminPdf','adminRecordings','adminLearning','adminAssignmentMonitor','adminNotifications']) {
+  for (const id of ['adminGlobalTask','adminCohort','adminSettings','adminRubrics','adminCalendar','adminAttendance','adminCertificates','adminHealth','adminAudit','adminExcel','adminPdf','adminRecordings','adminLearning','adminAssignmentMonitor','adminNotifications','adminDonorPortal']) {
     assert.match(app, new RegExp(`['"]${id}['"]`), `${id} missing`);
   }
   assert.match(app, /\$\('#adminCohort', sec\)\.addEventListener/);
@@ -280,7 +281,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=54/);
+    assert.match(await text(file), /app\.js\?v=55/);
   }
 });
 
@@ -302,7 +303,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=54/);
+    assert.match(await text(file), /app\.js\?v=55/);
   }
 });
 
@@ -535,4 +536,32 @@ test('Design Thinking is server-backed, weekly controlled, versioned and monitor
   assert.match(api, /assignment_targets/);
   assert.match(api, /audit_logs/);
   assert.match(operations, /learningHandler/);
+});
+
+test('standalone donor portal is bilingual, multi-program and securely managed by Fasil', async () => {
+  const app = await text('app.js');
+  const donor = await text('donor.js');
+  const api = await text('api/donor.js');
+  const css = await text('donor.css');
+  const programApi = await text('api/program.js');
+  for (const page of ['donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-messages.html']) {
+    assert.match(await text(page), /donor\.js\?v=1/);
+  }
+  assert.match(donor, /ftgDonorLang/);
+  assert.match(donor, /action:'rating'/);
+  assert.match(donor, /action:'message'/);
+  assert.match(donor, /sessionStorage/);
+  assert.match(api, /createHmac\('sha256'/);
+  assert.match(api, /requireRole\(req,res,\['admin'\]\)/);
+  assert.match(api, /admin_program_save/);
+  assert.match(api, /admin_donor_create/);
+  assert.match(api, /source === 'ftg'/);
+  assert.match(api, /manualRecipients/);
+  assert.match(api, /donor_message/);
+  assert.doesNotMatch(api, /code_hash:\s*codeHash\(['"][^'"]+['"]\)/);
+  assert.match(app, /function openDonorPortalManager/);
+  assert.match(app, /Portal Donor Multi-Program/);
+  assert.match(app, /return apiRequest\('\/api\/donor\?admin=1'\)/);
+  assert.match(css, /\.donor-shell/);
+  assert.match(programApi, /currentFlags/);
 });

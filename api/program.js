@@ -199,6 +199,8 @@ module.exports = async function handler(req, res) {
       return send(res, passed ? 200 : 502, { passed, generated:!!tokenHash, session_created:!!verified.access_token, refresh_created:!!verified.refresh_token, user_match:!!(verified.user && verified.user.id === candidate.id), status:verifiedResponse.status });
     }
     if (body.action === 'settings') {
+      const currentSettings = await adminFetch('/rest/v1/program_settings?id=eq.1&select=feature_flags');
+      const currentFlags = currentSettings && currentSettings[0] && currentSettings[0].feature_flags || {};
       const patch = {
         id: 1,
         program_name: String(body.program_name || 'Future Builders Fellowship').slice(0, 120),
@@ -209,7 +211,7 @@ module.exports = async function handler(req, res) {
         completion_requirement: Math.min(100, Math.max(0, Number(body.completion_requirement) || 80)),
         attendance_requirement: Math.min(100, Math.max(0, Number(body.attendance_requirement) || 80)),
         quality_requirement: Math.min(100, Math.max(0, Number(body.quality_requirement) || 75)),
-        feature_flags: body.feature_flags && typeof body.feature_flags === 'object' ? body.feature_flags : {},
+        feature_flags: Object.assign({}, currentFlags, body.feature_flags && typeof body.feature_flags === 'object' ? body.feature_flags : {}),
         kpi_weights: body.kpi_weights && typeof body.kpi_weights === 'object' ? body.kpi_weights : {},
         rubric_templates: Array.isArray(body.rubric_templates) ? body.rubric_templates.slice(0, 30) : [],
         updated_by: auth.user.id,
