@@ -161,6 +161,16 @@ module.exports = async function handler(req, res) {
       if ((admins || []).length <= 1) return send(res, 400, { error:'Fasil aktif terakhir tidak boleh dihapus' });
     }
     await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.soft_delete', entity_type: 'profile', entity_id: id, detail:{ email:deleteTarget.email, full_name:deleteTarget.full_name, role:deleteTarget.role } }) });
+    const detach = (table, column) => adminFetch(`/rest/v1/${table}?${column}=eq.${encodeURIComponent(id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ [column]:null }) }).catch(() => null);
+    await Promise.all([
+      detach('profiles','mentor_id'), detach('profiles','discipline_updated_by'), detach('program_settings','updated_by'),
+      detach('assignments','created_by'), detach('reviews','reviewer_id'), detach('review_history','reviewer_id'),
+      detach('task_discussions','author_id'), detach('audit_logs','actor_id'), detach('error_logs','user_id'),
+      detach('backup_snapshots','created_by'), detach('program_events','created_by'), detach('attendance_sessions','created_by'),
+      detach('attendance_records','recorded_by'), detach('discipline_actions','actor_id'), detach('certificates','issued_by')
+    ]);
+    await adminFetch(`/rest/v1/mentor_sessions?or=(mentor_id.eq.${encodeURIComponent(id)},mentee_id.eq.${encodeURIComponent(id)})`, { method:'DELETE', headers:{ Prefer:'return=minimal' } }).catch(() => null);
+    await adminFetch(`/rest/v1/mentor_notes?or=(mentor_id.eq.${encodeURIComponent(id)},mentee_id.eq.${encodeURIComponent(id)})`, { method:'DELETE', headers:{ Prefer:'return=minimal' } }).catch(() => null);
     await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}?should_soft_delete=true`, { method: 'DELETE' });
     return send(res, 200, { ok: true, recoverable: false });
   } catch (error) { return send(res, 500, { error: error.message }); }

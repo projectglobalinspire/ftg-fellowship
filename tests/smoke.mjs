@@ -283,6 +283,8 @@ test('dashboards do not flicker and users can edit profile while Fasil can delet
   assert.match(app, /method:'DELETE'/);
   assert.match(adminUsers, /Fasil tidak dapat menghapus akunnya sendiri/);
   assert.match(adminUsers, /Fasil aktif terakhir tidak boleh dihapus/);
+  assert.match(adminUsers, /detach\('audit_logs','actor_id'\)/);
+  assert.match(adminUsers, /mentor_sessions\?or=/);
 });
 
 test('Fasil approval labels and one-week mentor deadlines are complete', async () => {
