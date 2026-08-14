@@ -39,6 +39,15 @@ test('production config has security headers, cron and no public object embeddin
   assert.equal(headers['X-Content-Type-Options'], 'nosniff');
   assert.match(headers['Content-Security-Policy'], /object-src 'none'/);
   assert.equal(config.crons[0].path, '/api/cron-reminders');
+  assert.equal(config.rewrites.length, 3);
+  assert.ok(config.rewrites.every(item => item.destination.startsWith('/api/system?resource=')));
+});
+
+test('Hobby deployment stays within twelve serverless functions', async () => {
+  const apiFiles = (await readdir(path.join(root, 'api'))).filter(file => file.endsWith('.js') && !file.startsWith('_'));
+  assert.ok(apiFiles.length <= 12, `Vercel Hobby limit exceeded: ${apiFiles.length} functions`);
+  const system = await text('api/system.js');
+  for (const resource of ['certificates','errors','health']) assert.match(system, new RegExp(`resource === '${resource}'`));
 });
 
 test('database migrations include RLS and legacy access hardening', async () => {

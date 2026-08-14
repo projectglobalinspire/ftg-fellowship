@@ -1,4 +1,9 @@
 {
+  "rewrites": [
+    { "source": "/api/certificates", "destination": "/api/system?resource=certificates" },
+    { "source": "/api/errors", "destination": "/api/system?resource=errors" },
+    { "source": "/api/health", "destination": "/api/system?resource=health" }
+  ],
   "headers": [
     { "source": "/(.*)", "headers": [
       { "key": "X-Content-Type-Options", "value": "nosniff" },
