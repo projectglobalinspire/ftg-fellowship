@@ -106,8 +106,9 @@ async function hydratePrograms(programs) {
   const mentees=safeProfiles.filter(p=>p.role==='mentee'),menteeIds=new Set(mentees.map(p=>p.id)),published=(assignments||[]).filter(a=>a.status==='published'),publishedIds=new Set(published.map(a=>a.id));
   const liveSubmissions=(submissions||[]).filter(s=>menteeIds.has(s.mentee_id)&&publishedIds.has(s.assignment_id)&&s.submitted_at),submissionIds=new Set(liveSubmissions.map(s=>s.id));
   const liveReviews=(reviews||[]).filter(r=>submissionIds.has(r.submission_id)),reviewBySubmission=new Map(liveReviews.map(r=>[r.submission_id,r]));
-  const validTargets=(targets||[]).filter(row=>menteeIds.has(row.mentee_id)&&publishedIds.has(row.assignment_id));
-  const expectedSubmissions=validTargets.length||(published.length*mentees.length),submittedMentees=new Set(liveSubmissions.map(s=>s.mentee_id));
+  const validTargets=(targets||[]).filter(row=>menteeIds.has(row.mentee_id)&&publishedIds.has(row.assignment_id)),expectedPairs=new Set(validTargets.map(row=>`${row.assignment_id}:${row.mentee_id}`));
+  liveSubmissions.forEach(row=>expectedPairs.add(`${row.assignment_id}:${row.mentee_id}`));
+  const expectedSubmissions=expectedPairs.size||(published.length*mentees.length);
   const activityMentees=new Set(mentees.filter(p=>p.last_active_at&&Date.now()-new Date(p.last_active_at).getTime()<14*86400000).map(p=>p.id));
   liveSubmissions.filter(s=>Date.now()-new Date(s.updated_at||s.submitted_at).getTime()<14*86400000).forEach(s=>activityMentees.add(s.mentee_id));
   const pathCounts={};mentees.forEach(p=>{const key=clean(p.path||'Belum ditentukan',80);pathCounts[key]=(pathCounts[key]||0)+1;});
