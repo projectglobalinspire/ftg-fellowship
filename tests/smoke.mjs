@@ -553,8 +553,12 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html']) {
-    assert.match(await text(page), /donor\.js\?v=6/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=58/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=54/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=58/);
+  for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
+    assert.match(await text(page), /donor\.js\?v=7/);
+    assert.match(await text(page), /donor\.css\?v=6/);
   }
   assert.match(donor, /ftgDonorLang/);
   assert.match(donor, /fetch\('\/api\/donor'/);
@@ -577,16 +581,27 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   assert.match(api, /activity_trend/);
   assert.match(api, /review_turnaround_hours/);
   assert.match(api, /status:\['draft','verified','audited'\]/);
+  assert.match(api, /ensureTrustFields/);
+  assert.match(api, /liveTargets/);
+  assert.match(api, /scenario_low/);
+  assert.match(api, /registration_number/);
+  assert.match(api, /evidence_url/);
   assert.match(api, /participant-\$\{index\+1\}/);
   assert.doesNotMatch(api, /code_hash:\s*codeHash\(['"][^'"]+['"]\)/);
   assert.match(app, /function openDonorPortalManager/);
   assert.match(app, /Publikasi Program & Dampak/);
   assert.match(app, /Status laporan finansial/);
+  assert.match(app, /function openInvestorTrustManager/);
+  assert.match(app, /Investor Trust Center/);
   assert.match(app, /return apiRequest\('\/api\/donor\?admin=1'\)/);
   assert.match(css, /\.donor-shell/);
   assert.match(css, /\.public-program-hero/);
   assert.match(css, /\.impact-line-chart/);
   assert.match(donor, /function activityChart/);
+  assert.match(donor, /function targetDashboard/);
+  assert.match(donor, /function dataRoom/);
+  assert.match(donor, /function sroiAssurance/);
+  assert.match(donor, /function openMetricDetail/);
   assert.match(donor, /setInterval\(refreshLive/);
   assert.match(programApi, /currentFlags/);
 });
