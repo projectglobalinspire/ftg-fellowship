@@ -554,7 +554,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html']) {
-    assert.match(await text(page), /donor\.js\?v=2/);
+    assert.match(await text(page), /donor\.js\?v=3/);
   }
   assert.match(donor, /ftgDonorLang/);
   assert.match(donor, /fetch\('\/api\/donor'/);
