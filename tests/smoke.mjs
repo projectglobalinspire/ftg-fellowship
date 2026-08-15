@@ -554,12 +554,14 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html']) {
-    assert.match(await text(page), /donor\.js\?v=4/);
+    assert.match(await text(page), /donor\.js\?v=5/);
   }
   assert.match(donor, /ftgDonorLang/);
   assert.match(donor, /fetch\('\/api\/donor'/);
   assert.match(donor, /donor-programs\.html/);
-  assert.doesNotMatch(donor, /sessionStorage/);
+  assert.match(donor, /sessionStorage/);
+  assert.match(donor, /function routeTo/);
+  assert.match(donor, /Tersinkron LMS/);
   assert.doesNotMatch(donor, /action:'rating'/);
   assert.doesNotMatch(donor, /action:'message'/);
   assert.match(api, /createHmac\('sha256'/);
