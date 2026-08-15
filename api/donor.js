@@ -82,7 +82,7 @@ function sanitizeProgram(input, existing={}) {
     impact:{ beneficiaries:number(input.impact&&input.impact.beneficiaries,0,10000000), active_rate:number(input.impact&&input.impact.active_rate,0,100), average_progress:number(input.impact&&input.impact.average_progress,0,100), completion_rate:number(input.impact&&input.impact.completion_rate,0,100), employed_or_business:number(input.impact&&input.impact.employed_or_business,0,10000000), jobs:number(input.impact&&input.impact.jobs,0,10000000), businesses:number(input.impact&&input.impact.businesses,0,10000000), volunteer_hours:number(input.impact&&input.impact.volunteer_hours,0,100000000) },
     sroi:{ ratio:number(input.sroi&&input.sroi.ratio,0,10000), methodology:clean(input.sroi&&input.sroi.methodology,300), period:clean(input.sroi&&input.sroi.period,80), verified:Boolean(input.sroi&&input.sroi.verified), sources:Array.isArray(input.sroi&&input.sroi.sources)?input.sroi.sources.slice(0,20).map(s=>({label:clean(s.label,100),label_en:clean(s.label_en,100),value:number(s.value)})):[], trend:Array.isArray(input.sroi&&input.sroi.trend)?input.sroi.trend.slice(0,12).map(x=>number(x,0,10000)):[] },
     csr:{ pillars }, esg:{ environment:number(input.esg&&input.esg.environment,0,100), social:number(input.esg&&input.esg.social,0,100), governance:number(input.esg&&input.esg.governance,0,100), total:number(input.esg&&input.esg.total,0,100), framework:clean(input.esg&&input.esg.framework,200), verified:Boolean(input.esg&&input.esg.verified) },
-    beneficiaries:Array.isArray(input.beneficiaries)?input.beneficiaries.slice(0,500).map((b,index)=>({id:id(b.id)||`${programId}-beneficiary-${index+1}`,name:clean(b.name,120),initials:clean(b.initials,4),path:clean(b.path,80),status:clean(b.status,30)||'active',progress:number(b.progress,0,100),outcome:clean(b.outcome,500),bio:clean(b.bio,800),avatar_url:/^https:\/\//.test(String(b.avatar_url||''))?clean(b.avatar_url,1000):'',profile_id:/^[0-9a-f-]{36}$/i.test(String(b.profile_id||''))?b.profile_id:null})):[],
+    beneficiaries:Array.isArray(input.beneficiaries)?input.beneficiaries.slice(0,500).map((b,index)=>({id:id(b.id)||`${programId}-beneficiary-${index+1}`,name:clean(b.name,120),initials:clean(b.initials,4),path:clean(b.path,80),status:clean(b.status,30)||'active',progress:number(b.progress,0,100),outcome:clean(b.outcome,500),bio:clean(b.bio,800),avatar_url:/^https:\/\//.test(String(b.avatar_url||''))?clean(b.avatar_url,1000):'',profile_id:/^[0-9a-f-]{36}$/i.test(String(b.profile_id||''))?b.profile_id:null,public_consent:Boolean(b.public_consent)})):[],
     reports:Array.isArray(input.reports)?input.reports.slice(0,100).map((r,index)=>({id:id(r.id)||`${programId}-report-${index+1}`,title:clean(r.title,160),title_en:clean(r.title_en,160),type:clean(r.type,40),period:clean(r.period,80),url:/^https:\/\//.test(String(r.url||''))?clean(r.url,1200):'',verified:Boolean(r.verified)})):[]
   };
 }
@@ -98,15 +98,22 @@ async function hydratePrograms(programs) {
     adminFetch('/rest/v1/assignments?select=id,status'),
     adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,status,submitted_at')
   ]).catch(() => [[],[],[]]);
-  const safeProfiles=(profiles||[]).map(p=>{const prefs=p.notification_preferences||{};return {id:p.id,name:p.full_name,role:p.role,initials:p.initials,path:p.path,bio:clean(prefs.profile_bio,800),avatar_url:clean(prefs.avatar_url,1000),last_active_at:p.last_active_at};});
+  const safeProfiles=(profiles||[]).map(p=>{const prefs=p.notification_preferences||{};return {id:p.id,name:p.full_name,role:p.role,initials:p.initials,path:p.path,bio:clean(prefs.profile_bio,800),avatar_url:clean(prefs.avatar_url,1000),last_active_at:p.last_active_at,public_consent:prefs.donor_public===true};});
   const mentees=safeProfiles.filter(p=>p.role==='mentee'),published=(assignments||[]).filter(a=>a.status==='published'),submitted=new Set((submissions||[]).filter(s=>s.submitted_at).map(s=>s.mentee_id));
-  const hydrated=programs.map(program=>{if(program.source!=='ftg')return program;const copy=JSON.parse(JSON.stringify(program));copy.impact.beneficiaries=mentees.length||copy.impact.beneficiaries;copy.impact.active_rate=mentees.length?Math.round(mentees.filter(p=>p.last_active_at&&Date.now()-new Date(p.last_active_at).getTime()<14*86400000).length/mentees.length*100):copy.impact.active_rate;copy.impact.completion_rate=mentees.length?Math.round(submitted.size/mentees.length*100):copy.impact.completion_rate;copy.beneficiaries=mentees.map((p,index)=>({id:`ftg-${p.id}`,profile_id:p.id,name:p.name,initials:p.initials,path:p.path,status:'active',progress:published.length?Math.min(100,Math.round((submissions||[]).filter(s=>s.mentee_id===p.id&&s.submitted_at).length/published.length*100)):0,outcome:'',bio:p.bio,avatar_url:p.avatar_url}));return copy;});
+  const hydrated=programs.map(program=>{if(program.source!=='ftg')return program;const copy=JSON.parse(JSON.stringify(program));copy.impact.beneficiaries=mentees.length||copy.impact.beneficiaries;copy.impact.active_rate=mentees.length?Math.round(mentees.filter(p=>p.last_active_at&&Date.now()-new Date(p.last_active_at).getTime()<14*86400000).length/mentees.length*100):copy.impact.active_rate;copy.impact.completion_rate=mentees.length?Math.round(submitted.size/mentees.length*100):copy.impact.completion_rate;copy.beneficiaries=mentees.map((p,index)=>({id:`ftg-${p.id}`,profile_id:p.id,name:p.name,initials:p.initials,path:p.path,status:'active',progress:published.length?Math.min(100,Math.round((submissions||[]).filter(s=>s.mentee_id===p.id&&s.submitted_at).length/published.length*100)):0,outcome:'',bio:p.bio,avatar_url:p.avatar_url,public_consent:p.public_consent}));return copy;});
   const recipients=safeProfiles.filter(p=>p.role==='mentee'||p.role==='mentor').map(p=>({id:p.id,name:p.name,role:p.role,path:p.path,initials:p.initials,avatar_url:p.avatar_url}));
   manualRecipients.forEach(person=>{if(!recipients.some(existing=>existing.id===person.id))recipients.push(person);});
   return { programs:hydrated, recipients };
 }
 
-function publicProgram(program) { const copy=JSON.parse(JSON.stringify(program)); return copy; }
+function publicProgram(program) {
+  const copy=JSON.parse(JSON.stringify(program));
+  copy.beneficiaries=(copy.beneficiaries||[]).map((person,index)=>{
+    const consent=person.public_consent===true;
+    return { id:`${String(copy.code || 'program').toLowerCase()}-participant-${index+1}`, name:consent?person.name:`Peserta ${copy.code || 'Program'} ${String(index+1).padStart(2,'0')}`, initials:consent?person.initials:`P${index+1}`, path:person.path, status:person.status, progress:person.progress, outcome:consent?person.outcome:'', bio:consent?person.bio:'', avatar_url:consent?person.avatar_url:'', public_consent:consent };
+  });
+  return copy;
+}
 
 module.exports = async function handler(req,res) {
   if(!method(req,res,['GET','POST']))return;
@@ -135,13 +142,13 @@ module.exports = async function handler(req,res) {
       }
       return send(res,400,{error:'Aksi admin donor tidak dikenali'});
     }
+    if(req.method==='GET'){
+      const hydrated=await hydratePrograms(state.portal.programs.filter(program=>program.status==='active'||program.status==='completed'));
+      return send(res,200,{programs:hydrated.programs.map(publicProgram),updated_at:state.portal.updated_at,public:true});
+    }
     const token=verifyDonor(req);if(!token)return send(res,401,{error:'Sesi donor tidak valid atau sudah berakhir'});
     const donor=state.portal.donors.find(d=>d.id===token.id&&d.email===token.email&&d.active!==false);if(!donor)return send(res,403,{error:'Akses donor sudah dinonaktifkan'});
     const hydrated=await hydratePrograms(state.portal.programs.filter(p=>(donor.program_ids||[]).includes(p.id)&&p.status!=='archived'));
-    if(req.method==='GET'){
-      const ratings=state.portal.ratings.filter(r=>r.donor_id===donor.id);const messages=state.portal.messages.filter(m=>m.donor_id===donor.id).slice(-100);
-      return send(res,200,{donor:{id:donor.id,organization:donor.organization,contact_name:donor.contact_name,email:donor.email},programs:hydrated.programs.map(publicProgram),recipients:hydrated.recipients,ratings,messages,updated_at:state.portal.updated_at});
-    }
     if(body.action==='rating'){
       const programId=id(body.program_id),score=number(body.score,1,5);if(!(donor.program_ids||[]).includes(programId))return send(res,403,{error:'Program tidak tersedia untuk donor ini'});state.portal.ratings=state.portal.ratings.filter(r=>!(r.donor_id===donor.id&&r.program_id===programId));state.portal.ratings.push({id:crypto.randomUUID(),donor_id:donor.id,program_id:programId,score,comment:clean(body.comment,1000),created_at:nowIso()});await saveState(state,null,'donor.rating');return send(res,201,{ok:true});
     }

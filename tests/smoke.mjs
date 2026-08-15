@@ -19,7 +19,7 @@ test('all application pages have responsive metadata and valid local links', asy
 });
 
 test('protected pages use the shared engine or a dedicated authenticated flow', async () => {
-  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html', 'donor-login.html']);
+  const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html', 'donor-login.html', 'donor-messages.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
     const source = await text(file);
     const donorFlow = file.startsWith('donor-') && /donor\.js\?v=\d+/.test(source);
@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=55/);
+    assert.match(await text(file), /app\.js\?v=56/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=55/);
+    assert.match(await text(file), /app\.js\?v=56/);
   }
 });
 
@@ -547,31 +547,33 @@ test('Design Thinking is server-backed, weekly controlled, versioned and monitor
   assert.match(operations, /learningHandler/);
 });
 
-test('standalone donor portal is bilingual, multi-program and securely managed by Fasil', async () => {
+test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
   const app = await text('app.js');
   const donor = await text('donor.js');
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  for (const page of ['donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-messages.html']) {
-    assert.match(await text(page), /donor\.js\?v=1/);
+  for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html']) {
+    assert.match(await text(page), /donor\.js\?v=2/);
   }
   assert.match(donor, /ftgDonorLang/);
-  assert.match(donor, /action:'rating'/);
-  assert.match(donor, /action:'message'/);
-  assert.match(donor, /sessionStorage/);
+  assert.match(donor, /fetch\('\/api\/donor'/);
+  assert.match(donor, /donor-programs\.html/);
+  assert.doesNotMatch(donor, /sessionStorage/);
+  assert.doesNotMatch(donor, /action:'rating'/);
+  assert.doesNotMatch(donor, /action:'message'/);
   assert.match(api, /createHmac\('sha256'/);
   assert.match(api, /requireRole\(req,res,\['admin'\]\)/);
   assert.match(api, /admin_program_save/);
-  assert.match(api, /admin_donor_create/);
   assert.match(api, /source === 'ftg'/);
-  assert.match(api, /manualRecipients/);
-  assert.match(api, /donor_message/);
-  assert.match(api, /programIds\.has\(row\.program_id\)&&donorIds\.has\(row\.donor_id\)/);
+  assert.match(api, /public_consent/);
+  assert.match(api, /public:true/);
+  assert.match(api, /participant-\$\{index\+1\}/);
   assert.doesNotMatch(api, /code_hash:\s*codeHash\(['"][^'"]+['"]\)/);
   assert.match(app, /function openDonorPortalManager/);
-  assert.match(app, /Portal Donor Multi-Program/);
+  assert.match(app, /Publikasi Program & Dampak/);
   assert.match(app, /return apiRequest\('\/api\/donor\?admin=1'\)/);
   assert.match(css, /\.donor-shell/);
+  assert.match(css, /\.public-program-hero/);
   assert.match(programApi, /currentFlags/);
 });
