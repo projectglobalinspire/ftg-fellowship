@@ -554,7 +554,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html']) {
-    assert.match(await text(page), /donor\.js\?v=3/);
+    assert.match(await text(page), /donor\.js\?v=4/);
   }
   assert.match(donor, /ftgDonorLang/);
   assert.match(donor, /fetch\('\/api\/donor'/);
@@ -568,6 +568,10 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   assert.match(api, /source === 'ftg'/);
   assert.match(api, /public_consent/);
   assert.match(api, /public:true/);
+  assert.match(api, /assignment_targets/);
+  assert.match(api, /attendance_records/);
+  assert.match(api, /activity_trend/);
+  assert.match(api, /review_turnaround_hours/);
   assert.match(api, /participant-\$\{index\+1\}/);
   assert.doesNotMatch(api, /code_hash:\s*codeHash\(['"][^'"]+['"]\)/);
   assert.match(app, /function openDonorPortalManager/);
@@ -575,5 +579,8 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   assert.match(app, /return apiRequest\('\/api\/donor\?admin=1'\)/);
   assert.match(css, /\.donor-shell/);
   assert.match(css, /\.public-program-hero/);
+  assert.match(css, /\.impact-line-chart/);
+  assert.match(donor, /function activityChart/);
+  assert.match(donor, /setInterval\(refreshLive/);
   assert.match(programApi, /currentFlags/);
 });

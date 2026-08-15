@@ -93,14 +93,30 @@ async function hydratePrograms(programs) {
     initials:person.initials, avatar_url:person.avatar_url, program_id:program.id
   }))).filter(person => person.id && person.name);
   if (!programs.some(p => p.source === 'ftg')) return { programs, recipients:manualRecipients };
-  const [profiles, assignments, submissions] = await Promise.all([
-    adminFetch('/rest/v1/profiles?status=eq.active&select=id,full_name,role,initials,path,mentee_number,notification_preferences,last_active_at'),
-    adminFetch('/rest/v1/assignments?select=id,status'),
-    adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,status,submitted_at')
-  ]).catch(() => [[],[],[]]);
+  const [profiles, assignments, targets, submissions, reviews, attendance, sessions] = await Promise.all([
+    adminFetch('/rest/v1/profiles?status=eq.active&select=id,full_name,role,initials,path,mentee_number,notification_preferences,last_active_at,updated_at'),
+    adminFetch('/rest/v1/assignments?select=id,status,deadline,created_at,updated_at'),
+    adminFetch('/rest/v1/assignment_targets?select=assignment_id,mentee_id,assigned_at'),
+    adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,status,submitted_at,updated_at'),
+    adminFetch('/rest/v1/reviews?select=submission_id,score,decision,created_at,updated_at'),
+    adminFetch('/rest/v1/attendance_records?select=mentee_id,status,checked_in_at,created_at'),
+    adminFetch('/rest/v1/mentor_sessions?select=mentee_id,status,scheduled_at,completed_at,updated_at')
+  ]).catch(() => [[],[],[],[],[],[],[]]);
   const safeProfiles=(profiles||[]).map(p=>{const prefs=p.notification_preferences||{};return {id:p.id,name:p.full_name,role:p.role,initials:p.initials,path:p.path,bio:clean(prefs.profile_bio,800),avatar_url:clean(prefs.avatar_url,1000),last_active_at:p.last_active_at,public_consent:prefs.donor_public===true};});
-  const mentees=safeProfiles.filter(p=>p.role==='mentee'),published=(assignments||[]).filter(a=>a.status==='published'),submitted=new Set((submissions||[]).filter(s=>s.submitted_at).map(s=>s.mentee_id));
-  const hydrated=programs.map(program=>{if(program.source!=='ftg')return program;const copy=JSON.parse(JSON.stringify(program));copy.impact.beneficiaries=mentees.length||copy.impact.beneficiaries;copy.impact.active_rate=mentees.length?Math.round(mentees.filter(p=>p.last_active_at&&Date.now()-new Date(p.last_active_at).getTime()<14*86400000).length/mentees.length*100):copy.impact.active_rate;copy.impact.completion_rate=mentees.length?Math.round(submitted.size/mentees.length*100):copy.impact.completion_rate;copy.beneficiaries=mentees.map((p,index)=>({id:`ftg-${p.id}`,profile_id:p.id,name:p.name,initials:p.initials,path:p.path,status:'active',progress:published.length?Math.min(100,Math.round((submissions||[]).filter(s=>s.mentee_id===p.id&&s.submitted_at).length/published.length*100)):0,outcome:'',bio:p.bio,avatar_url:p.avatar_url,public_consent:p.public_consent}));return copy;});
+  const mentees=safeProfiles.filter(p=>p.role==='mentee'),menteeIds=new Set(mentees.map(p=>p.id)),published=(assignments||[]).filter(a=>a.status==='published'),publishedIds=new Set(published.map(a=>a.id));
+  const liveSubmissions=(submissions||[]).filter(s=>menteeIds.has(s.mentee_id)&&publishedIds.has(s.assignment_id)&&s.submitted_at),submissionIds=new Set(liveSubmissions.map(s=>s.id));
+  const liveReviews=(reviews||[]).filter(r=>submissionIds.has(r.submission_id)),reviewBySubmission=new Map(liveReviews.map(r=>[r.submission_id,r]));
+  const validTargets=(targets||[]).filter(row=>menteeIds.has(row.mentee_id)&&publishedIds.has(row.assignment_id));
+  const expectedSubmissions=validTargets.length||(published.length*mentees.length),submittedMentees=new Set(liveSubmissions.map(s=>s.mentee_id));
+  const activityMentees=new Set(mentees.filter(p=>p.last_active_at&&Date.now()-new Date(p.last_active_at).getTime()<14*86400000).map(p=>p.id));
+  liveSubmissions.filter(s=>Date.now()-new Date(s.updated_at||s.submitted_at).getTime()<14*86400000).forEach(s=>activityMentees.add(s.mentee_id));
+  const pathCounts={};mentees.forEach(p=>{const key=clean(p.path||'Belum ditentukan',80);pathCounts[key]=(pathCounts[key]||0)+1;});
+  const attendanceRows=(attendance||[]).filter(row=>menteeIds.has(row.mentee_id)),presentRows=attendanceRows.filter(row=>row.status==='present'||row.status==='late');
+  const scores=liveReviews.map(r=>number(r.score,0,100)),turnarounds=liveSubmissions.map(s=>{const review=reviewBySubmission.get(s.id);return review&&review.updated_at&&s.submitted_at?Math.max(0,(new Date(review.updated_at)-new Date(s.submitted_at))/3600000):null;}).filter(v=>v!==null&&Number.isFinite(v));
+  const assignmentById=new Map(published.map(a=>[a.id,a])),onTime=liveSubmissions.filter(s=>{const a=assignmentById.get(s.assignment_id);return !a||!a.deadline||new Date(s.submitted_at)<=new Date(a.deadline);}).length;
+  const weekMs=7*86400000,weekStart=new Date();weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  const activityTrend=Array.from({length:6},(_,index)=>{const start=new Date(weekStart.getTime()-(5-index)*weekMs),end=new Date(start.getTime()+weekMs);return{label:`W${index+1}`,value:liveSubmissions.filter(s=>{const at=new Date(s.submitted_at);return at>=start&&at<end;}).length,start:start.toISOString().slice(0,10)};});
+  const hydrated=programs.map(program=>{if(program.source!=='ftg')return program;const copy=JSON.parse(JSON.stringify(program)),submittedCount=liveSubmissions.length,reviewedCount=liveReviews.length,approvedCount=liveReviews.filter(r=>r.decision==='approved').length,revisionCount=liveReviews.filter(r=>r.decision==='revision').length,completion=expectedSubmissions?Math.round(submittedCount/expectedSubmissions*100):0;copy.impact.beneficiaries=mentees.length||copy.impact.beneficiaries;copy.impact.active_rate=mentees.length?Math.round(activityMentees.size/mentees.length*100):copy.impact.active_rate;copy.impact.completion_rate=Math.min(100,completion);copy.impact.average_progress=Math.min(100,completion);copy.analytics={source:'live_lms',synced_at:new Date().toISOString(),assignments:{published:published.length,expected:expectedSubmissions,submitted:submittedCount,reviewed:reviewedCount,approved:approvedCount,revision:revisionCount,pending_review:Math.max(0,submittedCount-reviewedCount),on_time_rate:submittedCount?Math.round(onTime/submittedCount*100):0},quality:{average_score:scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):0,review_turnaround_hours:turnarounds.length?Math.round(turnarounds.reduce((a,b)=>a+b,0)/turnarounds.length):0},engagement:{active_14d:activityMentees.size,attendance_rate:attendanceRows.length?Math.round(presentRows.length/attendanceRows.length*100):0,attendance_records:attendanceRows.length,mentoring_completed:(sessions||[]).filter(s=>menteeIds.has(s.mentee_id)&&s.status==='completed').length,mentoring_scheduled:(sessions||[]).filter(s=>menteeIds.has(s.mentee_id)&&s.status==='scheduled').length},paths:Object.entries(pathCounts).map(([label,value])=>({label,value})),activity_trend:activityTrend};copy.beneficiaries=mentees.map((p,index)=>{const assigned=validTargets.filter(t=>t.mentee_id===p.id).length||published.length,done=liveSubmissions.filter(s=>s.mentee_id===p.id).length;return{id:`ftg-${p.id}`,profile_id:p.id,name:p.name,initials:p.initials,path:p.path,status:activityMentees.has(p.id)?'active':'inactive',progress:assigned?Math.min(100,Math.round(done/assigned*100)):0,outcome:'',bio:p.bio,avatar_url:p.avatar_url,public_consent:p.public_consent};});return copy;});
   const recipients=safeProfiles.filter(p=>p.role==='mentee'||p.role==='mentor').map(p=>({id:p.id,name:p.name,role:p.role,path:p.path,initials:p.initials,avatar_url:p.avatar_url}));
   manualRecipients.forEach(person=>{if(!recipients.some(existing=>existing.id===person.id))recipients.push(person);});
   return { programs:hydrated, recipients };
@@ -144,7 +160,7 @@ module.exports = async function handler(req,res) {
     }
     if(req.method==='GET'){
       const hydrated=await hydratePrograms(state.portal.programs.filter(program=>program.status==='active'||program.status==='completed'));
-      return send(res,200,{programs:hydrated.programs.map(publicProgram),updated_at:state.portal.updated_at,public:true});
+      return send(res,200,{programs:hydrated.programs.map(publicProgram),updated_at:new Date().toISOString(),public:true,refresh_seconds:60});
     }
     const token=verifyDonor(req);if(!token)return send(res,401,{error:'Sesi donor tidak valid atau sudah berakhir'});
     const donor=state.portal.donors.find(d=>d.id===token.id&&d.email===token.email&&d.active!==false);if(!donor)return send(res,403,{error:'Akses donor sudah dinonaktifkan'});
