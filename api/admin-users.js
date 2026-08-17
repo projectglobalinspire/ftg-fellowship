@@ -44,11 +44,14 @@ module.exports = async function handler(req, res) {
     if (!auth) return;
     if (req.method === 'GET') {
       const page = Math.max(1, +(req.query.page || 1));
-      const users = await adminFetch(`/auth/v1/admin/users?page=${page}&per_page=100`);
+      const [users, profiles] = await Promise.all([
+        adminFetch(`/auth/v1/admin/users?page=${page}&per_page=100`),
+        adminFetch('/rest/v1/profiles?select=id,email,full_name,role,status,path,initials,mentee_number,mentor_id,cohort_id,warning_level,absence_count,discipline_note,notification_preferences,onboarding_completed,updated_at&order=created_at.desc')
+      ]);
       const authUsers = users.users || users;
-      const profiles = await adminFetch('/rest/v1/profiles?select=*&order=created_at.desc');
+      const authById = new Map((authUsers || []).map(account => [account.id, account]));
       const hydratedProfiles = (profiles || []).map(profile => {
-        const account = (authUsers || []).find(user => user.id === profile.id) || {};
+        const account = authById.get(profile.id) || {};
         const metadata = account.user_metadata || {};
         const preferences = profile.notification_preferences || {};
         return Object.assign({}, profile, { bio:metadata.bio || preferences.profile_bio || '', avatar_url:metadata.avatar_url || preferences.avatar_url || '' });

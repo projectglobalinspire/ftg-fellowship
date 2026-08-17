@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=60/);
+    assert.match(await text(file), /app\.js\?v=61/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=60/);
+    assert.match(await text(file), /app\.js\?v=61/);
   }
 });
 
@@ -553,9 +553,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=60/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=56/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=60/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=61/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=57/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=61/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
     assert.match(await text(page), /donor\.css\?v=6/);
@@ -642,4 +642,22 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(app, /id='adminAnnouncements'/);
   assert.match(css, /\.ftg-mentee-announcement/);
   assert.match(css, /\.ftg-track-manager/);
+});
+
+test('slow Fasil screens use parallel data, deduped cache and visible loading feedback', async () => {
+  const app = await text('app.js');
+  const adminUsers = await text('api/admin-users.js');
+  const css = await text('responsive.css');
+  assert.match(adminUsers, /Promise\.all\(\[/);
+  assert.match(adminUsers, /const authById = new Map/);
+  assert.match(app, /function cachedApiRequest/);
+  assert.match(app, /API_INFLIGHT\[key\]/);
+  assert.match(app, /readSessionCache\('ftg-admin-users'/);
+  assert.match(app, /function accountLoadingSkeleton/);
+  assert.match(app, /function operationLoader/);
+  assert.match(app, /openBusy\(this,openCohortManager\)/);
+  assert.match(app, /cachedApiRequest\('program-pairings'/);
+  assert.match(app, /cachedApiRequest\('program-tracks'/);
+  assert.match(css, /\.ftg-operation-loading/);
+  assert.match(css, /\.ftg-account-skeleton/);
 });
