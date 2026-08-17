@@ -189,12 +189,11 @@ module.exports = async function handler(req, res) {
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       const authPatch = {};
-      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
+      const [currentRows,listed] = await Promise.all([adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`),adminFetch('/auth/v1/admin/users?page=1&per_page=1000')]);
       const currentProfile = currentRows && currentRows[0];
       if(body.path!==undefined&&['mentee','mentor'].includes(body.role||currentProfile&&currentProfile.role)){
         const activeTracks=await configuredTrackNames(false);if(!activeTracks.includes(body.path)&&body.path!==(currentProfile&&currentProfile.path))return send(res,400,{error:'Track atau jalur program tidak aktif'});
       }
-      const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
       const currentAuthUser = (listed.users || listed || []).find(user => user.id === id);
       const currentMetadata = currentAuthUser && currentAuthUser.user_metadata || {};
       const mentorProfileRequired = body.role === 'mentor' && !mentorApplicationComplete(currentMetadata.mentor_application);
@@ -219,8 +218,10 @@ module.exports = async function handler(req, res) {
       }
       if (body.password) authPatch.password = body.password;
       if (body.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(profilePatch.status || body.status) ? '876000h' : 'none';
-      if (Object.keys(authPatch).length) await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(authPatch) });
-      if (Object.keys(profilePatch).length) await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) });
+      const updates=[];
+      if (Object.keys(authPatch).length) updates.push(adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(authPatch) }));
+      if (Object.keys(profilePatch).length) updates.push(adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) }));
+      if(updates.length)await Promise.all(updates);
       if (notifyMentorRequirement && currentProfile.email) {
         const notification = { type:'registration', title:'Lengkapi profil Mentor', body:'Akses dashboard Mentor akan dibuka setelah formulir profesional dilengkapi dan disetujui Fasil.', href:'profile-setup.html' };
         const notices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:id, delivery:{ in_app:'sent', email:'queued' } }, notification)) }).catch(() => []);

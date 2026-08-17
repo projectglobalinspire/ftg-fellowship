@@ -4554,11 +4554,16 @@
     var csv = rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = 'rekap-ftg-fellowship.csv'; a.click(); URL.revokeObjectURL(a.href); addAudit('report.export', 'Rekap program CSV'); saveState();
   }
+  var USER_ACTION_CONTEXT = { at:0, label:'', button:null };
   function apiRequest(path, options) {
-    options = options || {}; options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
+    options = options || {};
+    var requestMethod=String(options.method||'GET').toUpperCase(),showActionLoader=options.loading!==false&&requestMethod!=='GET'&&Date.now()-USER_ACTION_CONTEXT.at<1800,hideActionLoader=null;
+    delete options.loading;
+    if(showActionLoader){var label=USER_ACTION_CONTEXT.label||'perubahan',title=/hapus|delete/i.test(label)?'Menghapus data…':/kirim|send/i.test(label)?'Mengirim data…':/unggah|upload/i.test(label)?'Mengunggah data…':'Menyimpan perubahan…';hideActionLoader=operationLoader(title,'Mohon tunggu. Data sedang diproses dengan aman dan jangan klik ulang.');}
+    options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
     var timer=null,controller=null;
     if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},25000);}
-    return fetch(path, options).then(function (r) { return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || 'Permintaan gagal'); return data; }); }).catch(function(error){if(error&&error.name==='AbortError')throw new Error('Server terlalu lama merespons. Silakan coba lagi.');throw error;}).finally(function(){if(timer)clearTimeout(timer);});
+    return fetch(path, options).then(function (r) { return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || 'Permintaan gagal'); return data; }); }).catch(function(error){if(error&&error.name==='AbortError')throw new Error('Server terlalu lama merespons. Silakan coba lagi.');throw error;}).finally(function(){if(timer)clearTimeout(timer);if(hideActionLoader)hideActionLoader();});
   }
   var API_MEMORY_CACHE = {}, API_INFLIGHT = {};
   function cachedApiRequest(key, path, options, ttl, force) {
@@ -5163,6 +5168,7 @@
   }
   function wireGlobalUX() {
     if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');
+    document.addEventListener('click',function(event){var button=event.target.closest&&event.target.closest('button,input[type="submit"]');if(!button||button.disabled)return;USER_ACTION_CONTEXT={at:Date.now(),label:(button.textContent||button.value||button.getAttribute('aria-label')||'perubahan').trim(),button:button};},true);
     var skip=document.createElement('a');skip.href='#main-content';skip.className='ftg-skip-link';skip.textContent='Lewati ke konten utama';document.body.insertBefore(skip,document.body.firstChild);var main=$('main');if(main)main.id='main-content';
     document.addEventListener('click',function(e){var p=e.target.closest&&e.target.closest('[data-drive-preview]');if(p){e.preventDefault();openDrivePreview(p.getAttribute('data-drive-preview'),p.getAttribute('data-drive-name'),p.getAttribute('data-drive-download'));}});
     document.addEventListener('click',function(e){var link=e.target.closest&&e.target.closest('a[href]');if(!link||e.defaultPrevented||e.button>0||e.ctrlKey||e.metaKey||e.shiftKey||link.target==='_blank'||link.hasAttribute('download'))return;try{var url=new URL(link.href,location.href);if(url.origin!==location.origin||url.pathname===location.pathname||!/\.html$/.test(url.pathname))return;operationLoader('Membuka halaman','Tampilan berikutnya sedang disiapkan…');}catch(_){}});
