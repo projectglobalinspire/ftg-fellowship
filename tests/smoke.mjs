@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=62/);
+    assert.match(await text(file), /app\.js\?v=63/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=62/);
+    assert.match(await text(file), /app\.js\?v=63/);
   }
 });
 
@@ -553,9 +553,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=62/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=63/);
   assert.match(await text('admin-program.html'), /responsive\.css\?v=57/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=62/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=63/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
     assert.match(await text(page), /donor\.css\?v=6/);
@@ -658,6 +658,8 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(app, /USER_ACTION_CONTEXT/);
   assert.match(app, /showActionLoader=options\.loading!==false/);
   assert.match(app, /Menyimpan perubahan/);
+  assert.match(app, /Tidak ada perubahan yang perlu disimpan/);
+  assert.match(adminUsers, /unchanged:true/);
   assert.match(app, /document\.addEventListener\('click'.*USER_ACTION_CONTEXT/);
   assert.match(app, /openBusy\(this,openCohortManager\)/);
   assert.match(app, /cachedApiRequest\('program-pairings'/);

@@ -188,11 +188,14 @@ module.exports = async function handler(req, res) {
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       const authPatch = {};
-      const [currentRows,currentAuthUser] = await Promise.all([adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`),adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`)]);
+      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
       const currentProfile = currentRows && currentRows[0];
+      if(!currentProfile)return send(res,404,{error:'Profil pengguna tidak ditemukan'});
       if(body.path!==undefined&&['mentee','mentor'].includes(body.role||currentProfile&&currentProfile.role)){
         const activeTracks=await configuredTrackNames(false);if(!activeTracks.includes(body.path)&&body.path!==(currentProfile&&currentProfile.path))return send(res,400,{error:'Track atau jalur program tidak aktif'});
       }
+      const roleChanging=Boolean(body.role&&body.role!==currentProfile.role),needsAuthMetadata=body.role==='mentor'||roleChanging;
+      const currentAuthUser=needsAuthMetadata?await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`):null;
       const currentMetadata = currentAuthUser && currentAuthUser.user_metadata || {};
       const mentorProfileRequired = body.role === 'mentor' && !mentorApplicationComplete(currentMetadata.mentor_application);
       const notifyMentorRequirement = mentorProfileRequired && (currentProfile.role !== 'mentor' || currentProfile.status !== 'invited' || currentMetadata.requested_role !== 'mentor');
@@ -215,7 +218,9 @@ module.exports = async function handler(req, res) {
         profilePatch.email = normalizedEmail;
       }
       if (body.password) authPatch.password = body.password;
-      if (body.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(profilePatch.status || body.status) ? '876000h' : 'none';
+      if (body.status && body.status !== currentProfile.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(profilePatch.status || body.status) ? '876000h' : 'none';
+      ['full_name','role','status','path','mentee_number'].forEach(key=>{if(profilePatch[key]===currentProfile[key])delete profilePatch[key];});
+      if(!Object.keys(authPatch).length&&!Object.keys(profilePatch).length)return send(res,200,{ok:true,unchanged:true,mentor_profile_required:false});
       const updates=[];
       if (Object.keys(authPatch).length) updates.push(adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(authPatch) }));
       if (Object.keys(profilePatch).length) updates.push(adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(profilePatch) }));
