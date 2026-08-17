@@ -6,6 +6,7 @@ const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max);
 const safeUrl = value => { const input=clean(value,500);if(!input)return'';try{const url=new URL(input);return ['http:','https:'].includes(url.protocol)?url.toString():'';}catch(_){return'';} };
 const initials = name => clean(name,120).split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase();
+let adminUserCache = null;
 
 function mentorApplicationComplete(application) {
   return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60);
@@ -43,6 +44,7 @@ module.exports = async function handler(req, res) {
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     if (req.method === 'GET') {
+      if (adminUserCache && Date.now() - adminUserCache.at < 30000) return send(res, 200, adminUserCache.data);
       const page = Math.max(1, +(req.query.page || 1));
       const [users, profiles] = await Promise.all([
         adminFetch(`/auth/v1/admin/users?page=${page}&per_page=100`),
@@ -56,8 +58,11 @@ module.exports = async function handler(req, res) {
         const preferences = profile.notification_preferences || {};
         return Object.assign({}, profile, { bio:metadata.bio || preferences.profile_bio || '', avatar_url:metadata.avatar_url || preferences.avatar_url || '' });
       });
-      return send(res, 200, { users: authUsers, profiles:hydratedProfiles });
+      const payload={ users:authUsers, profiles:hydratedProfiles };
+      adminUserCache={at:Date.now(),data:payload};
+      return send(res, 200, payload);
     }
+    adminUserCache=null;
     const body = req.body || {};
     if (req.method === 'POST') {
       if (!body.email || !body.full_name || !['mentee', 'mentor', 'admin'].includes(body.role)) return send(res, 400, { error: 'Email, nama, dan role wajib valid' });

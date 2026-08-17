@@ -261,8 +261,8 @@ module.exports = async function handler(req, res) {
       return send(res,200,{ok:true,tracks:await tracksWithUsage(true)});
     }
     if(body.action==='pairings_data'){
-      const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=id,email,full_name,role,status,path,initials,mentee_number,mentor_id&order=role.desc,path.asc,full_name.asc');
-      return send(res,200,{mentees:(profiles||[]).filter(row=>row.role==='mentee'&&row.status==='active'),mentors:(profiles||[]).filter(row=>row.role==='mentor'&&row.status==='active'),tracks:await programTracks(true)});
+      const [profiles,tracks]=await Promise.all([adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=id,email,full_name,role,status,path,initials,mentee_number,mentor_id&order=role.desc,path.asc,full_name.asc'),programTracks(true)]);
+      return send(res,200,{mentees:(profiles||[]).filter(row=>row.role==='mentee'&&row.status==='active'),mentors:(profiles||[]).filter(row=>row.role==='mentor'&&row.status==='active'),tracks});
     }
     if(body.action==='pairings_save'){
       const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&status=eq.active&select=id,full_name,role,path,mentor_id'),mentees=new Map((profiles||[]).filter(row=>row.role==='mentee').map(row=>[row.id,row])),mentors=new Map((profiles||[]).filter(row=>row.role==='mentor').map(row=>[row.id,row]));
