@@ -95,7 +95,7 @@ module.exports = async function handler(req, res) {
         if(!profile)return send(res,404,{error:'Profil Mentor tidak ditemukan'});
         const activeTracks=await configuredTrackNames(false),allTracks=await configuredTrackNames(true),track=activeTracks.includes(body.path)||(body.path===profile.path&&allTracks.includes(body.path))?body.path:'';
         if(!track)return send(res,400,{error:'Track Mentor wajib dipilih dari track aktif'});
-        const listed=await adminFetch('/auth/v1/admin/users?page=1&per_page=1000'),authUser=(listed.users||listed||[]).find(user=>user.id===id);
+        const authUser=await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`);
         if(!authUser)return send(res,404,{error:'Akun login Mentor tidak ditemukan'});
         const fullName=clean(body.full_name||profile.full_name,120),email=clean(body.email||profile.email,254).toLowerCase();
         if(fullName.length<3||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'Nama dan email Mentor wajib valid'});
@@ -112,8 +112,7 @@ module.exports = async function handler(req, res) {
         const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
         const applicant = rows && rows[0];
         if (!applicant || applicant.status !== 'invited') return send(res, 409, { error: 'Pendaftaran ini sudah diproses' });
-        const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
-        const authUser = (listed.users || listed || []).find(user => user.id === id);
+        const authUser = await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`);
         const metadata = authUser && authUser.user_metadata || {};
         const requestedRole = ['mentee', 'mentor'].includes(metadata.requested_role) ? metadata.requested_role : 'mentee';
         if (body.action === 'approve_registration' && requestedRole === 'mentor') {
@@ -189,12 +188,11 @@ module.exports = async function handler(req, res) {
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       const authPatch = {};
-      const [currentRows,listed] = await Promise.all([adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`),adminFetch('/auth/v1/admin/users?page=1&per_page=1000')]);
+      const [currentRows,currentAuthUser] = await Promise.all([adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`),adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`)]);
       const currentProfile = currentRows && currentRows[0];
       if(body.path!==undefined&&['mentee','mentor'].includes(body.role||currentProfile&&currentProfile.role)){
         const activeTracks=await configuredTrackNames(false);if(!activeTracks.includes(body.path)&&body.path!==(currentProfile&&currentProfile.path))return send(res,400,{error:'Track atau jalur program tidak aktif'});
       }
-      const currentAuthUser = (listed.users || listed || []).find(user => user.id === id);
       const currentMetadata = currentAuthUser && currentAuthUser.user_metadata || {};
       const mentorProfileRequired = body.role === 'mentor' && !mentorApplicationComplete(currentMetadata.mentor_application);
       const notifyMentorRequirement = mentorProfileRequired && (currentProfile.role !== 'mentor' || currentProfile.status !== 'invited' || currentMetadata.requested_role !== 'mentor');
