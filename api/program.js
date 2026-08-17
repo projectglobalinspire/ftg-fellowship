@@ -5,6 +5,7 @@ const { deliverEmail } = require('./_email');
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
 function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
 const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
+const MENTOR_TRACKS = ['Career Path','Entrepreneur Path'];
 function mentorApplicationComplete(application) { return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60); }
 
 function safeUrl(value) {
@@ -46,7 +47,7 @@ async function completeGoogleProfile(req, res) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email !== verifiedEmail || email !== clean(profile.email, 254).toLowerCase()) return send(res, 400, { error:'Email notifikasi harus sama dengan email login yang telah terverifikasi' });
   const requestedRole = ['mentee', 'mentor'].includes(user.user_metadata && user.user_metadata.requested_role) ? user.user_metadata.requested_role : 'mentee';
   const fullName = clean(body.full_name, 120);
-  const path = requestedRole === 'mentor' ? 'Senior Mentor' : (['Career Path', 'Entrepreneur Path'].includes(body.path) ? body.path : '');
+  const path = (requestedRole === 'mentor' ? MENTOR_TRACKS : ['Career Path','Entrepreneur Path']).includes(body.path) ? body.path : '';
   if (fullName.length < 3 || !path) return send(res, 400, { error: 'Nama lengkap dan jalur program wajib diisi' });
   let application = null;
   if (requestedRole === 'mentor') application = mentorApplication(body);
@@ -78,11 +79,11 @@ async function completeGoogleProfile(req, res) {
 async function prepareIncompleteMentor(req, res) {
   const user = await currentUser(req);
   if (!user) return send(res, 401, { error:'Sesi mentor tidak valid atau berakhir' });
-  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`);
+  const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status,path`);
   const profile = rows && rows[0];
   if (!profile || profile.role !== 'mentor') return send(res, 403, { error:'Akun ini bukan mentor' });
   if (mentorApplicationComplete(user.user_metadata && user.user_metadata.mentor_application)) return send(res, 200, { complete:true });
-  await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ status:'invited', onboarding_completed:false, path:'Senior Mentor', updated_at:new Date().toISOString() }) });
+  await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ status:'invited', onboarding_completed:false, path:MENTOR_TRACKS.includes(profile.path)?profile.path:'Career Path', updated_at:new Date().toISOString() }) });
   await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { requested_role:'mentor', role:'mentee', profile_completed:false, registration_decision:'pending' }) }) });
   await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'registration.mentor_profile_required', entity_type:'profile', entity_id:user.id, detail:{ previous_status:profile.status } }) }).catch(() => null);
   return send(res, 200, { complete:false, redirected:true });
@@ -114,7 +115,14 @@ async function updateOwnProfile(req, res) {
   if (profile.role === 'mentee') {
     path = clean(req.body && req.body.path, 40);
     if (!['Career Path','Entrepreneur Path'].includes(path)) return send(res, 400, { error:'Jalur mentee tidak valid' });
-  } else if (profile.role === 'mentor') path = 'Senior Mentor';
+  } else if (profile.role === 'mentor') {
+    path = clean(req.body && req.body.path, 40);
+    if (!MENTOR_TRACKS.includes(path)) return send(res, 400, { error:'Track Mentor tidak valid' });
+    if (path !== profile.path) {
+      const assigned = await adminFetch(`/rest/v1/profiles?role=eq.mentee&mentor_id=eq.${encodeURIComponent(user.id)}&select=id&limit=1`);
+      if (assigned && assigned.length) return send(res, 409, { error:'Track tidak dapat diubah karena masih memiliki mentee. Hubungi Fasil untuk memindahkan pairing.' });
+    }
+  }
   const prefs = req.body && req.body.notification_preferences || {};
   const bio = clean(req.body && req.body.bio, 500);
   let avatarUrl = clean(user.user_metadata && user.user_metadata.avatar_url, 1000);
@@ -170,6 +178,30 @@ async function updateOwnPassword(req, res) {
   return send(res, 200, { ok:true });
 }
 
+function safeHttps(value) { const input=clean(value,1200);if(!input)return'';try{const url=new URL(input);return url.protocol==='https:'?url.toString():'';}catch(_){return'';} }
+async function uploadAnnouncementImage(id, dataUrl) {
+  const match=/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl||''));
+  if(!match)throw new Error('Format poster harus JPG, PNG, atau WebP');
+  const bytes=Buffer.from(match[2],'base64');if(!bytes.length||bytes.length>4*1024*1024)throw new Error('Ukuran poster maksimal 4MB');
+  const headers={apikey:process.env.SUPABASE_SECRET_KEY,Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}`};
+  let bucket=await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket/program-assets`,{headers});
+  if(!bucket.ok)bucket=await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},headers),body:JSON.stringify({id:'program-assets',name:'program-assets',public:true,file_size_limit:4194304,allowed_mime_types:['image/jpeg','image/png','image/webp']})});
+  if(!bucket.ok)throw new Error('Penyimpanan poster program belum tersedia');
+  const ext=match[1]==='image/png'?'png':match[1]==='image/webp'?'webp':'jpg',objectPath=`announcements/${id}.${ext}`;
+  const upload=await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/program-assets/${objectPath}`,{method:'POST',headers:Object.assign({'Content-Type':match[1],'x-upsert':'true'},headers),body:bytes});
+  if(!upload.ok)throw new Error('Poster gagal diunggah');
+  return `${process.env.SUPABASE_URL}/storage/v1/object/public/program-assets/${objectPath}?v=${Date.now()}`;
+}
+async function programFlags() { const rows=await adminFetch('/rest/v1/program_settings?id=eq.1&select=feature_flags');return rows&&rows[0]&&rows[0].feature_flags||{}; }
+async function saveProgramFlags(flags, actorId) { await adminFetch('/rest/v1/program_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({feature_flags:flags,updated_by:actorId,updated_at:new Date().toISOString()})}); }
+function cleanAnnouncement(source, existing) {
+  source=source||{};existing=existing||{};const id=clean(source.id||existing.id||crypto.randomUUID(),80).replace(/[^a-zA-Z0-9_-]/g,'');
+  const item={id,title:clean(source.title,140),body:clean(source.body,1200),image_url:safeHttps(source.image_url||existing.image_url),cta_url:safeHttps(source.cta_url||source.link_url||existing.cta_url||existing.link_url),cta_label:clean(source.cta_label,40),starts_at:clean(source.starts_at||source.start_at,40)||null,ends_at:clean(source.ends_at||source.end_at,40)||null,is_active:source.is_active!==false,priority:Math.max(0,Math.min(999,Number(source.priority)||0)),updated_at:new Date().toISOString()};
+  if(!item.title)throw new Error('Judul informasi wajib diisi');
+  if(item.starts_at&&item.ends_at&&new Date(item.ends_at)<=new Date(item.starts_at))throw new Error('Waktu selesai harus setelah waktu mulai');
+  return item;
+}
+
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
   try {
@@ -179,9 +211,44 @@ module.exports = async function handler(req, res) {
     if (req.body && req.body.action === 'profile_context') return profileContext(req, res);
     if (req.body && req.body.action === 'profile_update') return updateOwnProfile(req, res);
     if (req.body && req.body.action === 'profile_password') return updateOwnPassword(req, res);
+    if (req.body && req.body.action === 'announcements_list') {
+      const user=await currentUser(req);if(!user)return send(res,401,{error:'Sesi tidak valid'});
+      const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`),profile=rows&&rows[0];if(!profile||profile.status!=='active')return send(res,403,{error:'Profil tidak aktif'});
+      const flags=await programFlags(),all=Array.isArray(flags.announcements)?flags.announcements:[],now=Date.now();
+      const announcements=profile.role==='admin'&&req.body.admin===true?all:all.filter(item=>item.is_active!==false&&(!(item.starts_at||item.start_at)||new Date(item.starts_at||item.start_at).getTime()<=now)&&(!(item.ends_at||item.end_at)||new Date(item.ends_at||item.end_at).getTime()>=now));
+      return send(res,200,{announcements:announcements.sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0)||new Date(b.updated_at)-new Date(a.updated_at))});
+    }
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
+    if(body.action==='pairings_data'){
+      const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=id,email,full_name,role,status,path,initials,mentee_number,mentor_id&order=role.desc,path.asc,full_name.asc');
+      return send(res,200,{mentees:(profiles||[]).filter(row=>row.role==='mentee'&&row.status==='active'),mentors:(profiles||[]).filter(row=>row.role==='mentor'&&row.status==='active')});
+    }
+    if(body.action==='pairings_save'){
+      const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&status=eq.active&select=id,full_name,role,path,mentor_id'),mentees=new Map((profiles||[]).filter(row=>row.role==='mentee').map(row=>[row.id,row])),mentors=new Map((profiles||[]).filter(row=>row.role==='mentor').map(row=>[row.id,row]));
+      let changed=0;for(const pair of Array.isArray(body.pairings)?body.pairings.slice(0,1000):[]){const mentee=mentees.get(String(pair.mentee_id||'')),mentor=pair.mentor_id?mentors.get(String(pair.mentor_id)):null;if(!mentee)continue;if(mentor&&mentor.path!==mentee.path)return send(res,400,{error:`Track ${mentor.full_name} tidak cocok dengan ${mentee.full_name}`});const mentorId=mentor?mentor.id:null;if((mentee.mentor_id||null)!==mentorId){await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(mentee.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({mentor_id:mentorId,updated_at:new Date().toISOString()})});changed++;}}
+      await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'pairing.manual_save',entity_type:'profile',detail:{changed}})}).catch(()=>null);return send(res,200,{ok:true,changed});
+    }
+    if(body.action==='pairings_auto'){
+      const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&status=eq.active&select=id,full_name,role,path,mentor_id&order=created_at.asc'),mentees=(profiles||[]).filter(row=>row.role==='mentee'&&!row.mentor_id),mentors=(profiles||[]).filter(row=>row.role==='mentor'),loads={};(profiles||[]).filter(row=>row.role==='mentee'&&row.mentor_id).forEach(row=>loads[row.mentor_id]=(loads[row.mentor_id]||0)+1);let paired=0;
+      for(const mentee of mentees){const eligible=mentors.filter(mentor=>mentor.path===mentee.path).sort((a,b)=>(loads[a.id]||0)-(loads[b.id]||0)||a.full_name.localeCompare(b.full_name));if(!eligible.length)continue;const mentor=eligible[0];await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(mentee.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({mentor_id:mentor.id,updated_at:new Date().toISOString()})});loads[mentor.id]=(loads[mentor.id]||0)+1;paired++;}
+      await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'pairing.auto_balance',entity_type:'profile',detail:{paired}})}).catch(()=>null);return send(res,200,{ok:true,paired});
+    }
+    if(body.action==='announcement_save'){
+      const source=body.announcement&&typeof body.announcement==='object'?body.announcement:{},flags=await programFlags(),rows=Array.isArray(flags.announcements)?flags.announcements.slice():[],index=rows.findIndex(row=>row.id===source.id),existing=index>-1?rows[index]:null,item=cleanAnnouncement(source,existing);
+      if(body.image_data)item.image_url=await uploadAnnouncementImage(item.id,body.image_data);
+      if(!item.body&&!item.image_url)return send(res,400,{error:'Isi informasi atau poster wajib ditambahkan'});
+      if(index>-1)rows[index]=item;else rows.push(item);flags.announcements=rows.slice(-50);await saveProgramFlags(flags,auth.user.id);
+      await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'announcement.save',entity_type:'program_settings',entity_id:item.id,detail:{title:item.title,is_active:item.is_active}})}).catch(()=>null);
+      return send(res,200,{ok:true,announcement:item,announcements:flags.announcements});
+    }
+    if(body.action==='announcement_delete'){
+      const announcementId=clean(body.id,80),flags=await programFlags(),rows=Array.isArray(flags.announcements)?flags.announcements:[],existing=rows.find(row=>row.id===announcementId);flags.announcements=rows.filter(row=>row.id!==announcementId);await saveProgramFlags(flags,auth.user.id);
+      if(existing&&existing.image_url){const match=/\/program-assets\/(announcements\/[^?]+)/.exec(existing.image_url);if(match)await fetch(`${process.env.SUPABASE_URL}/storage/v1/object/program-assets/${match[1]}`,{method:'DELETE',headers:{apikey:process.env.SUPABASE_SECRET_KEY,Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}`}}).catch(()=>null);}
+      await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'announcement.delete',entity_type:'program_settings',entity_id:announcementId,detail:{title:existing&&existing.title}})}).catch(()=>null);
+      return send(res,200,{ok:true,announcements:flags.announcements});
+    }
     if (body.action === 'qa_google_auth') {
       const candidates = await adminFetch('/rest/v1/profiles?role=eq.mentee&status=eq.active&select=id,email&order=created_at.asc&limit=1');
       const candidate = candidates && candidates[0];

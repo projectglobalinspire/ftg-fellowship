@@ -1,8 +1,30 @@
 const { send, adminFetch, requireRole, method } = require('./_lib');
 const { deliverEmail } = require('./_email');
 
+const MENTOR_TRACKS = ['Career Path', 'Entrepreneur Path'];
+const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
+const clean = (value, max = 500) => String(value || '').trim().slice(0, max);
+const safeUrl = value => { const input=clean(value,500);if(!input)return'';try{const url=new URL(input);return ['http:','https:'].includes(url.protocol)?url.toString():'';}catch(_){return'';} };
+const initials = name => clean(name,120).split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join('').toUpperCase();
+
 function mentorApplicationComplete(application) {
   return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60);
+}
+
+function normalizeMentorApplication(source) {
+  source=source&&typeof source==='object'?source:{};
+  const tags=Array.isArray(source.expertise_tags)?[...new Set(source.expertise_tags.filter(tag=>MENTOR_EXPERTISE.includes(tag)))].slice(0,5):[];
+  const data={ phone:clean(source.phone,24).replace(/[\s-]/g,''),linkedin_url:safeUrl(source.linkedin_url),job_title:clean(source.job_title,120),company_or_institution:clean(source.company_or_institution,160),years_of_experience:clean(source.years_of_experience,12),expertise_tags:tags,bio:clean(source.bio,600),availability_hours:clean(source.availability_hours,12),mentoring_format:clean(source.mentoring_format,12),motivation:clean(source.motivation,1000),commitment_confirmed:source.commitment_confirmed===true,submitted_at:source.submitted_at||new Date().toISOString(),completed_by_fasil:true };
+  if(!mentorApplicationComplete(data)||!/^(?:\+62|62|0)8\d{8,12}$/.test(data.phone)||!['1-3','4-6','7-10','10+'].includes(data.years_of_experience)||!['2-4','4-6','6+'].includes(data.availability_hours)||!['online','offline','hybrid'].includes(data.mentoring_format))throw new Error('Profil profesional Mentor belum lengkap atau belum valid');
+  return data;
+}
+
+async function pairUnassignedByTrack(track, mentorId, actorId) {
+  if(!MENTOR_TRACKS.includes(track)||!mentorId)return 0;
+  const mentees=await adminFetch(`/rest/v1/profiles?role=eq.mentee&status=eq.active&path=eq.${encodeURIComponent(track)}&mentor_id=is.null&select=id`);
+  for(const mentee of mentees||[])await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(mentee.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({mentor_id:mentorId,updated_at:new Date().toISOString()})});
+  if((mentees||[]).length)await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:actorId,action:'pairing.auto_track',entity_type:'profile',entity_id:mentorId,detail:{track,mentees:(mentees||[]).map(row=>row.id)}})}).catch(()=>null);
+  return (mentees||[]).length;
 }
 
 async function nextMenteeNumber() {
@@ -36,14 +58,41 @@ module.exports = async function handler(req, res) {
       if (body.password && String(body.password).length < 8) return send(res, 400, { error:'Password sementara minimal 8 karakter' });
       const password = body.password || `${crypto.randomUUID().slice(0, 10)}Aa1!`;
       const menteeNumber = body.role === 'mentee' ? (Number(body.mentee_number) || await nextMenteeNumber()) : null;
-      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata: { full_name: body.full_name, role:body.role === 'mentor' ? 'mentee' : body.role, requested_role:body.role, initials: body.initials || '', path: body.path || '', mentee_number: menteeNumber } }) });
-      if (body.mentor_id || body.cohort_id || body.role === 'mentor' || menteeNumber) await adminFetch(`/rest/v1/profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(Object.assign({ mentor_id: body.mentor_id || null, cohort_id: body.cohort_id || null, mentee_number:menteeNumber }, body.role === 'mentor' ? { role:'mentor', status:'invited', path:'Senior Mentor', onboarding_completed:false } : {})) });
-      await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: 'user.create', entity_type: 'profile', entity_id: user.id, detail: { email: accountEmail, role: body.role } }) });
-      return send(res, 201, { user, temporary_password: body.password ? undefined : password });
+      const mentorTrack=body.role==='mentor'&&MENTOR_TRACKS.includes(body.path)?body.path:null;
+      const mentorApplication=body.role==='mentor'?normalizeMentorApplication(body.mentor_application):null;
+      if(body.role==='mentor'&&!mentorTrack)return send(res,400,{error:'Track Mentor wajib Career Path atau Entrepreneur Path'});
+      const metadata={full_name:clean(body.full_name,120),role:body.role,requested_role:body.role,initials:body.initials||initials(body.full_name),path:body.path||'',mentee_number:menteeNumber,profile_completed:true,registration_decision:'approved',registration_decided_at:new Date().toISOString(),created_by_fasil:true};
+      if(mentorApplication)metadata.mentor_application=mentorApplication;
+      const user = await adminFetch('/auth/v1/admin/users', { method: 'POST', body: JSON.stringify({ email: accountEmail, password, email_confirm: body.email_confirm !== false, user_metadata:metadata }) });
+      const profilePatch={mentor_id:body.mentor_id||null,cohort_id:body.cohort_id||null,mentee_number:menteeNumber,full_name:clean(body.full_name,120),initials:metadata.initials,path:body.path||'',status:'active',onboarding_completed:true,updated_at:new Date().toISOString()};
+      if(body.role==='mentor')Object.assign(profilePatch,{role:'mentor',mentor_id:null,mentee_number:null,notification_preferences:{in_app:true,email:true,deadline:true,review:true,session:true,profile_bio:mentorApplication.bio}});
+      await adminFetch(`/rest/v1/profiles?id=eq.${user.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(profilePatch) });
+      const paired=body.role==='mentor'&&body.auto_pair!==false?await pairUnassignedByTrack(mentorTrack,user.id,auth.user.id):0;
+      await adminFetch('/rest/v1/audit_logs', { method: 'POST', body: JSON.stringify({ actor_id: auth.user.id, action: body.role==='mentor'?'mentor.create_approved':'user.create', entity_type: 'profile', entity_id: user.id, detail: { email: accountEmail, role: body.role, track:mentorTrack, paired } }) });
+      return send(res, 201, { user, approved:true, paired, temporary_password: body.password ? undefined : password });
     }
     const id = body.id || req.query.id;
     if (!id) return send(res, 400, { error: 'ID pengguna wajib ada' });
     if (req.method === 'PATCH') {
+      if(body.action==='admin_mentor_profile'){
+        const track=MENTOR_TRACKS.includes(body.path)?body.path:'';
+        if(!track)return send(res,400,{error:'Track Mentor wajib dipilih'});
+        const application=normalizeMentorApplication(body.mentor_application);
+        const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,notification_preferences`),profile=rows&&rows[0];
+        if(!profile)return send(res,404,{error:'Profil Mentor tidak ditemukan'});
+        const listed=await adminFetch('/auth/v1/admin/users?page=1&per_page=1000'),authUser=(listed.users||listed||[]).find(user=>user.id===id);
+        if(!authUser)return send(res,404,{error:'Akun login Mentor tidak ditemukan'});
+        const fullName=clean(body.full_name||profile.full_name,120),email=clean(body.email||profile.email,254).toLowerCase();
+        if(fullName.length<3||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return send(res,400,{error:'Nama dan email Mentor wajib valid'});
+        const prefs=Object.assign({},profile.notification_preferences||{},{in_app:true,email:true,deadline:true,review:true,session:true,profile_bio:application.bio});
+        await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`,{method:'PUT',body:JSON.stringify({email,email_confirm:true,user_metadata:Object.assign({},authUser.user_metadata||{},{full_name:fullName,initials:initials(fullName),path:track,role:'mentor',requested_role:'mentor',profile_completed:true,registration_decision:'approved',registration_decided_at:new Date().toISOString(),mentor_application:application,completed_by_fasil:true})})});
+        let unpaired=0;
+        if(profile.path!==track){const assigned=await adminFetch(`/rest/v1/profiles?role=eq.mentee&mentor_id=eq.${encodeURIComponent(id)}&select=id,path`);for(const mentee of assigned||[]){if(mentee.path!==track){await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(mentee.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({mentor_id:null,updated_at:new Date().toISOString()})});unpaired++;}}}
+        const updated=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({email,full_name:fullName,initials:initials(fullName),role:'mentor',status:'active',path:track,mentee_number:null,mentor_id:null,onboarding_completed:true,notification_preferences:prefs,updated_at:new Date().toISOString()})});
+        const paired=body.auto_pair!==false?await pairUnassignedByTrack(track,id,auth.user.id):0;
+        await adminFetch('/rest/v1/audit_logs',{method:'POST',body:JSON.stringify({actor_id:auth.user.id,action:'mentor.profile_admin_complete',entity_type:'profile',entity_id:id,detail:{track,paired,unpaired}})});
+        return send(res,200,{ok:true,approved:true,paired,unpaired,profile:updated&&updated[0]});
+      }
       if (['approve_registration', 'reject_registration'].includes(body.action)) {
         const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
         const applicant = rows && rows[0];
@@ -57,18 +106,20 @@ module.exports = async function handler(req, res) {
           if (!mentorApplicationComplete(application)) return send(res, 400, { error: 'Form calon mentor belum lengkap' });
         }
         const approved = body.action === 'approve_registration';
+        const mentorTrack=MENTOR_TRACKS.includes(applicant.path)?applicant.path:'Career Path';
         const patch = approved
-          ? { status:'active', role:requestedRole, path:requestedRole === 'mentor' ? 'Senior Mentor' : applicant.path, updated_at:new Date().toISOString() }
+          ? { status:'active', role:requestedRole, path:requestedRole === 'mentor' ? mentorTrack : applicant.path, updated_at:new Date().toISOString() }
           : { status:'suspended', discipline_note:String(body.note || 'Pendaftaran belum dapat disetujui').slice(0,1000), updated_at:new Date().toISOString() };
         if (approved && requestedRole === 'mentee' && !applicant.mentee_number) patch.mentee_number = await nextMenteeNumber();
         await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify(patch) });
         await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(id)}`, { method:'PUT', body:JSON.stringify({ ban_duration:approved ? 'none' : '876000h', user_metadata:Object.assign({}, metadata, { role:approved ? requestedRole : metadata.role, profile_completed:approved, registration_decision:approved ? 'approved' : 'rejected', registration_decided_at:new Date().toISOString() }) }) });
+        const paired=approved&&requestedRole==='mentor'?await pairUnassignedByTrack(mentorTrack,id,auth.user.id):0;
         const notification = { type:'registration', title:approved ? 'Pendaftaran disetujui' : 'Pendaftaran belum disetujui', body:approved ? `Akses ${requestedRole === 'mentor' ? 'mentor' : 'mentee'} kamu sudah aktif.` : patch.discipline_note, href:approved ? (requestedRole === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html') : 'login.html' };
         const notices = await adminFetch('/rest/v1/notifications', { method:'POST', headers:{ Prefer:'return=representation' }, body:JSON.stringify(Object.assign({ user_id:id, delivery:{ in_app:'sent', email:'queued' } }, notification)) }).catch(() => []);
         const delivery = await deliverEmail(applicant, notification, notices[0] && notices[0].id).catch(error => ({ status:'failed', reason:error.message }));
         if (notices[0]) await adminFetch(`/rest/v1/notifications?id=eq.${encodeURIComponent(notices[0].id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:delivery.status } }) }).catch(() => null);
         await adminFetch('/rest/v1/audit_logs', { method:'POST', body:JSON.stringify({ actor_id:auth.user.id, action:approved ? 'registration.approve' : 'registration.reject', entity_type:'profile', entity_id:id, detail:{ requested_role:requestedRole, reason:approved ? null : patch.discipline_note } }) });
-        return send(res, 200, { ok:true, status:patch.status, role:approved ? requestedRole : applicant.role });
+        return send(res, 200, { ok:true, status:patch.status, role:approved ? requestedRole : applicant.role, paired });
       }
       if (body.action && ['record_absence', 'correct_absence', 'lock', 'unlock', 'drop', 'restore'].includes(body.action)) {
         const rows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,absence_count,warning_level,discipline_note`);
@@ -123,7 +174,7 @@ module.exports = async function handler(req, res) {
       ['full_name', 'role', 'status', 'path', 'mentor_id', 'cohort_id', 'mentee_number', 'absence_count', 'discipline_note'].forEach(k => { if (body[k] !== undefined) profilePatch[k] = body[k]; });
       if (body.status && !['invited', 'active', 'suspended', 'graduated', 'dropped'].includes(body.status)) return send(res, 400, { error: 'Status akun tidak valid' });
       const authPatch = {};
-      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,mentee_number`);
+      const currentRows = await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(id)}&select=id,email,full_name,role,status,path,mentee_number`);
       const currentProfile = currentRows && currentRows[0];
       const listed = await adminFetch('/auth/v1/admin/users?page=1&per_page=1000');
       const currentAuthUser = (listed.users || listed || []).find(user => user.id === id);
@@ -131,7 +182,7 @@ module.exports = async function handler(req, res) {
       const mentorProfileRequired = body.role === 'mentor' && !mentorApplicationComplete(currentMetadata.mentor_application);
       const notifyMentorRequirement = mentorProfileRequired && (currentProfile.role !== 'mentor' || currentProfile.status !== 'invited' || currentMetadata.requested_role !== 'mentor');
       if (mentorProfileRequired) {
-        profilePatch.role = 'mentor'; profilePatch.status = 'invited'; profilePatch.path = 'Senior Mentor'; profilePatch.onboarding_completed = false; profilePatch.mentee_number = null; profilePatch.mentor_id = null;
+        profilePatch.role = 'mentor'; profilePatch.status = 'invited'; profilePatch.path = MENTOR_TRACKS.includes(body.path) ? body.path : (MENTOR_TRACKS.includes(currentProfile.path) ? currentProfile.path : 'Career Path'); profilePatch.onboarding_completed = false; profilePatch.mentee_number = null; profilePatch.mentor_id = null;
         authPatch.user_metadata = Object.assign({}, currentMetadata, { requested_role:'mentor', registration_decision:'pending', role:'mentee', profile_completed:false });
       } else if (body.role === 'mentor') {
         profilePatch.mentee_number = null; profilePatch.mentor_id = null;
