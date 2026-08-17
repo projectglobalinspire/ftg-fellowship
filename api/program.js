@@ -216,8 +216,10 @@ async function tracksWithUsage(includeInactive) {
 }
 function cleanAnnouncement(source, existing) {
   source=source||{};existing=existing||{};const id=clean(source.id||existing.id||crypto.randomUUID(),80).replace(/[^a-zA-Z0-9_-]/g,'');
-  const item={id,title:clean(source.title,140),body:clean(source.body,1200),image_url:safeHttps(source.image_url||existing.image_url),cta_url:safeHttps(source.cta_url||source.link_url||existing.cta_url||existing.link_url),cta_label:clean(source.cta_label,40),starts_at:clean(source.starts_at||source.start_at,40)||null,ends_at:clean(source.ends_at||source.end_at,40)||null,is_active:source.is_active!==false,priority:Math.max(0,Math.min(999,Number(source.priority)||0)),updated_at:new Date().toISOString()};
+  const rawStart=clean(source.starts_at||source.start_at,40)||null,rawEnd=clean(source.ends_at||source.end_at,40)||null,displayMode=source.display_mode==='scheduled'?'scheduled':source.display_mode==='permanent'||source.permanent===true?'permanent':existing.display_mode||(rawStart||rawEnd?'scheduled':'permanent');
+  const item={id,title:clean(source.title,140),body:clean(source.body,1200),image_url:safeHttps(source.image_url||existing.image_url),cta_url:safeHttps(source.cta_url||source.link_url||existing.cta_url||existing.link_url),cta_label:clean(source.cta_label,40),display_mode:displayMode,starts_at:displayMode==='permanent'?null:rawStart,ends_at:displayMode==='permanent'?null:rawEnd,is_active:source.is_active!==false,priority:Math.max(0,Math.min(999,Number(source.priority)||0)),updated_at:new Date().toISOString()};
   if(!item.title)throw new Error('Judul informasi wajib diisi');
+  if(item.display_mode==='scheduled'&&(!item.starts_at||!item.ends_at))throw new Error('Jadwal tayang membutuhkan waktu mulai dan selesai');
   if(item.starts_at&&item.ends_at&&new Date(item.ends_at)<=new Date(item.starts_at))throw new Error('Waktu selesai harus setelah waktu mulai');
   return item;
 }
@@ -241,7 +243,7 @@ module.exports = async function handler(req, res) {
       const user=await currentUser(req);if(!user)return send(res,401,{error:'Sesi tidak valid'});
       const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`),profile=rows&&rows[0];if(!profile||profile.status!=='active')return send(res,403,{error:'Profil tidak aktif'});
       const flags=await programFlags(),all=Array.isArray(flags.announcements)?flags.announcements:[],now=Date.now();
-      const announcements=profile.role==='admin'&&req.body.admin===true?all:all.filter(item=>item.is_active!==false&&(!(item.starts_at||item.start_at)||new Date(item.starts_at||item.start_at).getTime()<=now)&&(!(item.ends_at||item.end_at)||new Date(item.ends_at||item.end_at).getTime()>=now));
+      const announcements=profile.role==='admin'&&req.body.admin===true?all:all.filter(item=>item.is_active!==false&&(item.display_mode==='permanent'||(!(item.starts_at||item.start_at)||new Date(item.starts_at||item.start_at).getTime()<=now)&&(!(item.ends_at||item.end_at)||new Date(item.ends_at||item.end_at).getTime()>=now)));
       return send(res,200,{announcements:announcements.sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0)||new Date(b.updated_at)-new Date(a.updated_at))});
     }
     const auth = await requireRole(req, res, ['admin']);
