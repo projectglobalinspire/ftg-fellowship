@@ -277,7 +277,8 @@ module.exports = async function handler(req, res) {
       await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'pairing.auto_balance',entity_type:'profile',detail:{paired}})}).catch(()=>null);return send(res,200,{ok:true,paired});
     }
     if(body.action==='announcement_save'){
-      const source=body.announcement&&typeof body.announcement==='object'?body.announcement:{},flags=await programFlags(),rows=Array.isArray(flags.announcements)?flags.announcements.slice():[],index=rows.findIndex(row=>row.id===source.id),existing=index>-1?rows[index]:null,item=cleanAnnouncement(source,existing);
+      const source=body.announcement&&typeof body.announcement==='object'?body.announcement:{},flags=await programFlags(),rows=Array.isArray(flags.announcements)?flags.announcements.slice():[],index=rows.findIndex(row=>row.id===source.id),existing=index>-1?rows[index]:null;
+      let item;try{item=cleanAnnouncement(source,existing);}catch(error){return send(res,400,{error:error.message});}
       if(body.image_data)item.image_url=await uploadAnnouncementImage(item.id,body.image_data);
       if(!item.body&&!item.image_url)return send(res,400,{error:'Isi informasi atau poster wajib ditambahkan'});
       if(index>-1)rows[index]=item;else rows.push(item);flags.announcements=rows.slice(-50);await saveProgramFlags(flags,auth.user.id);

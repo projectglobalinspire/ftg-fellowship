@@ -638,6 +638,7 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(program, /announcement_delete/);
   assert.match(program, /display_mode/);
   assert.match(program, /Jadwal tayang membutuhkan waktu mulai dan selesai/);
+  assert.match(program, /cleanAnnouncement\(source,existing\).*send\(res,400/);
   assert.match(app, /function openAnnouncementManager/);
   assert.match(app, /id="announcementPermanent"/);
   assert.match(app, /Simpan & Tampilkan ke Mentee/);
