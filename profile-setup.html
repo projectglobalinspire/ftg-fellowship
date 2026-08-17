@@ -45,10 +45,10 @@
           <form id="profileForm" class="space-y-4">
             <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nama lengkap sesuai pendaftaran</label><input id="fullName" class="field" required minlength="3" maxlength="120" autocomplete="name"></div>
             <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Email login & notifikasi *</label><input id="googleEmail" class="field bg-slate-50 text-slate-500" type="email" required readonly autocomplete="email"><p class="text-[10px] text-emerald-700 mt-1.5">Email terverifikasi ini otomatis digunakan untuk tugas, deadline, feedback, status akun, dan informasi program.</p></div>
-            <div id="menteeFields"><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white"><option value="">Pilih jalur</option><option>Career Path</option><option>Entrepreneur Path</option></select></div>
+            <div id="menteeFields"><label class="text-xs font-bold text-slate-600 block mb-1.5">Jalur program</label><select id="path" class="field bg-white"><option value="">Memuat jalur program…</option></select></div>
             <div id="mentorFields" class="hidden space-y-5">
               <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4"><p class="text-xs font-black tracking-wider text-emerald-800">A. PROFIL PROFESIONAL</p><p class="text-[11px] text-emerald-700 mt-1">Data ini membantu Fasil menilai kecocokan mentor dengan kebutuhan mentee.</p></div>
-              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Track mentoring *</label><select id="mentorPath" class="field bg-white"><option value="">Pilih track</option><option>Career Path</option><option>Entrepreneur Path</option></select><p class="text-[10px] text-emerald-700 mt-1.5">Setelah disetujui, dashboard otomatis menampilkan mentee yang dipasangkan pada track ini.</p></div>
+              <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Track mentoring *</label><select id="mentorPath" class="field bg-white"><option value="">Memuat track…</option></select><p class="text-[10px] text-emerald-700 mt-1.5">Setelah disetujui, dashboard otomatis menampilkan mentee yang dipasangkan pada track ini.</p></div>
               <div class="grid md:grid-cols-2 gap-4">
                 <div><label class="text-xs font-bold text-slate-600 block mb-1.5">Nomor WhatsApp *</label><input id="mentorPhone" class="field" type="tel" placeholder="08xxxxxxxxxx"></div>
                 <div><label class="text-xs font-bold text-slate-600 block mb-1.5">LinkedIn <span class="font-normal text-slate-400">(opsional)</span></label><input id="mentorLinkedin" class="field" type="url" placeholder="https://linkedin.com/in/namamu"></div>
@@ -90,10 +90,13 @@
   <script>
     (function () {
       var sb = window.supabase.createClient(FTG_CONF.url, FTG_CONF.anonKey);
-      var session = null, profile = null, requestedRole = 'mentee';
+      var session = null, profile = null, requestedRole = 'mentee', tracks = ['Career Path','Entrepreneur Path'];
       var expertiseOptions = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
       document.getElementById('mentorExpertise').innerHTML = expertiseOptions.map(function (item) { return '<label class="rounded-xl border border-slate-200 p-2.5 text-[11px] font-semibold text-slate-600"><input type="checkbox" name="mentorExpertise" value="' + item + '" class="mr-1.5">' + item + '</label>'; }).join('');
       function show(id) { ['loading','setupView','pendingView','blockedView'].forEach(function (name) { document.getElementById(name).classList.toggle('hidden', name !== id); }); }
+      function trackOptions(selected) { return '<option value="">Pilih track</option>' + tracks.map(function (track) { return '<option value="' + track.replace(/&/g,'&amp;').replace(/"/g,'&quot;') + '"' + (track === selected ? ' selected' : '') + '>' + track.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</option>'; }).join(''); }
+      function populateTracks(selected) { document.getElementById('path').innerHTML=trackOptions(selected);document.getElementById('mentorPath').innerHTML=trackOptions(selected); }
+      function fetchTracks() { return fetch('/api/program',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({action:'tracks_list'})}).then(function(response){return response.ok?response.json():null;}).then(function(body){if(body&&Array.isArray(body.tracks)&&body.tracks.length)tracks=body.tracks.map(function(track){return track.label;});populateTracks(profile&&profile.path||'');}).catch(function(){populateTracks(profile&&profile.path||'');}); }
       function home(role) { return role === 'admin' ? 'admin-dashboard.html' : role === 'mentor' ? 'mentor-dashboard.html' : 'mentee-dashboard.html'; }
       function logout() { sb.auth.signOut({ scope:'local' }).finally(function () { localStorage.removeItem('ftgSession'); location.replace('login.html'); }); }
       function route() {
@@ -105,8 +108,8 @@
           document.getElementById('welcomeName').textContent = profile.full_name || 'Future Builder';
           document.getElementById('fullName').value = profile.full_name || '';
           document.getElementById('googleEmail').value = profile.email || profile.google_email || session.user.email || '';
-          document.getElementById('path').value = profile.path || '';
-          document.getElementById('mentorPath').value = /^(Career|Entrepreneur) Path$/.test(profile.path || '') ? profile.path : '';
+          document.getElementById('path').value = tracks.indexOf(profile.path)>-1 ? profile.path : '';
+          document.getElementById('mentorPath').value = tracks.indexOf(profile.path)>-1 ? profile.path : '';
           document.getElementById('menteeFields').classList.toggle('hidden', mentor);
           document.getElementById('mentorFields').classList.toggle('hidden', !mentor);
           document.getElementById('asideEyebrow').textContent = mentor ? 'WELCOME, GROWTH PARTNER' : 'WELCOME, FUTURE BUILDER';
@@ -141,7 +144,7 @@
         }).then(function (result) {
           if (!result) return;
           if (result.error || !result.data) throw new Error('Profil tidak ditemukan');
-          profile = result.data; route();
+          profile = result.data; return fetchTracks().then(route);
         }).catch(function () { show('blockedView'); });
       }
       document.getElementById('profileForm').addEventListener('submit', function (event) {
@@ -150,13 +153,14 @@
         var notificationEmail = document.getElementById('googleEmail').value.trim().toLowerCase();
         var mentor = requestedRole === 'mentor', payload = { action:'complete_google_profile', email:notificationEmail, full_name:document.getElementById('fullName').value, path:document.getElementById('path').value };
         if (!notificationEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notificationEmail)) { error.textContent='Email login dan notifikasi wajib valid.'; error.classList.remove('hidden'); return; }
+        if (tracks.indexOf(payload.path)===-1) { error.textContent='Pilih track / jalur program yang aktif.'; error.classList.remove('hidden'); return; }
         if (mentor) {
           payload.path = document.getElementById('mentorPath').value;
           var tags = Array.from(document.querySelectorAll('[name="mentorExpertise"]:checked')).map(function (box) { return box.value; });
           var format = document.querySelector('[name="mentorFormat"]:checked');
           payload.mentor_application = { phone:document.getElementById('mentorPhone').value, linkedin_url:document.getElementById('mentorLinkedin').value, job_title:document.getElementById('mentorJobTitle').value, company_or_institution:document.getElementById('mentorCompany').value, years_of_experience:document.getElementById('mentorExperience').value, expertise_tags:tags, bio:document.getElementById('mentorBio').value, availability_hours:document.getElementById('mentorAvailability').value, mentoring_format:format ? format.value : '', motivation:document.getElementById('mentorMotivation').value, commitment_confirmed:document.getElementById('mentorCommitment').checked };
           if (!/^((\+62|62|0)8)[0-9]{8,12}$/.test(payload.mentor_application.phone.replace(/[\s-]/g,''))) { error.textContent='Nomor WhatsApp Indonesia belum valid.'; error.classList.remove('hidden'); return; }
-          if (!/^(Career|Entrepreneur) Path$/.test(payload.path) || !payload.mentor_application.job_title.trim() || !payload.mentor_application.company_or_institution.trim() || !payload.mentor_application.years_of_experience || tags.length < 1 || tags.length > 5 || payload.mentor_application.bio.trim().length < 40 || !payload.mentor_application.availability_hours || !payload.mentor_application.mentoring_format || payload.mentor_application.motivation.trim().length < 60 || !payload.mentor_application.commitment_confirmed) { error.textContent='Pilih track, lengkapi seluruh data wajib, pilih 1–5 keahlian, dan setujui komitmen mentor.'; error.classList.remove('hidden'); return; }
+          if (tracks.indexOf(payload.path)===-1 || !payload.mentor_application.job_title.trim() || !payload.mentor_application.company_or_institution.trim() || !payload.mentor_application.years_of_experience || tags.length < 1 || tags.length > 5 || payload.mentor_application.bio.trim().length < 40 || !payload.mentor_application.availability_hours || !payload.mentor_application.mentoring_format || payload.mentor_application.motivation.trim().length < 60 || !payload.mentor_application.commitment_confirmed) { error.textContent='Pilih track, lengkapi seluruh data wajib, pilih 1–5 keahlian, dan setujui komitmen mentor.'; error.classList.remove('hidden'); return; }
         }
         button.disabled = true; button.textContent = 'Mengirim profil...'; error.classList.add('hidden');
         fetch('/api/program', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + session.access_token }, body:JSON.stringify(payload) })

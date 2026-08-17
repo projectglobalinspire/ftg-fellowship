@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=59/);
+    assert.match(await text(file), /app\.js\?v=60/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=59/);
+    assert.match(await text(file), /app\.js\?v=60/);
   }
 });
 
@@ -553,9 +553,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=59/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=55/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=59/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=60/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=56/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=60/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
     assert.match(await text(page), /donor\.css\?v=6/);
@@ -613,16 +613,23 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   const setup = await text('profile-setup.html');
   const css = await text('responsive.css');
   assert.match(setup, /id="mentorPath"/);
-  assert.match(setup, /Career Path/);
-  assert.match(setup, /Entrepreneur Path/);
+  assert.match(setup, /action:'tracks_list'/);
+  assert.match(setup, /fetchTracks/);
   assert.match(adminUsers, /admin_mentor_profile/);
   assert.match(adminUsers, /created_by_fasil:true/);
   assert.match(adminUsers, /pairUnassignedByTrack/);
   assert.match(program, /pairings_data/);
   assert.match(program, /pairings_save/);
   assert.match(program, /pairings_auto/);
+  assert.match(program, /tracks_list/);
+  assert.match(program, /tracks_save/);
+  assert.match(program, /program_tracks/);
+  assert.match(program, /Track .* masih digunakan peserta atau mentor/);
   assert.match(program, /mentor\.path!==mentee\.path/);
   assert.match(app, /function openCohortManager/);
+  assert.match(app, /function openTrackManager/);
+  assert.match(app, /id='adminTracks'/);
+  assert.match(app, /trackOptions\(profile\.path,true\)/);
   assert.match(app, /data-pairing-mentee/);
   assert.match(app, /function adminMentorProfileModal/);
   assert.match(app, /className='ftg-account-delete'/);
@@ -634,4 +641,5 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(app, /PAGE\.indexOf\('mentee-dashboard'\) !== 0 \|\| myRole\(\) !== 'mentee'/);
   assert.match(app, /id='adminAnnouncements'/);
   assert.match(css, /\.ftg-mentee-announcement/);
+  assert.match(css, /\.ftg-track-manager/);
 });

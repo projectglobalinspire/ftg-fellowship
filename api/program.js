@@ -5,7 +5,10 @@ const { deliverEmail } = require('./_email');
 function clean(value, max) { return String(value || '').trim().slice(0, max); }
 function initials(name) { return clean(name, 120).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase(); }
 const MENTOR_EXPERTISE = ['Career Development','CV & LinkedIn','Interview Skills','Salary Negotiation','Personal Branding','Entrepreneurship','Business Model','Marketing','Product Development','Finance & Fundraising','Leadership','Mental Health','Tech & Digital','Creative Industry','Social Impact'];
-const MENTOR_TRACKS = ['Career Path','Entrepreneur Path'];
+const DEFAULT_TRACKS = [
+  { id:'career-path', label:'Career Path', description:'Pengembangan karier dan kesiapan profesional.', color:'#7c3aed', active:true },
+  { id:'entrepreneur-path', label:'Entrepreneur Path', description:'Pengembangan usaha dan kesiapan kewirausahaan.', color:'#f97316', active:true }
+];
 function mentorApplicationComplete(application) { return Boolean(application && application.commitment_confirmed && application.phone && application.job_title && application.company_or_institution && application.years_of_experience && Array.isArray(application.expertise_tags) && application.expertise_tags.length && String(application.bio || '').length >= 40 && application.availability_hours && application.mentoring_format && String(application.motivation || '').length >= 60); }
 
 function safeUrl(value) {
@@ -47,7 +50,8 @@ async function completeGoogleProfile(req, res) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email !== verifiedEmail || email !== clean(profile.email, 254).toLowerCase()) return send(res, 400, { error:'Email notifikasi harus sama dengan email login yang telah terverifikasi' });
   const requestedRole = ['mentee', 'mentor'].includes(user.user_metadata && user.user_metadata.requested_role) ? user.user_metadata.requested_role : 'mentee';
   const fullName = clean(body.full_name, 120);
-  const path = (requestedRole === 'mentor' ? MENTOR_TRACKS : ['Career Path','Entrepreneur Path']).includes(body.path) ? body.path : '';
+  const activeTracks = await programTracks(false);
+  const path = activeTracks.some(track => track.label === body.path) ? body.path : '';
   if (fullName.length < 3 || !path) return send(res, 400, { error: 'Nama lengkap dan jalur program wajib diisi' });
   let application = null;
   if (requestedRole === 'mentor') application = mentorApplication(body);
@@ -83,7 +87,8 @@ async function prepareIncompleteMentor(req, res) {
   const profile = rows && rows[0];
   if (!profile || profile.role !== 'mentor') return send(res, 403, { error:'Akun ini bukan mentor' });
   if (mentorApplicationComplete(user.user_metadata && user.user_metadata.mentor_application)) return send(res, 200, { complete:true });
-  await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ status:'invited', onboarding_completed:false, path:MENTOR_TRACKS.includes(profile.path)?profile.path:'Career Path', updated_at:new Date().toISOString() }) });
+  const tracks=await programTracks(true),fallback=(tracks.find(track=>track.active)||DEFAULT_TRACKS[0]).label;
+  await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ status:'invited', onboarding_completed:false, path:tracks.some(track=>track.label===profile.path)?profile.path:fallback, updated_at:new Date().toISOString() }) });
   await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ user_metadata:Object.assign({}, user.user_metadata || {}, { requested_role:'mentor', role:'mentee', profile_completed:false, registration_decision:'pending' }) }) });
   await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'registration.mentor_profile_required', entity_type:'profile', entity_id:user.id, detail:{ previous_status:profile.status } }) }).catch(() => null);
   return send(res, 200, { complete:false, redirected:true });
@@ -112,12 +117,13 @@ async function updateOwnProfile(req, res) {
   const fullName = clean(req.body && req.body.full_name, 120);
   if (fullName.length < 3) return send(res, 400, { error:'Nama lengkap minimal 3 karakter' });
   let path = profile.path;
+  const tracks=await programTracks(false),validTrack=tracks.some(track=>track.label===clean(req.body&&req.body.path,60));
   if (profile.role === 'mentee') {
-    path = clean(req.body && req.body.path, 40);
-    if (!['Career Path','Entrepreneur Path'].includes(path)) return send(res, 400, { error:'Jalur mentee tidak valid' });
+    path = clean(req.body && req.body.path, 60);
+    if (!validTrack && path!==profile.path) return send(res, 400, { error:'Jalur mentee tidak aktif atau tidak valid' });
   } else if (profile.role === 'mentor') {
-    path = clean(req.body && req.body.path, 40);
-    if (!MENTOR_TRACKS.includes(path)) return send(res, 400, { error:'Track Mentor tidak valid' });
+    path = clean(req.body && req.body.path, 60);
+    if (!validTrack && path!==profile.path) return send(res, 400, { error:'Track Mentor tidak aktif atau tidak valid' });
     if (path !== profile.path) {
       const assigned = await adminFetch(`/rest/v1/profiles?role=eq.mentee&mentor_id=eq.${encodeURIComponent(user.id)}&select=id&limit=1`);
       if (assigned && assigned.length) return send(res, 409, { error:'Track tidak dapat diubah karena masih memiliki mentee. Hubungi Fasil untuk memindahkan pairing.' });
@@ -194,6 +200,20 @@ async function uploadAnnouncementImage(id, dataUrl) {
 }
 async function programFlags() { const rows=await adminFetch('/rest/v1/program_settings?id=eq.1&select=feature_flags');return rows&&rows[0]&&rows[0].feature_flags||{}; }
 async function saveProgramFlags(flags, actorId) { await adminFetch('/rest/v1/program_settings?id=eq.1',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({feature_flags:flags,updated_by:actorId,updated_at:new Date().toISOString()})}); }
+function normalizeTrack(source,index) {
+  source=source&&typeof source==='object'?source:{label:source};
+  const label=clean(source.label||source.name,60),id=clean(source.id,80).replace(/[^a-zA-Z0-9_-]/g,'')||label.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||`track-${index+1}`;
+  return { id,label,description:clean(source.description,180),color:/^#[0-9a-f]{6}$/i.test(source.color||'')?source.color:'#1a5f4f',active:source.active!==false,order:Number.isFinite(Number(source.order))?Number(source.order):index,created_at:source.created_at||new Date().toISOString() };
+}
+async function programTracks(includeInactive) {
+  const flags=await programFlags(),source=Array.isArray(flags.program_tracks)&&flags.program_tracks.length?flags.program_tracks:DEFAULT_TRACKS;
+  const tracks=source.map(normalizeTrack).filter((track,index,rows)=>track.label&&rows.findIndex(item=>item.label.toLowerCase()===track.label.toLowerCase())===index).sort((a,b)=>a.order-b.order||a.label.localeCompare(b.label));
+  return includeInactive?tracks:tracks.filter(track=>track.active);
+}
+async function tracksWithUsage(includeInactive) {
+  const [tracks,profiles]=await Promise.all([programTracks(includeInactive),adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=role,path,status')]);
+  return tracks.map(track=>Object.assign({},track,{mentee_count:(profiles||[]).filter(row=>row.role==='mentee'&&row.path===track.label).length,mentor_count:(profiles||[]).filter(row=>row.role==='mentor'&&row.path===track.label).length}));
+}
 function cleanAnnouncement(source, existing) {
   source=source||{};existing=existing||{};const id=clean(source.id||existing.id||crypto.randomUUID(),80).replace(/[^a-zA-Z0-9_-]/g,'');
   const item={id,title:clean(source.title,140),body:clean(source.body,1200),image_url:safeHttps(source.image_url||existing.image_url),cta_url:safeHttps(source.cta_url||source.link_url||existing.cta_url||existing.link_url),cta_label:clean(source.cta_label,40),starts_at:clean(source.starts_at||source.start_at,40)||null,ends_at:clean(source.ends_at||source.end_at,40)||null,is_active:source.is_active!==false,priority:Math.max(0,Math.min(999,Number(source.priority)||0)),updated_at:new Date().toISOString()};
@@ -211,6 +231,12 @@ module.exports = async function handler(req, res) {
     if (req.body && req.body.action === 'profile_context') return profileContext(req, res);
     if (req.body && req.body.action === 'profile_update') return updateOwnProfile(req, res);
     if (req.body && req.body.action === 'profile_password') return updateOwnPassword(req, res);
+    if (req.body && req.body.action === 'tracks_list') {
+      const user=await currentUser(req);if(!user)return send(res,401,{error:'Sesi tidak valid'});
+      const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`),profile=rows&&rows[0];if(!profile)return send(res,403,{error:'Profil tidak ditemukan'});
+      const admin=profile.role==='admin'&&profile.status==='active'&&req.body.admin===true;
+      return send(res,200,{tracks:admin?await tracksWithUsage(true):await programTracks(false)});
+    }
     if (req.body && req.body.action === 'announcements_list') {
       const user=await currentUser(req);if(!user)return send(res,401,{error:'Sesi tidak valid'});
       const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`),profile=rows&&rows[0];if(!profile||profile.status!=='active')return send(res,403,{error:'Profil tidak aktif'});
@@ -221,9 +247,22 @@ module.exports = async function handler(req, res) {
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
+    if(body.action==='tracks_save'){
+      const incoming=Array.isArray(body.tracks)?body.tracks.slice(0,30):[],tracks=incoming.map(normalizeTrack);
+      if(!tracks.length||!tracks.some(track=>track.active))return send(res,400,{error:'Minimal satu track aktif wajib tersedia'});
+      if(tracks.some(track=>track.label.length<2))return send(res,400,{error:'Nama track minimal 2 karakter'});
+      const labels=tracks.map(track=>track.label.toLowerCase());if(new Set(labels).size!==labels.length)return send(res,400,{error:'Nama track tidak boleh duplikat'});
+      const ids=tracks.map(track=>track.id);if(new Set(ids).size!==ids.length)return send(res,400,{error:'Identitas track tidak boleh duplikat'});
+      const [current,profiles]=await Promise.all([programTracks(true),adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=id,path')]);
+      const removed=current.filter(old=>!tracks.some(track=>track.label===old.label));
+      const used=removed.find(track=>(profiles||[]).some(profile=>profile.path===track.label));if(used)return send(res,409,{error:`Track ${used.label} masih digunakan peserta atau mentor. Nonaktifkan saja agar riwayat tetap aman.`});
+      const flags=await programFlags();flags.program_tracks=tracks.map((track,index)=>Object.assign({},track,{order:index}));await saveProgramFlags(flags,auth.user.id);
+      await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'tracks.update',entity_type:'program_settings',entity_id:'1',detail:{tracks:tracks.map(track=>({label:track.label,active:track.active}))}})}).catch(()=>null);
+      return send(res,200,{ok:true,tracks:await tracksWithUsage(true)});
+    }
     if(body.action==='pairings_data'){
       const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&select=id,email,full_name,role,status,path,initials,mentee_number,mentor_id&order=role.desc,path.asc,full_name.asc');
-      return send(res,200,{mentees:(profiles||[]).filter(row=>row.role==='mentee'&&row.status==='active'),mentors:(profiles||[]).filter(row=>row.role==='mentor'&&row.status==='active')});
+      return send(res,200,{mentees:(profiles||[]).filter(row=>row.role==='mentee'&&row.status==='active'),mentors:(profiles||[]).filter(row=>row.role==='mentor'&&row.status==='active'),tracks:await programTracks(true)});
     }
     if(body.action==='pairings_save'){
       const profiles=await adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&status=eq.active&select=id,full_name,role,path,mentor_id'),mentees=new Map((profiles||[]).filter(row=>row.role==='mentee').map(row=>[row.id,row])),mentors=new Map((profiles||[]).filter(row=>row.role==='mentor').map(row=>[row.id,row]));
