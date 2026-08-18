@@ -5018,25 +5018,35 @@
     return 'https://calendar.google.com/calendar/render?' + params.toString();
   }
   function openMenteeCalendar() {
+    var view = modal('<div class="ftg-calendar-view"><div class="ftg-calendar-view-head"><div><small>AGENDA PESERTA</small><h3><i class="fa-regular fa-calendar-check"></i> Kalender Program</h3><p>Lihat jadwal di sini. Tambahkan agenda yang kamu pilih langsung ke Google Calendar.</p></div><a class="ftg-suite-secondary" href="/api/calendar?public=1" target="_blank" rel="noopener"><i class="fa-solid fa-calendar-plus"></i> Sinkronkan semua (.ics)</a></div><div class="ftg-calendar-view-note"><i class="fa-solid fa-circle-info"></i><span>Tombol Google Calendar adalah pilihan utama. File .ics hanya tersedia untuk Apple Calendar, Outlook, atau aplikasi kalender lain.</span></div><div class="ftg-calendar-view-list"><div class="ftg-calendar-loading" role="status"><i class="fa-solid fa-circle-notch fa-spin"></i><b>Memuat agenda terbaru</b><span>Mohon tunggu sebentar.</span></div></div></div>');
+    var list = $('.ftg-calendar-view-list', view.box);
     return apiRequest('/api/operations?resource=events').then(function (data) {
       var events = (data.events || []).filter(function (event) { return !eventIsRecording(event); }).sort(function (a, b) { return new Date(a.starts_at) - new Date(b.starts_at); });
       var now = Date.now(), upcoming = events.filter(function (event) { return new Date(event.starts_at).getTime() >= now; });
       var visible = (upcoming.length ? upcoming : events.slice(-6)).slice(0, 12);
-      modal('<div class="ftg-calendar-view"><div class="ftg-calendar-view-head"><div><small>AGENDA PESERTA</small><h3><i class="fa-regular fa-calendar-check"></i> Kalender Program</h3><p>Lihat jadwal di sini. Tambahkan agenda yang kamu pilih langsung ke Google Calendar.</p></div><a class="ftg-suite-secondary" href="/api/calendar?public=1" target="_blank" rel="noopener"><i class="fa-solid fa-calendar-plus"></i> Sinkronkan semua (.ics)</a></div><div class="ftg-calendar-view-note"><i class="fa-solid fa-circle-info"></i><span>Tombol Google Calendar adalah pilihan utama. File .ics hanya tersedia untuk Apple Calendar, Outlook, atau aplikasi kalender lain.</span></div><div class="ftg-calendar-view-list">' + (visible.length ? visible.map(function (event) {
+      if (!document.contains(list)) return;
+      list.innerHTML = visible.length ? visible.map(function (event) {
         var starts = new Date(event.starts_at), ended = event.ends_at ? new Date(event.ends_at) : null;
         return '<article><time datetime="' + esc(event.starts_at) + '"><b>' + starts.toLocaleDateString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { day:'2-digit', month:'short' }) + '</b><span>' + starts.toLocaleTimeString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { hour:'2-digit', minute:'2-digit' }) + '</span></time><div><h4>' + esc(event.title) + '</h4><p>' + esc([event.location, event.event_type].filter(Boolean).join(' · ')) + '</p>' + (ended ? '<small>Selesai ' + ended.toLocaleString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '</small>' : '') + '</div><div class="ftg-calendar-view-actions">' + (event.meeting_link ? '<a href="' + esc(event.meeting_link) + '" target="_blank" rel="noopener" class="ftg-suite-secondary">Buka link</a>' : '') + '<a href="' + esc(googleCalendarUrl(event)) + '" target="_blank" rel="noopener" class="ftg-suite-primary"><i class="fa-brands fa-google"></i> Tambah ke Google Calendar</a></div></article>';
-      }).join('') : '<div class="ftg-calendar-empty"><i class="fa-regular fa-calendar"></i><b>Belum ada agenda mendatang</b><span>Jadwal baru dari Fasil akan otomatis muncul di sini.</span></div>') + '</div></div>');
-    }).catch(function (error) { toast('Kalender belum dapat dimuat: ' + error.message, '⚠️'); throw error; });
+      }).join('') : '<div class="ftg-calendar-empty"><i class="fa-regular fa-calendar"></i><b>Belum ada agenda mendatang</b><span>Jadwal baru dari Fasil akan otomatis muncul di sini.</span></div>';
+      applyLanguage(view.box);
+    }).catch(function (error) {
+      if (document.contains(list)) list.innerHTML = '<div class="ftg-calendar-error"><i class="fa-solid fa-triangle-exclamation"></i><b>Agenda belum dapat dimuat</b><span>' + esc(error.message || 'Silakan coba lagi.') + '</span><button type="button" class="ftg-suite-secondary" data-calendar-retry>Coba lagi</button></div>';
+      var retry = $('[data-calendar-retry]', view.box);
+      if (retry) retry.addEventListener('click', function () { view.close(); openMenteeCalendar(); });
+      toast('Kalender belum dapat dimuat: ' + error.message, '⚠️');
+      throw error;
+    });
   }
   function upgradeMenteeCalendar() {
     var suite = byId('mentee-program-suite');
-    if (!suite || suite.dataset.calendarReady === '1') return;
-    suite.dataset.calendarReady = '1';
-    var mainLink = $('a[href^="/api/calendar"]', suite);
+    var mainLink = suite && $('a[href^="/api/calendar"]', suite);
     if (mainLink) { mainLink.href = '#'; mainLink.dataset.menteeCalendar = '1'; mainLink.textContent = UI_LANGUAGE === 'en' ? 'Open Calendar' : 'Buka Kalender'; }
-    suite.addEventListener('click', function (event) {
+    if (document.body.dataset.menteeCalendarReady === '1') return;
+    document.body.dataset.menteeCalendarReady = '1';
+    document.addEventListener('click', function (event) {
       var link = event.target.closest('a[data-mentee-calendar],#menteeUpcomingEvents a[href^="/api/calendar"]');
-      if (!link || !suite.contains(link)) return;
+      if (!link) return;
       event.preventDefault();
       openBusy(link, openMenteeCalendar);
     });

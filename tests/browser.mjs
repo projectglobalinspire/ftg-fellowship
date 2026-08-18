@@ -228,6 +228,8 @@ async function exerciseMenteeCalendar(page) {
   const dialog = page.locator('[role="dialog"]').last();
   await dialog.waitFor({ state: 'visible', timeout: 15_000 });
   await page.locator('.ftg-calendar-view').waitFor({ state: 'visible' });
+  await page.locator('.ftg-calendar-view-list article, .ftg-calendar-empty, .ftg-calendar-error').first().waitFor({ state: 'visible', timeout: 30_000 });
+  assert.equal(await page.locator('.ftg-calendar-error').count(), 0, 'calendar data must load without an error state');
   const eventCount = await page.locator('.ftg-calendar-view-list article').count();
   if (eventCount) {
     const googleLink = page.locator('.ftg-calendar-view-actions a[href^="https://calendar.google.com/calendar/render"]').first();

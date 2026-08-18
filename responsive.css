@@ -866,6 +866,7 @@ body:not(:has(main[data-design-id])) .text-slate-300{color:#475569!important}
 .ftg-calendar-view-note i{margin-top:2px;color:#1d4ed8}
 .ftg-calendar-view-list{display:grid;gap:10px;max-height:56vh;overflow:auto;padding:16px 24px 24px}
 .ftg-calendar-view-list article{display:grid;grid-template-columns:74px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px;border:1px solid #dbe3ec;border-radius:12px;background:#fff}
+.ftg-calendar-loading,.ftg-calendar-error{min-height:180px;display:grid;place-items:center;align-content:center;gap:7px;text-align:center;color:#52647a}.ftg-calendar-loading i,.ftg-calendar-error i{font-size:22px;color:#1a5f4f}.ftg-calendar-loading b,.ftg-calendar-error b{color:#1e293b;font-size:13px}.ftg-calendar-loading span,.ftg-calendar-error span{font-size:11px}.ftg-calendar-error i{color:#dc2626}.ftg-calendar-error button{margin-top:5px}
 .ftg-calendar-view-list article time{display:grid;align-content:center;min-height:60px;padding:8px;border-radius:9px;background:#eef7f4;color:#155e4b;text-align:center}
 .ftg-calendar-view-list article time b{font-size:14px}.ftg-calendar-view-list article time span{font-size:10px;font-weight:700}
 .ftg-calendar-view-list h4{margin:0;color:#1e293b;font-size:13px;font-weight:800}.ftg-calendar-view-list p{margin:4px 0;color:#52647a;font-size:11px}.ftg-calendar-view-list small{color:#64748b;font-size:10px}
