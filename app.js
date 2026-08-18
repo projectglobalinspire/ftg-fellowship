@@ -4975,6 +4975,92 @@
   function openEventSuite() {
     return cachedApiRequest('operations-events','/api/operations?resource=events',null,45000).then(function(data){modal('<h3 style="font-weight:800;color:#1e293b">🗓️ Kalender Program</h3><div style="max-height:180px;overflow:auto">'+((data.events||[]).map(function(e){return '<p style="border-bottom:1px solid #f1f5f9;padding:6px;font-size:11px"><b>'+esc(e.title)+'</b><br><span style="color:#64748b">'+new Date(e.starts_at).toLocaleString('id-ID')+' · '+esc(e.event_type)+'</span></p>';}).join('')||'<p>Belum ada agenda.</p>')+'</div><hr style="margin:10px 0"><div style="display:grid;grid-template-columns:1fr 1fr;gap:7px"><input id="eventTitle" placeholder="Nama kegiatan"><select id="eventType"><option value="workshop">Workshop</option><option value="mentoring">Mentoring</option><option value="opening">Opening</option><option value="closing">Closing</option><option value="other">Lainnya</option></select><input id="eventStart" type="datetime-local"><input id="eventEnd" type="datetime-local"><input id="eventLocation" placeholder="Lokasi / ruang"><input id="eventLink" type="url" placeholder="Link meeting"></div><textarea id="eventDesc" rows="2" placeholder="Keterangan"></textarea><button id="eventSave" class="ftg-suite-primary">Tambahkan ke kalender</button><a href="/api/calendar?public=1" target="_blank" style="display:block;text-align:center;font-size:11px;margin-top:8px">Unduh / sinkronkan kalender (.ics)</a>',function(box,close){var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box),base=new Date(Date.now()+3600000);base.setMinutes(0,0,0);eventStart.value=localDateTimeValue(base);eventEnd.value=localDateTimeValue(new Date(base.getTime()+2*3600000));$('#eventSave',box).addEventListener('click',function(){var button=this;button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan agenda…';apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'event_save',title:$('#eventTitle',box).value,event_type:$('#eventType',box).value,starts_at:$('#eventStart',box).value,ends_at:$('#eventEnd',box).value||null,location:$('#eventLocation',box).value,meeting_link:$('#eventLink',box).value,description:$('#eventDesc',box).value,visibility:'all'})}).then(function(){invalidateApiCache('operations-events');close();toast('Agenda ditambahkan','✅');document.dispatchEvent(new CustomEvent('ftg:events-changed'));}).catch(function(e){button.disabled=false;button.textContent='Tambahkan ke kalender';toast(e.message,'⚠️');});});});}).catch(function(e){toast(e.message,'⚠️');});
   }
+  function eventIsRecording(event) {
+    return event && event.event_type === 'other' && String(event.location || '').indexOf('LMS · ') === 0;
+  }
+  function eventCalendarStamp(value) {
+    return new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  }
+  function googleCalendarUrl(event) {
+    var start = new Date(event.starts_at), end = event.ends_at ? new Date(event.ends_at) : new Date(start.getTime() + 3600000);
+    var params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title || 'Agenda FTG Fellowship',
+      dates: eventCalendarStamp(start) + '/' + eventCalendarStamp(end),
+      details: [event.description || '', event.meeting_link || ''].filter(Boolean).join('\n\n'),
+      location: event.location || event.meeting_link || ''
+    });
+    return 'https://calendar.google.com/calendar/render?' + params.toString();
+  }
+  function openMenteeCalendar() {
+    return apiRequest('/api/operations?resource=events').then(function (data) {
+      var events = (data.events || []).filter(function (event) { return !eventIsRecording(event); }).sort(function (a, b) { return new Date(a.starts_at) - new Date(b.starts_at); });
+      var now = Date.now(), upcoming = events.filter(function (event) { return new Date(event.starts_at).getTime() >= now; });
+      var visible = (upcoming.length ? upcoming : events.slice(-6)).slice(0, 12);
+      modal('<div class="ftg-calendar-view"><div class="ftg-calendar-view-head"><div><small>AGENDA PESERTA</small><h3><i class="fa-regular fa-calendar-check"></i> Kalender Program</h3><p>Lihat jadwal di sini. Tambahkan agenda yang kamu pilih langsung ke Google Calendar.</p></div><a class="ftg-suite-secondary" href="/api/calendar?public=1" target="_blank" rel="noopener"><i class="fa-solid fa-calendar-plus"></i> Sinkronkan semua (.ics)</a></div><div class="ftg-calendar-view-note"><i class="fa-solid fa-circle-info"></i><span>Tombol Google Calendar adalah pilihan utama. File .ics hanya tersedia untuk Apple Calendar, Outlook, atau aplikasi kalender lain.</span></div><div class="ftg-calendar-view-list">' + (visible.length ? visible.map(function (event) {
+        var starts = new Date(event.starts_at), ended = event.ends_at ? new Date(event.ends_at) : null;
+        return '<article><time datetime="' + esc(event.starts_at) + '"><b>' + starts.toLocaleDateString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { day:'2-digit', month:'short' }) + '</b><span>' + starts.toLocaleTimeString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { hour:'2-digit', minute:'2-digit' }) + '</span></time><div><h4>' + esc(event.title) + '</h4><p>' + esc([event.location, event.event_type].filter(Boolean).join(' · ')) + '</p>' + (ended ? '<small>Selesai ' + ended.toLocaleString(UI_LANGUAGE === 'en' ? 'en-US' : 'id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) + '</small>' : '') + '</div><div class="ftg-calendar-view-actions">' + (event.meeting_link ? '<a href="' + esc(event.meeting_link) + '" target="_blank" rel="noopener" class="ftg-suite-secondary">Buka link</a>' : '') + '<a href="' + esc(googleCalendarUrl(event)) + '" target="_blank" rel="noopener" class="ftg-suite-primary"><i class="fa-brands fa-google"></i> Tambah ke Google Calendar</a></div></article>';
+      }).join('') : '<div class="ftg-calendar-empty"><i class="fa-regular fa-calendar"></i><b>Belum ada agenda mendatang</b><span>Jadwal baru dari Fasil akan otomatis muncul di sini.</span></div>') + '</div></div>');
+    }).catch(function (error) { toast('Kalender belum dapat dimuat: ' + error.message, '⚠️'); throw error; });
+  }
+  function upgradeMenteeCalendar() {
+    var suite = byId('mentee-program-suite');
+    if (!suite || suite.dataset.calendarReady === '1') return;
+    suite.dataset.calendarReady = '1';
+    var mainLink = $('a[href^="/api/calendar"]', suite);
+    if (mainLink) { mainLink.href = '#'; mainLink.dataset.menteeCalendar = '1'; mainLink.textContent = UI_LANGUAGE === 'en' ? 'Open Calendar' : 'Buka Kalender'; }
+    suite.addEventListener('click', function (event) {
+      var link = event.target.closest('a[data-mentee-calendar],#menteeUpcomingEvents a[href^="/api/calendar"]');
+      if (!link || !suite.contains(link)) return;
+      event.preventDefault();
+      openBusy(link, openMenteeCalendar);
+    });
+  }
+  function openEventManager() {
+    return cachedApiRequest('operations-events', '/api/operations?resource=events', null, 45000).then(function (data) {
+      var events = (data.events || []).filter(function (event) { return !eventIsRecording(event); });
+      modal('<div class="ftg-event-manager"><div class="ftg-event-manager-head"><div><small>KALENDER TERPUSAT</small><h3><i class="fa-regular fa-calendar-days"></i> Kelola Agenda Program</h3><p>Pilih agenda untuk mengubahnya, atau buat agenda baru. Perubahan langsung tampil di dashboard peserta.</p></div><button id="eventNew" type="button" class="ftg-suite-secondary"><i class="fa-solid fa-plus"></i> Agenda Baru</button></div><div class="ftg-event-manager-layout"><aside><b>Agenda tersimpan</b><span>' + events.length + ' agenda</span><div id="eventManagerList">' + (events.length ? events.map(function (event, index) { return '<button type="button" data-event-edit="' + index + '"><time>' + new Date(event.starts_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) + '</time><span><b>' + esc(event.title) + '</b><small>' + new Date(event.starts_at).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }) + ' · ' + esc(event.event_type || 'other') + '</small></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>'; }).join('') : '<div class="ftg-event-manager-empty">Belum ada agenda. Buat agenda pertama dari formulir.</div>') + '</div></aside><form id="eventManagerForm"><input id="eventId" type="hidden"><div class="ftg-event-form-title"><div><small id="eventModeLabel">AGENDA BARU</small><h4 id="eventFormHeading">Tambah kegiatan program</h4></div><span id="eventStatus" role="status">Belum disimpan</span></div><div class="ftg-event-fields"><label>Nama kegiatan *<input id="eventTitle" maxlength="160" required placeholder="Contoh: Mentoring Sesi 2"></label><label>Jenis kegiatan<select id="eventType"><option value="workshop">Workshop</option><option value="mentoring">Mentoring</option><option value="opening">Opening</option><option value="closing">Closing</option><option value="other">Lainnya</option></select></label><label>Mulai *<input id="eventStart" type="datetime-local" required></label><label>Selesai<input id="eventEnd" type="datetime-local"></label><label>Lokasi / ruang<input id="eventLocation" maxlength="180" placeholder="Contoh: Zoom atau Ruang Utama"></label><label>Link meeting<input id="eventLink" type="url" maxlength="500" placeholder="https://..."></label><label class="is-wide">Keterangan<textarea id="eventDesc" maxlength="1500" rows="3" placeholder="Informasi yang perlu diketahui peserta"></textarea></label></div><div class="ftg-event-actions"><button id="eventDelete" type="button" class="ftg-suite-danger" hidden><i class="fa-regular fa-trash-can"></i> Hapus Agenda</button><button id="eventSave" type="submit" class="ftg-suite-primary"><i class="fa-regular fa-floppy-disk"></i> Simpan Agenda</button></div></form></div><div class="ftg-event-manager-foot"><i class="fa-solid fa-circle-info"></i><span>Peserta dapat membuka kalender di dashboard dan menambahkan agenda tertentu ke Google Calendar tanpa mengunduh file.</span><a href="/api/calendar?public=1" target="_blank" rel="noopener">Ekspor semua (.ics)</a></div></div>', function (box, close) {
+        var form = $('#eventManagerForm', box), status = $('#eventStatus', box), save = $('#eventSave', box), remove = $('#eventDelete', box);
+        function defaults() { var start = new Date(Date.now() + 3600000); start.setMinutes(0,0,0); return { starts_at:start, ends_at:new Date(start.getTime() + 2 * 3600000) }; }
+        function setMode(row) {
+          var fresh = !row, base = defaults();
+          $('#eventId', box).value = fresh ? '' : row.id;
+          $('#eventTitle', box).value = fresh ? '' : row.title || '';
+          $('#eventType', box).value = fresh ? 'workshop' : row.event_type || 'other';
+          $('#eventStart', box).value = localDateTimeValue(fresh ? base.starts_at : row.starts_at);
+          $('#eventEnd', box).value = localDateTimeValue(fresh ? base.ends_at : (row.ends_at || new Date(new Date(row.starts_at).getTime() + 3600000)));
+          $('#eventLocation', box).value = fresh ? '' : row.location || '';
+          $('#eventLink', box).value = fresh ? '' : row.meeting_link || '';
+          $('#eventDesc', box).value = fresh ? '' : row.description || '';
+          $('#eventModeLabel', box).textContent = fresh ? 'AGENDA BARU' : 'EDIT AGENDA';
+          $('#eventFormHeading', box).textContent = fresh ? 'Tambah kegiatan program' : 'Perbarui ' + row.title;
+          status.textContent = fresh ? 'Belum disimpan' : 'Data tersimpan';
+          status.className = fresh ? '' : 'is-saved';
+          save.innerHTML = '<i class="fa-regular fa-floppy-disk"></i> ' + (fresh ? 'Simpan Agenda' : 'Simpan Perubahan');
+          remove.hidden = fresh;
+          $all('[data-event-edit]', box).forEach(function (button) { button.classList.toggle('is-active', !fresh && Number(button.dataset.eventEdit) === events.indexOf(row)); });
+        }
+        $('#eventNew', box).addEventListener('click', function () { setMode(null); $('#eventTitle', box).focus(); });
+        $all('[data-event-edit]', box).forEach(function (button) { button.addEventListener('click', function () { setMode(events[Number(button.dataset.eventEdit)]); $('#eventTitle', box).focus(); }); });
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var start = $('#eventStart', box).value, end = $('#eventEnd', box).value, title = $('#eventTitle', box).value.trim();
+          if (!title || !start) { status.textContent = 'Nama dan waktu mulai wajib diisi.'; status.className = 'is-error'; return; }
+          if (end && new Date(end) <= new Date(start)) { status.textContent = 'Waktu selesai harus setelah waktu mulai.'; status.className = 'is-error'; return; }
+          var payload = { action:'event_save', id:$('#eventId', box).value || null, title:title, event_type:$('#eventType', box).value, starts_at:start, ends_at:end || null, location:$('#eventLocation', box).value, meeting_link:$('#eventLink', box).value, description:$('#eventDesc', box).value, visibility:'all' };
+          save.disabled = true; save.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan agenda'; status.textContent = 'Mengirim perubahan ke server...'; status.className = 'is-loading';
+          apiRequest('/api/operations', { method:'POST', body:JSON.stringify(payload) }).then(function () { invalidateApiCache('operations-events'); close(); toast(payload.id ? 'Perubahan agenda tersimpan' : 'Agenda baru ditambahkan', '✅'); document.dispatchEvent(new CustomEvent('ftg:events-changed')); }).catch(function (error) { save.disabled = false; save.innerHTML = '<i class="fa-regular fa-floppy-disk"></i> Coba Simpan Lagi'; status.textContent = error.message; status.className = 'is-error'; });
+        });
+        remove.addEventListener('click', function () {
+          var id = $('#eventId', box).value, title = $('#eventTitle', box).value.trim();
+          if (!id || !window.confirm('Hapus agenda "' + title + '"? Tindakan ini tidak dapat dibatalkan.')) return;
+          remove.disabled = true; remove.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghapus agenda'; status.textContent = 'Menghapus agenda dari server...'; status.className = 'is-loading';
+          apiRequest('/api/operations', { method:'POST', body:JSON.stringify({ action:'event_delete', id:id }) }).then(function () { invalidateApiCache('operations-events'); close(); toast('Agenda dihapus', '✅'); document.dispatchEvent(new CustomEvent('ftg:events-changed')); }).catch(function (error) { remove.disabled = false; remove.innerHTML = '<i class="fa-regular fa-trash-can"></i> Coba Hapus Lagi'; status.textContent = error.message; status.className = 'is-error'; });
+        });
+        setMode(null);
+      });
+    }).catch(function (error) { toast('Kalender belum dapat dimuat: ' + error.message, '⚠️'); throw error; });
+  }
   function openAttendanceSuite() {
     modal('<h3 style="font-weight:800;color:#1e293b">📷 Buat Presensi QR</h3><input id="attTitle" placeholder="Nama kegiatan"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><label>Dibuka<input id="attOpen" type="datetime-local"></label><label>Ditutup<input id="attClose" type="datetime-local"></label></div><button id="attCreate" class="ftg-suite-primary">Buat QR presensi</button>',function(box,close){var opened=$('#attOpen',box),closed=$('#attClose',box),base=new Date(Date.now()+3600000);base.setMinutes(0,0,0);opened.value=localDateTimeValue(base);closed.value=localDateTimeValue(new Date(base.getTime()+2*3600000));$('#attCreate',box).addEventListener('click',function(){var button=this;button.disabled=true;button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Membuat QR…';apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'attendance_create',title:$('#attTitle',box).value,opens_at:opened.value,closes_at:closed.value})}).then(function(data){invalidateApiCache('operations-attendance');close();var qr='https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='+encodeURIComponent(data.check_in_url);modal('<div style="text-align:center"><h3 style="font-weight:800">QR Presensi Siap</h3><img src="'+qr+'" alt="QR presensi" style="width:260px;max-width:100%;margin:12px auto"><p style="font-size:10px;word-break:break-all">'+esc(data.check_in_url)+'</p><button id="copyAttendance" class="ftg-suite-primary">Salin link presensi</button></div>',function(qbox){$('#copyAttendance',qbox).addEventListener('click',function(){navigator.clipboard.writeText(data.check_in_url);toast('Link disalin','✅');});});}).catch(function(e){button.disabled=false;button.textContent='Buat QR presensi';toast(e.message,'⚠️');});});});
   }
@@ -5157,7 +5243,7 @@
     $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); });
     $('#adminSettings', sec).addEventListener('click', openProgramSettingsSuite);
     $('#adminRubrics',sec).addEventListener('click',openRubricSuite);
-    $('#adminCalendar',sec).addEventListener('click',function(){openBusy(this,openEventSuite);});
+    $('#adminCalendar',sec).addEventListener('click',function(){openBusy(this,openEventManager);});
     $('#adminAttendance',sec).addEventListener('click',openAttendanceSuite);
     $('#adminCertificates',sec).addEventListener('click',function(){openBusy(this,openCertificateSuite);});
     $('#adminHealth',sec).addEventListener('click',function(){openBusy(this,openHealthSuite);});
@@ -5352,7 +5438,7 @@
     'Dashboard':'Dashboard','Design Thinking':'Design Thinking','Workshop Library':'Workshop Library','Tugas Saya':'My Assignments','Progress Saya':'My Progress','Jurnal Saya':'My Journal','Feedback Mentor':'Mentor Feedback','Leaderboard':'Leaderboard','Keluar':'Sign Out',
     'Mentee Saya':'My Mentees','Tugas & Review':'Assignments & Reviews','Berikan Feedback':'Give Feedback','Progress Grup':'Group Progress','Monitoring':'Monitoring','Pusat Program':'Program Center','Kelola Akun':'Manage Accounts',
     'Opening Ceremony':'Opening Ceremony','Closing Ceremony':'Closing Ceremony','Kalender':'Calendar','Presensi':'Attendance','Sertifikat':'Certificate','Cari':'Search','Simpan Perubahan':'Save Changes','Buat Akun Aman':'Create Secure Account',
-    'Kalender Program':'Program Calendar','Tambahkan ke kalender':'Add to calendar','Tugas & Pengumpulan Program':'Program Assignments & Submissions','Tugas Baru':'New Assignment','Lihat detail':'View details','Tutup detail':'Close details',
+    'Kalender Program':'Program Calendar','Buka Kalender':'Open Calendar','Tambah ke Google Calendar':'Add to Google Calendar','Sinkronkan semua (.ics)':'Sync all (.ics)','Agenda Baru':'New Event','Simpan Agenda':'Save Event','Hapus Agenda':'Delete Event','Tambahkan ke kalender':'Add to calendar','Tugas & Pengumpulan Program':'Program Assignments & Submissions','Tugas Baru':'New Assignment','Lihat detail':'View details','Tutup detail':'Close details',
     'Cohort & Pairing':'Cohort & Pairing','Kurikulum & Canvas':'Curriculum & Canvas','Tugas & Pengumpulan':'Assignments & Submissions','Email & Notifikasi':'Email & Notifications','Program Publik':'Public Program','Papan Informasi':'Information Board','LMS & Rekaman':'LMS & Recordings','Pengaturan':'Settings','Rubrik':'Rubric','Kesehatan Program':'Program Health','Audit Log':'Audit Log',
     'Tambah Mentee':'Add Mentee','Tambah Mentor':'Add Mentor','Semua Akun':'All Accounts','Semua role':'All roles','Nama lengkap':'Full name','Email aktif':'Active email','Password sementara':'Temporary password','Jalur mentee':'Mentee track',
     'Belum ada agenda.':'No schedule yet.','Menyimpan…':'Saving…','Coba Lagi':'Try Again','Simpan Pairing':'Save Pairing','Belum ditentukan':'Not assigned','Minggu aktif':'Active week','Bulan aktif':'Active month','Akses fitur':'Feature access'
@@ -5408,7 +5494,7 @@
     try { mountMentorOperations(); mountMentorLearningMonitor(); } catch (e) { console.warn(e); }
     try { mountMentorGooglePanel(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
-    try { mountMenteeProgramSuite(); mountUpcomingEvents(); } catch (e) { console.warn(e); }
+    try { mountMenteeProgramSuite(); mountUpcomingEvents(); upgradeMenteeCalendar(); } catch (e) { console.warn(e); }
     try { mountMenteeAnnouncementBoard(); } catch (e) { console.warn(e); }
     try { mountAdminDiscipline(); } catch (e) { reportError(e); }
     try { mountSecureAccountAdmin(); } catch (e) { reportError(e); }

@@ -845,6 +845,43 @@ main [class*="bg-[#22c55e]"][class*="text-white"]{background:#166534!important;c
 #tabMentor.text-slate-500{color:#475569!important}
 body:not(:has(main[data-design-id])) .text-slate-300{color:#475569!important}
 
+/* Calendar is an in-product workspace. ICS remains an explicit export. */
+.ftg-modal-box:has(.ftg-calendar-view),
+.ftg-modal-box:has(.ftg-event-manager){width:min(960px,calc(100vw - 32px))!important;max-width:960px!important;padding:0!important;overflow:hidden}
+.ftg-modal-box:has(.ftg-calendar-view) .ftg-modal-content,
+.ftg-modal-box:has(.ftg-event-manager) .ftg-modal-content{padding:0}
+.ftg-calendar-view,.ftg-event-manager{color:#1e293b;background:#fff}
+.ftg-calendar-view-head,.ftg-event-manager-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;padding:24px 24px 18px;border-bottom:1px solid #e2e8f0}
+.ftg-calendar-view-head>div,.ftg-event-manager-head>div{min-width:0}
+.ftg-calendar-view-head small,.ftg-event-manager-head small,.ftg-event-form-title small{display:block;margin-bottom:5px;color:#b45309;font-size:10px;font-weight:800;letter-spacing:.09em}
+.ftg-calendar-view-head h3,.ftg-event-manager-head h3{margin:0;color:#1e293b;font-size:21px;font-weight:800;line-height:1.25}
+.ftg-calendar-view-head p,.ftg-event-manager-head p{margin:6px 0 0;color:#52647a;font-size:12px;line-height:1.55}
+.ftg-calendar-view-head>a,.ftg-event-manager-head>button{flex:0 0 auto;min-height:44px}
+.ftg-calendar-view-note{display:flex;gap:9px;align-items:flex-start;margin:16px 24px 0;padding:11px 13px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a5f;font-size:11px;line-height:1.5}
+.ftg-calendar-view-note i{margin-top:2px;color:#1d4ed8}
+.ftg-calendar-view-list{display:grid;gap:10px;max-height:56vh;overflow:auto;padding:16px 24px 24px}
+.ftg-calendar-view-list article{display:grid;grid-template-columns:74px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px;border:1px solid #dbe3ec;border-radius:12px;background:#fff}
+.ftg-calendar-view-list article time{display:grid;align-content:center;min-height:60px;padding:8px;border-radius:9px;background:#eef7f4;color:#155e4b;text-align:center}
+.ftg-calendar-view-list article time b{font-size:14px}.ftg-calendar-view-list article time span{font-size:10px;font-weight:700}
+.ftg-calendar-view-list h4{margin:0;color:#1e293b;font-size:13px;font-weight:800}.ftg-calendar-view-list p{margin:4px 0;color:#52647a;font-size:11px}.ftg-calendar-view-list small{color:#64748b;font-size:10px}
+.ftg-calendar-view-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px}.ftg-calendar-view-actions a{min-height:44px;white-space:nowrap}
+.ftg-calendar-empty{display:grid;justify-items:center;gap:6px;padding:40px 16px;border:1px dashed #cbd5e1;border-radius:12px;color:#52647a;text-align:center}.ftg-calendar-empty i{font-size:24px;color:#64748b}.ftg-calendar-empty b{color:#1e293b}
+
+.ftg-event-manager-layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:460px}
+.ftg-event-manager-layout>aside{padding:18px;border-right:1px solid #e2e8f0;background:#f8fafc}
+.ftg-event-manager-layout>aside>b{font-size:12px;color:#1e293b}.ftg-event-manager-layout>aside>span{float:right;color:#64748b;font-size:10px}
+#eventManagerList{display:grid;gap:7px;max-height:420px;margin-top:12px;overflow:auto}
+#eventManagerList>button{display:grid;grid-template-columns:58px minmax(0,1fr) 12px;gap:9px;align-items:center;width:100%;min-height:58px;padding:8px;border:1px solid #dbe3ec;border-radius:10px;background:#fff;color:#1e293b;text-align:left;transition:border-color .16s ease,background .16s ease}
+#eventManagerList>button:hover,#eventManagerList>button.is-active{border-color:#24725e;background:#eef7f4}
+#eventManagerList>button:focus-visible{outline:3px solid rgba(29,78,216,.28);outline-offset:2px}
+#eventManagerList time{color:#52647a;font-size:10px;font-weight:800;text-align:center}#eventManagerList span{min-width:0}#eventManagerList span b,#eventManagerList span small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#eventManagerList span b{font-size:11px}#eventManagerList span small{margin-top:3px;color:#64748b;font-size:9px}#eventManagerList i{color:#64748b;font-size:9px}
+.ftg-event-manager-empty{padding:24px 12px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b;font-size:11px;text-align:center}
+#eventManagerForm{padding:20px 22px}
+.ftg-event-form-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}.ftg-event-form-title h4{margin:0;color:#1e293b;font-size:15px;font-weight:800}.ftg-event-form-title>span{padding:5px 8px;border-radius:999px;background:#f1f5f9;color:#52647a;font-size:9px;font-weight:800}.ftg-event-form-title>span.is-saved{background:#dcfce7;color:#166534}.ftg-event-form-title>span.is-error{background:#fee2e2;color:#991b1b}.ftg-event-form-title>span.is-loading{background:#fef3c7;color:#92400e}
+.ftg-event-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}.ftg-event-fields label{margin:0!important}.ftg-event-fields .is-wide{grid-column:1/-1}.ftg-event-fields input,.ftg-event-fields select,.ftg-event-fields textarea{min-height:44px;margin-top:5px!important}.ftg-event-fields textarea{min-height:84px}
+.ftg-event-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0}.ftg-event-actions button{min-height:44px}.ftg-event-actions #eventDelete{margin-right:auto}
+.ftg-event-manager-foot{display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;color:#52647a;font-size:10px}.ftg-event-manager-foot i{color:#1d4ed8}.ftg-event-manager-foot span{flex:1}.ftg-event-manager-foot a{color:#155e4b;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+
 /* Do not hide layout defects at page level. Content reflows; only data
    tables receive their own horizontal scroll container. */
 body:has(main[data-design-id]){overflow-x:auto}
@@ -875,6 +912,10 @@ main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box sma
   .ftg-toast{width:calc(100vw - 20px)}
   .ftg-mail-compose,.ftg-donor-admin-layout,.ftg-recording-admin-grid,.ftg-canvas-workspace{grid-template-columns:1fr!important}
   .ftg-mail-preview,.ftg-donor-admin-layout>aside,.ftg-canvas-side{position:static!important}
+  .ftg-modal-box:has(.ftg-calendar-view),.ftg-modal-box:has(.ftg-event-manager){width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;padding:0!important}
+  .ftg-calendar-view-head,.ftg-event-manager-head{padding:18px;gap:12px}.ftg-calendar-view-head{display:grid}.ftg-calendar-view-head>a{width:100%}
+  .ftg-calendar-view-note{margin:12px 18px 0}.ftg-calendar-view-list{padding:12px 18px 18px}.ftg-calendar-view-list article{grid-template-columns:62px minmax(0,1fr)}.ftg-calendar-view-actions{grid-column:1/-1;justify-content:stretch}.ftg-calendar-view-actions a{flex:1}
+  .ftg-event-manager-layout{grid-template-columns:1fr}.ftg-event-manager-layout>aside{border-right:0;border-bottom:1px solid #e2e8f0}#eventManagerList{max-height:190px}#eventManagerForm{padding:18px}.ftg-event-fields{grid-template-columns:1fr}.ftg-event-fields .is-wide{grid-column:auto}.ftg-event-manager-foot{align-items:flex-start;flex-wrap:wrap}.ftg-event-manager-foot span{flex-basis:calc(100% - 28px)}
 }
 @media(max-width:520px){
   .ftg-suite-grid{grid-template-columns:1fr}

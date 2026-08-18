@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -17,7 +17,6 @@ test('all application pages have responsive metadata and valid local links', asy
     }
   }
 });
-
 test('protected pages use the shared engine or a dedicated authenticated flow', async () => {
   const publicPages = new Set(['index.html', 'login.html', 'panitia.html', 'certificate.html', 'privacy-policy.html', 'terms.html', 'donor-login.html', 'donor-messages.html']);
   for (const file of htmlFiles.filter(file => !publicPages.has(file))) {
@@ -290,7 +289,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=73/);
+    assert.match(await text(file), /app\.js\?v=74/);
   }
 });
 
@@ -312,7 +311,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=73/);
+    assert.match(await text(file), /app\.js\?v=74/);
   }
 });
 
@@ -394,7 +393,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=71/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=72/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -461,10 +460,31 @@ test('real notifications, Zoho email, calendar, reports and health monitoring ha
   assert.match(reminders, /reminder_days: \[3, 1, 0\]/);
   assert.match(reminders, /Tugas terlambat/);
   assert.match(calendar, /BEGIN:VCALENDAR/);
+  assert.match(app, /function openMenteeCalendar/);
+  assert.match(app, /function googleCalendarUrl/);
+  assert.match(app, /dataset\.menteeCalendar = '1'/);
+  assert.match(app, /function openEventManager/);
+  assert.match(app, /data-event-edit/);
+  assert.match(app, /action:'event_delete'/);
   assert.match(reports, /application\/vnd\.ms-excel/);
   assert.match(app, /Kesehatan Program/);
   assert.match(app, /Zoho aktif/);
   assert.match(app, /Audit Log/);
+});
+
+test('Fasil calendar supports create, edit and delete with a responsive in-app mentee view', async () => {
+  const app = await text('app.js');
+  const api = await text('api/operations.js');
+  const css = await text('responsive.css');
+  assert.match(app, /#adminCalendar[\s\S]*openEventManager/);
+  assert.match(app, /id:\$\('#eventId'/);
+  assert.match(app, /Simpan Perubahan/);
+  assert.match(api, /action === 'event_delete'/);
+  assert.match(api, /event\.delete/);
+  assert.match(api, /Waktu selesai harus setelah waktu mulai/);
+  assert.match(css, /\.ftg-calendar-view-list article/);
+  assert.match(css, /\.ftg-event-manager-layout/);
+  assert.match(css, /@media\(max-width:780px\)[\s\S]*\.ftg-event-manager-layout\{grid-template-columns:1fr\}/);
 });
 
 test('Fasil can manually send synchronized email and dashboard notifications', async () => {
@@ -574,8 +594,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=73/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=73/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=74/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=74/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -584,9 +604,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=73/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=71/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=73/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=74/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=72/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=74/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);

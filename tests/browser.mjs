@@ -212,6 +212,45 @@ async function exerciseAdminDialog(page) {
   assert.ok(await trigger.evaluate(node => node === document.activeElement), 'focus must return to the admin action');
 }
 
+async function exerciseMenteeCalendar(page) {
+  const trigger = page.locator('[data-mentee-calendar]');
+  await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+  assert.equal(await trigger.getAttribute('href'), '#', 'mentee calendar must open in the LMS instead of downloading a file');
+  await trigger.click();
+  const dialog = page.locator('[role="dialog"]').last();
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  await page.locator('.ftg-calendar-view').waitFor({ state: 'visible' });
+  const eventCount = await page.locator('.ftg-calendar-view-list article').count();
+  if (eventCount) {
+    const googleLink = page.locator('.ftg-calendar-view-actions a[href^="https://calendar.google.com/calendar/render"]').first();
+    assert.ok(await googleLink.count(), 'calendar event must provide a Google Calendar action');
+  } else {
+    assert.ok(await page.locator('.ftg-calendar-empty').count(), 'empty calendar must explain that no event is scheduled');
+  }
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+}
+
+async function exerciseAdminCalendar(page) {
+  const trigger = page.locator('#adminCalendar');
+  await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+  await trigger.click();
+  const dialog = page.locator('[role="dialog"]').last();
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  await page.locator('.ftg-event-manager').waitFor({ state: 'visible' });
+  const firstEvent = page.locator('[data-event-edit]').first();
+  if (await firstEvent.count()) {
+    await firstEvent.click();
+    assert.ok(await page.locator('#eventId').inputValue(), 'selecting an event must enter edit mode');
+    assert.match(await page.locator('#eventSave').textContent(), /Simpan Perubahan|Save Changes/);
+    await page.locator('#eventDelete').waitFor({ state: 'visible' });
+  }
+  await page.locator('#eventNew').click();
+  assert.equal(await page.locator('#eventId').inputValue(), '', 'new event action must reset edit mode');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+}
+
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 try {
   for (const viewport of viewports) {
@@ -242,7 +281,11 @@ try {
         await page.goto(`${BASE_URL}/${pageName}`, { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1500);
         await injectLocalStyles(page, pageName);
-        if (role.name === 'admin' && pageName === 'admin-program.html') await exerciseAdminDialog(page);
+        if (role.name === 'mentee' && pageName === 'mentee-dashboard.html') await exerciseMenteeCalendar(page);
+        if (role.name === 'admin' && pageName === 'admin-program.html') {
+          await exerciseAdminDialog(page);
+          await exerciseAdminCalendar(page);
+        }
         await inspectPage(page, `${role.name}-${pageName.replace('.html', '')}`, viewport);
       }
       await context.close();

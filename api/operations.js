@@ -149,12 +149,22 @@ module.exports = async function handler(req, res) {
 
     if (action === 'event_save') {
       if (!body.title || !body.starts_at) return send(res, 400, { error:'Judul dan waktu mulai wajib diisi' });
+      if (body.ends_at && new Date(body.ends_at) <= new Date(body.starts_at)) return send(res, 400, { error:'Waktu selesai harus setelah waktu mulai' });
       const payload = { title:safe(body.title,160),event_type:body.event_type || 'other',starts_at:body.starts_at,ends_at:body.ends_at || null,location:safe(body.location,180) || null,meeting_link:safe(body.meeting_link,500) || null,description:safe(body.description,1500) || null,visibility:body.visibility || 'all',cohort_id:body.cohort_id || null,created_by:auth.user.id,updated_at:new Date().toISOString() };
       let rows;
       if (body.id) rows = await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}`, { method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(payload) });
       else rows = await adminFetch('/rest/v1/program_events', { method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload) });
       await audit(auth.user.id,'event.save','program_event',rows[0].id,{ title:payload.title });
       return send(res, 200, { event:rows[0] });
+    }
+    if (action === 'event_delete') {
+      if (!body.id) return send(res, 400, { error:'Agenda wajib dipilih' });
+      const current = await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}&select=id,title,event_type,location`);
+      if (!current[0]) return send(res, 404, { error:'Agenda tidak ditemukan' });
+      if (current[0].event_type === 'other' && String(current[0].location || '').startsWith('LMS · ')) return send(res, 409, { error:'Rekaman LMS harus dihapus melalui menu LMS & Rekaman' });
+      await adminFetch(`/rest/v1/program_events?id=eq.${encodeURIComponent(body.id)}`, { method:'DELETE',headers:{Prefer:'return=minimal'} });
+      await audit(auth.user.id,'event.delete','program_event',body.id,{ title:current[0].title });
+      return send(res, 200, { ok:true });
     }
     if (action === 'recording_save') {
       const videoId = youtubeId(body.youtube_url);
