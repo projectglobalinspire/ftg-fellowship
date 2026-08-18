@@ -4563,7 +4563,7 @@
     var total = (task.checklist || []).length;
     if (!total) return sub && sub.submittedAt ? 100 : 0;
     var done = Object.keys((sub && sub.checks) || {}).filter(function (k) { return sub.checks[k]; }).length;
-    return Math.round(done / total * 100);
+    return Math.min(100, Math.max(0, Math.round(done / total * 100)));
   }
 
   function recordingDate(value) {
