@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=66/);
+    assert.match(await text(file), /app\.js\?v=67/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=66/);
+    assert.match(await text(file), /app\.js\?v=67/);
   }
 });
 
@@ -561,8 +561,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=66/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=66/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=67/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=67/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -571,9 +571,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=66/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=59/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=66/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=67/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=60/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=67/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
     assert.match(await text(page), /donor\.css\?v=6/);
@@ -683,7 +683,15 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(app, /function accountLoadingSkeleton/);
   assert.match(app, /function operationLoader/);
   assert.match(app, /USER_ACTION_CONTEXT/);
-  assert.match(app, /showActionLoader=options\.loading!==false/);
+  assert.match(app, /showActionLoader=options\.loading!==false&&Date\.now\(\)-USER_ACTION_CONTEXT\.at<2200/);
+  assert.match(app, /requestMethod==='GET'\?'Memuat data…'/);
+  assert.match(app, /actionButton\.classList\.add\('ftg-action-pending'\)/);
+  assert.match(app, /actionButton\.classList\.remove\('ftg-action-pending'\)/);
+  assert.match(app, /document\.addEventListener\('submit'/);
+  assert.match(app, /window\.addEventListener\('unhandledrejection'/);
+  assert.match(app, /function visibleActionError/);
+  assert.match(app, /Koneksi ke server terputus/);
+  assert.match(app, /LAST_TOAST/);
   assert.match(app, /Menyimpan perubahan/);
   assert.match(app, /Tidak ada perubahan yang perlu disimpan/);
   assert.match(adminUsers, /unchanged:true/);
@@ -704,6 +712,7 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(app, /Object\.assign\(\{\},rawFlags,featureFlags\)/);
   assert.match(program, /feature_flags: Object\.assign\(\{\}, currentFlags,/);
   assert.match(css, /\.ftg-operation-loading/);
+  assert.match(css, /\.ftg-action-pending/);
   assert.match(css, /\.ftg-account-skeleton/);
 });
 

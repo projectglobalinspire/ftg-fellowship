@@ -1298,8 +1298,11 @@
   }
 
   /* ---------- Toast ---------- */
-  var toastWrap;
+  var toastWrap, LAST_TOAST = { message:'', at:0 };
   function toast(msg, icon) {
+    msg=String(msg||'');
+    if(msg===LAST_TOAST.message&&Date.now()-LAST_TOAST.at<1200)return;
+    LAST_TOAST={message:msg,at:Date.now()};
     if (!toastWrap) {
       toastWrap = document.createElement('div');
       toastWrap.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;';
@@ -1759,8 +1762,18 @@
     if(!sb||!session||!session.dbId)return Promise.resolve();
     return sb.from('mentor_sessions').update({status:session.status,shared_summary:session.outcome||null,action_items:session.actionItems||[],attendance:session.attendance||{},completed_at:session.completedAt||null,updated_at:new Date().toISOString()}).eq('id',session.dbId).then(function(r){if(r.error)throw r.error;}).catch(reportError);
   }
+  var LAST_VISIBLE_ERROR = { message:'', at:0 };
+  function visibleActionError(error) {
+    var message=error&&error.message?error.message:String(error||'Tindakan tidak berhasil. Silakan coba lagi.');
+    if(/failed to fetch|networkerror|load failed/i.test(message))message='Koneksi ke server terputus. Periksa internet lalu coba kembali.';
+    if(/abort|terlalu lama|timeout/i.test(message))message='Server terlalu lama merespons. Data belum diubah; silakan coba kembali.';
+    if(message===LAST_VISIBLE_ERROR.message&&Date.now()-LAST_VISIBLE_ERROR.at<2500)return;
+    LAST_VISIBLE_ERROR={message:message,at:Date.now()};
+    toast(message,'⚠️');
+  }
   function reportError(error) {
     console.error(error);
+    visibleActionError(error);
     var payload = { level: 'error', source: PAGE, message: error && error.message || String(error), context: { role: myRole() } };
     fetch('/api/errors', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {}), body: JSON.stringify(payload) }).catch(function () {});
   }
@@ -4577,9 +4590,9 @@
   var USER_ACTION_CONTEXT = { at:0, label:'', button:null };
   function apiRequest(path, options) {
     options = options || {};
-    var requestMethod=String(options.method||'GET').toUpperCase(),showActionLoader=options.loading!==false&&requestMethod!=='GET'&&Date.now()-USER_ACTION_CONTEXT.at<1800,hideActionLoader=null;
+    var requestMethod=String(options.method||'GET').toUpperCase(),showActionLoader=options.loading!==false&&Date.now()-USER_ACTION_CONTEXT.at<2200,hideActionLoader=null,actionButton=showActionLoader&&USER_ACTION_CONTEXT.button,buttonWasBusy=actionButton&&actionButton.getAttribute('aria-busy');
     delete options.loading;
-    if(showActionLoader){var label=USER_ACTION_CONTEXT.label||'perubahan',title=/hapus|delete/i.test(label)?'Menghapus data…':/kirim|send/i.test(label)?'Mengirim data…':/unggah|upload/i.test(label)?'Mengunggah data…':'Menyimpan perubahan…';hideActionLoader=operationLoader(title,'Mohon tunggu. Data sedang diproses dengan aman dan jangan klik ulang.');}
+    if(showActionLoader){var label=USER_ACTION_CONTEXT.label||'data',title=requestMethod==='GET'?'Memuat data…':/hapus|delete/i.test(label)?'Menghapus data…':/kirim|send/i.test(label)?'Mengirim data…':/unggah|upload/i.test(label)?'Mengunggah data…':'Menyimpan perubahan…';if(actionButton){actionButton.classList.add('ftg-action-pending');actionButton.setAttribute('aria-busy','true');}hideActionLoader=operationLoader(title,requestMethod==='GET'?'Mengambil informasi terbaru dari server…':'Mohon tunggu. Data sedang diproses dengan aman dan jangan klik ulang.');}
     options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
     var timer=null,controller=null;
     if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},requestMethod==='GET'?35000:90000);}
@@ -4589,7 +4602,7 @@
         if(!r.ok)throw new Error(data.error||'Permintaan gagal');return data;
       });});
     }
-    return execute(false).catch(function(error){if(error&&error.name==='AbortError')throw new Error('Server terlalu lama merespons. Data belum diubah; silakan coba lagi.');throw error;}).finally(function(){if(timer)clearTimeout(timer);if(hideActionLoader)hideActionLoader();});
+    return execute(false).catch(function(error){if(error&&error.name==='AbortError')error=new Error('Server terlalu lama merespons. Data belum diubah; silakan coba lagi.');if(showActionLoader)visibleActionError(error);throw error;}).finally(function(){if(timer)clearTimeout(timer);if(hideActionLoader)hideActionLoader();if(actionButton){actionButton.classList.remove('ftg-action-pending');if(buttonWasBusy===null)actionButton.removeAttribute('aria-busy');else actionButton.setAttribute('aria-busy',buttonWasBusy);}});
   }
   var API_MEMORY_CACHE = {}, API_INFLIGHT = {};
   function cachedApiRequest(key, path, options, ttl, force) {
@@ -5252,11 +5265,14 @@
   function wireGlobalUX() {
     if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');
     document.addEventListener('click',function(event){var button=event.target.closest&&event.target.closest('button,input[type="submit"]');if(!button||button.disabled)return;USER_ACTION_CONTEXT={at:Date.now(),label:(button.textContent||button.value||button.getAttribute('aria-label')||'perubahan').trim(),button:button};},true);
+    document.addEventListener('submit',function(event){var form=event.target,button=event.submitter||(form&&form.querySelector('button[type="submit"],input[type="submit"]'));USER_ACTION_CONTEXT={at:Date.now(),label:(button&&(button.textContent||button.value))||(form&&form.getAttribute('aria-label'))||'mengirim formulir',button:button||null};},true);
     var skip=document.createElement('a');skip.href='#main-content';skip.className='ftg-skip-link';skip.textContent='Lewati ke konten utama';document.body.insertBefore(skip,document.body.firstChild);var main=$('main');if(main)main.id='main-content';
     document.addEventListener('click',function(e){var p=e.target.closest&&e.target.closest('[data-drive-preview]');if(p){e.preventDefault();openDrivePreview(p.getAttribute('data-drive-preview'),p.getAttribute('data-drive-name'),p.getAttribute('data-drive-download'));}});
     document.addEventListener('click',function(e){var link=e.target.closest&&e.target.closest('a[href]');if(!link||e.defaultPrevented||e.button>0||e.ctrlKey||e.metaKey||e.shiftKey||link.target==='_blank'||link.hasAttribute('download'))return;try{var url=new URL(link.href,location.href);if(url.origin!==location.origin||url.pathname===location.pathname||!/\.html$/.test(url.pathname))return;operationLoader('Membuka halaman','Tampilan berikutnya sedang disiapkan…');}catch(_){}});
     var header=$('main header');if(header&&!$('#ftgGlobalSearch',header)){var b=document.createElement('button');b.id='ftgGlobalSearch';b.type='button';b.className='ftg-global-search';b.setAttribute('aria-label','Cari di platform');b.innerHTML='<i class="fa-solid fa-magnifying-glass"></i><span>Cari</span><kbd>Ctrl K</kbd>';b.addEventListener('click',globalSearchModal);var actions=$all(':scope > div',header).filter(function(group){return !!group.querySelector('[data-design-id*="notif"], .fa-bell');})[0];if(!actions){actions=document.createElement('div');actions.className='flex items-center gap-4';header.appendChild(actions);}actions.classList.add('ftg-header-actions');actions.insertBefore(b,actions.firstChild);}
     document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();globalSearchModal();}});
+    window.addEventListener('unhandledrejection',function(event){if(Date.now()-USER_ACTION_CONTEXT.at>12000)return;var reason=event.reason instanceof Error?event.reason:new Error(String(event.reason||'Tindakan tidak berhasil'));reportError(reason);});
+    window.addEventListener('error',function(event){if(Date.now()-USER_ACTION_CONTEXT.at>12000||!event.error)return;reportError(event.error);});
   }
 
   /* ---------- Boot ---------- */
