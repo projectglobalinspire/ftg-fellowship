@@ -223,6 +223,15 @@ function cleanAnnouncement(source, existing) {
   if(item.starts_at&&item.ends_at&&new Date(item.ends_at)<=new Date(item.starts_at))throw new Error('Waktu selesai harus setelah waktu mulai');
   return item;
 }
+const WORKSHOP_TITLES=[
+  ['career','Career Mapping & Personal Branding'],['entrepreneur','Business Model Canvas & Validasi Ide'],
+  ['career','Interview Skills & Komunikasi Profesional'],['entrepreneur','Marketing Digital & Customer Acquisition'],
+  ['career','Networking & Membangun Komunitas Profesional'],['entrepreneur','Financial Literacy & Manajemen Keuangan Bisnis'],
+  ['career','Goal Setting & 90-Day Career Action Plan'],['entrepreneur','Pitching & Demo Day Preparation']
+];
+function defaultWorkshopSchedule(){const first=Date.UTC(2026,7,22,2,0,0);return WORKSHOP_TITLES.map((item,index)=>({id:`workshop-${index+1}`,week:index+1,track:item[0],title:item[1],starts_at:new Date(first+index*7*86400000).toISOString(),ends_at:new Date(first+index*7*86400000+3*3600000).toISOString(),pre_work:'Materi persiapan akan diinformasikan Fasil.',live_work:'Workshop interaktif dan diskusi.',post_work:'Tugas tindak lanjut sesi.',access_mode:'automatic',published:true}));}
+function cleanWorkshop(source,index){source=source||{};const fallback=defaultWorkshopSchedule()[index]||defaultWorkshopSchedule()[0],track=source.track==='entrepreneur'?'entrepreneur':'career',start=new Date(source.starts_at||fallback.starts_at),end=new Date(source.ends_at||fallback.ends_at);if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start)throw new Error(`Tanggal workshop ${index+1} tidak valid`);return {id:clean(source.id||fallback.id,80).replace(/[^a-zA-Z0-9_-]/g,''),week:index+1,track,title:clean(source.title||fallback.title,160),starts_at:start.toISOString(),ends_at:end.toISOString(),pre_work:clean(source.pre_work,500),live_work:clean(source.live_work,500),post_work:clean(source.post_work,500),access_mode:['automatic','open','closed'].includes(source.access_mode)?source.access_mode:'automatic',published:source.published!==false};}
+async function workshopSchedule(){const flags=await programFlags(),source=Array.isArray(flags.workshop_schedule)&&flags.workshop_schedule.length?flags.workshop_schedule:defaultWorkshopSchedule();return source.slice(0,24).map(cleanWorkshop).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));}
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['POST'])) return;
@@ -246,9 +255,15 @@ module.exports = async function handler(req, res) {
       const announcements=profile.role==='admin'&&req.body.admin===true?all:all.filter(item=>item.is_active!==false&&(item.display_mode==='permanent'||(!(item.starts_at||item.start_at)||new Date(item.starts_at||item.start_at).getTime()<=now)&&(!(item.ends_at||item.end_at)||new Date(item.ends_at||item.end_at).getTime()>=now)));
       return send(res,200,{announcements:announcements.sort((a,b)=>(Number(b.priority)||0)-(Number(a.priority)||0)||new Date(b.updated_at)-new Date(a.updated_at))});
     }
+    if(req.body&&req.body.action==='workshop_schedule_get'){
+      const user=await currentUser(req);if(!user)return send(res,401,{error:'Sesi tidak valid'});const rows=await adminFetch(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,status`),profile=rows&&rows[0];if(!profile||profile.status!=='active')return send(res,403,{error:'Profil tidak aktif'});return send(res,200,{schedule:await workshopSchedule(),can_edit:profile.role==='admin'});
+    }
     const auth = await requireRole(req, res, ['admin']);
     if (!auth) return;
     const body = req.body || {};
+    if(body.action==='workshop_schedule_save'){
+      const incoming=Array.isArray(body.schedule)?body.schedule.slice(0,24):[];if(!incoming.length)return send(res,400,{error:'Minimal satu workshop wajib tersedia'});let schedule;try{schedule=incoming.map(cleanWorkshop);}catch(error){return send(res,400,{error:error.message});}if(schedule.some(item=>!item.title))return send(res,400,{error:'Judul setiap workshop wajib diisi'});const flags=await programFlags();flags.workshop_schedule=schedule;await saveProgramFlags(flags,auth.user.id);await adminFetch('/rest/v1/audit_logs',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({actor_id:auth.user.id,action:'workshop.schedule_update',entity_type:'program_settings',entity_id:'1',detail:{sessions:schedule.length,first_session:schedule[0].starts_at}})}).catch(()=>null);return send(res,200,{ok:true,schedule});
+    }
     if(body.action==='tracks_save'){
       const incoming=Array.isArray(body.tracks)?body.tracks.slice(0,30):[],tracks=incoming.map(normalizeTrack);
       if(!tracks.length||!tracks.some(track=>track.active))return send(res,400,{error:'Minimal satu track aktif wajib tersedia'});
