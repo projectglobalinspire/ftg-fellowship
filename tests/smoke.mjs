@@ -675,3 +675,25 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(css, /\.ftg-operation-loading/);
   assert.match(css, /\.ftg-account-skeleton/);
 });
+
+test('dashboards are bilingual and Fasil operations have real data flows', async () => {
+  const app = await text('app.js');
+  const operations = await text('api/operations.js');
+  const program = await text('api/program.js');
+  const css = await text('responsive.css');
+  assert.match(app, /function mountLanguageControl/);
+  assert.match(app, /localStorage\.getItem\('ftg-language'\)/);
+  assert.match(app, /function applyLanguage/);
+  assert.match(css, /\.ftg-language-control/);
+  assert.match(app, /function initRealLeaderboard/);
+  assert.match(operations, /function leaderboardData/);
+  assert.match(operations, /resource === 'leaderboard'/);
+  assert.match(operations, /Tugas & target.*Pengumpulan.*Review mentor.*Presensi & progres canvas/);
+  assert.match(app, /ftg-monitor-create/);
+  assert.match(app, /openAssignmentEditor\(null/);
+  assert.match(app, /eventStart.*nextHour/);
+  assert.match(app, /function mountUpcomingEvents/);
+  assert.match(program, /missing_by_track/);
+  assert.match(app, /Maksimal 5 keahlian/);
+  assert.match(app, /refreshSession/);
+});

@@ -46,6 +46,39 @@ async function eligibility(menteeId) {
   return { profile, settings, metrics };
 }
 
+function answerProgress(value) {
+  let filled=0,total=0;
+  const walk=current=>{
+    if(Array.isArray(current)){current.forEach(walk);return;}
+    if(current&&typeof current==='object'){Object.entries(current).forEach(([key,item])=>{if(!['updated_at','saved_at','status'].includes(key))walk(item);});return;}
+    if(typeof current==='string'){total++;if(current.trim())filled++;}
+  };
+  walk(value||{});return total?Math.round(filled/total*100):0;
+}
+
+async function leaderboardData() {
+  const [settingsRows,profiles,assignments,submissions,attendance]=await Promise.all([
+    adminFetch('/rest/v1/program_settings?id=eq.1&select=kpi_weights'),
+    adminFetch('/rest/v1/profiles?role=in.(mentee,mentor)&status=eq.active&select=id,full_name,initials,path,role,mentor_id,last_active_at&order=full_name.asc'),
+    adminFetch('/rest/v1/assignments?status=eq.published&select=id,deadline,assignment_targets(mentee_id)'),
+    adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,status,submitted_at,checklist_state,reviews(score,decision,updated_at)'),
+    adminFetch('/rest/v1/attendance_records?select=mentee_id,status')
+  ]);
+  const raw=(settingsRows[0]&&settingsRows[0].kpi_weights)||{},weights={completion:+raw.completion||30,quality:+raw.quality||40,engagement:+raw.engagement||20,innovation:+(raw.innovation||raw.values)||10};
+  const sum=Object.values(weights).reduce((a,b)=>a+b,0)||100,mentors=new Map(profiles.filter(p=>p.role==='mentor').map(p=>[p.id,p]));
+  const rows=profiles.filter(p=>p.role==='mentee').map(profile=>{
+    const eligible=assignments.filter(a=>(a.assignment_targets||[]).some(t=>t.mentee_id===profile.id)),own=submissions.filter(s=>s.mentee_id===profile.id&&eligible.some(a=>a.id===s.assignment_id));
+    const submitted=own.filter(s=>s.submitted_at),completion=eligible.length?Math.round(submitted.length/eligible.length*100):0;
+    const scores=own.flatMap(s=>s.reviews||[]).map(r=>+r.score).filter(Number.isFinite),quality=scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length):0;
+    const onTime=submitted.filter(s=>{const task=eligible.find(a=>a.id===s.assignment_id);return !task||!task.deadline||new Date(s.submitted_at)<=new Date(task.deadline);}).length,att=attendance.filter(a=>a.mentee_id===profile.id),present=att.filter(a=>['present','late','excused'].includes(a.status)).length;
+    const engagementParts=[];if(submitted.length)engagementParts.push(onTime/submitted.length*100);if(att.length)engagementParts.push(present/att.length*100);const engagement=engagementParts.length?Math.round(engagementParts.reduce((a,b)=>a+b,0)/engagementParts.length):0;
+    const progress=own.map(s=>answerProgress(s.checklist_state)).filter(Number.isFinite),innovation=progress.length?Math.round(progress.reduce((a,b)=>a+b,0)/progress.length):0;
+    const total=Math.round(((completion*weights.completion+quality*weights.quality+engagement*weights.engagement+innovation*weights.innovation)/sum)*10)/10,mentor=mentors.get(profile.mentor_id);
+    return {id:profile.id,name:profile.full_name,initials:profile.initials||'',path:profile.path||'Belum diatur',mentor:mentor?mentor.full_name:'Belum ditentukan',completion,quality,engagement,innovation,total};
+  }).sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
+  return {leaderboard:rows,weights,generated_at:new Date().toISOString(),flow:['Tugas & target','Pengumpulan','Review mentor','Presensi & progres canvas','KPI tertimbang']};
+}
+
 module.exports = async function handler(req, res) {
   if ((req.method === 'GET' && String(req.query && req.query.resource || '') === 'learning') ||
       (req.method === 'POST' && ['config_save','progress_save'].includes(req.body && req.body.action))) {
@@ -61,6 +94,7 @@ module.exports = async function handler(req, res) {
         const rows = await adminFetch('/rest/v1/program_events?select=*&order=starts_at.asc');
         return send(res, 200, { events:rows });
       }
+      if (resource === 'leaderboard') return send(res,200,await leaderboardData());
       if (resource === 'recordings') {
         const rows = await adminFetch('/rest/v1/program_events?event_type=eq.other&select=*&order=starts_at.desc');
         return send(res, 200, { recordings:rows.filter(row => String(row.location || '').startsWith('LMS · ')).map(row => Object.assign({}, row, { location:String(row.location).slice(6),youtube_id:youtubeId(row.meeting_link) })).filter(row => row.youtube_id) });

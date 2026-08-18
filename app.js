@@ -304,14 +304,14 @@
     // Leaderboard diperbarui di tempat. Hindari reload berkala yang sempat
     // menampilkan identitas statis Arya sebelum role mentor dipersonalisasi.
     if (PAGE.indexOf('kpi-leaderboard') === 0) {
-      try { initLeaderboardLive(); personalize(); } catch (e) { console.warn(e); }
+      try { var liveTable=byId('leaderboard-table');if(liveTable)liveTable.removeAttribute('data-real-loading');initRealLeaderboard(); personalize(); } catch (e) { console.warn(e); }
       return;
     }
     // Jangan reload seluruh dashboard untuk setiap perubahan realtime. Pada
     // grup aktif hal ini membuat mentor/Fasil berkedip terus-menerus.
     try {
       if (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE)) refreshReviewNumbersUI();
-      if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboardLive();
+      if (PAGE.indexOf('kpi-leaderboard') === 0) initRealLeaderboard();
       personalize();
     } catch (e) { console.warn(e); }
     toast('Data terbaru dari ' + who + ' sudah disinkronkan', '📨');
@@ -1336,7 +1336,12 @@
     }
     ov.addEventListener('click', function (e) { if (e.target === ov) shut(); });
     document.body.appendChild(ov);
+    var assignmentMonitor=$('.ftg-assignment-monitor',box);
+    if(assignmentMonitor){var monitorCreate=document.createElement('button');monitorCreate.type='button';monitorCreate.className='ftg-suite-primary ftg-monitor-create';monitorCreate.innerHTML='<i class="fa-solid fa-plus"></i> Tugas Baru';assignmentMonitor.insertBefore(monitorCreate,assignmentMonitor.firstChild);monitorCreate.addEventListener('click',function(){shut();setTimeout(function(){openAssignmentEditor(null,function(){invalidateApiCache('admin-operations');openAssignmentMonitor();});},210);});}
+    var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box);
+    if(eventStart&&!eventStart.value){var nextHour=new Date();nextHour.setMinutes(0,0,0);nextHour.setHours(nextHour.getHours()+1);eventStart.value=localDateTimeValue(nextHour);if(eventEnd&&!eventEnd.value)eventEnd.value=localDateTimeValue(new Date(nextHour.getTime()+3600000));eventStart.setAttribute('aria-label','Tanggal dan jam mulai');if(eventEnd)eventEnd.setAttribute('aria-label','Tanggal dan jam selesai');eventStart.addEventListener('change',function(){var selected=new Date(eventStart.value);if(eventEnd&&!isNaN(selected))eventEnd.value=localDateTimeValue(new Date(selected.getTime()+3600000));});}
     if (onMount) onMount(box, shut);
+    if(typeof applyLanguage==='function')applyLanguage(box);
     return { close: shut, box: box, overlay: ov };
   }
 
@@ -2079,6 +2084,15 @@
       });
       $all('span').forEach(function (sp) { if (sp.textContent.trim() === 'Top 8') sp.textContent = 'Top 4'; });
     }
+  }
+
+  function initRealLeaderboard() {
+    var table=byId('leaderboard-table');if(!table||table.getAttribute('data-real-loading'))return;table.setAttribute('data-real-loading','1');
+    var header=table.firstElementChild;table.innerHTML='';if(header)table.appendChild(header);var loading=document.createElement('div');loading.className='ftg-kpi-loading';loading.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> Menghitung KPI dari tugas, review, presensi, dan canvas…';table.appendChild(loading);
+    apiRequest('/api/operations?resource=leaderboard').then(function(data){var rows=data.leaderboard||[],myProfile=AUTH.profile||{},medals=['🥇','🥈','🥉'];table.innerHTML='';if(header)table.appendChild(header);rows.forEach(function(row,index){var mine=row.id===myProfile.id,item=document.createElement('div');item.setAttribute('data-lb-path',/entre/i.test(row.path)?'ent':'career');item.className='px-6 py-3 grid grid-cols-12 gap-2 items-center border-b border-slate-50 text-xs'+(mine?' bg-[#1a5f4f]/5':'');item.innerHTML='<div class="col-span-1 font-bold">'+(medals[index]||index+1)+'</div><div class="col-span-3 min-w-0"><p class="text-[#2c3e50] font-bold truncate">'+esc(row.name)+(mine?' <span class="text-[#1a5f4f]">(Kamu)</span>':'')+'</p><p class="text-slate-400 text-[10px]">Mentor: '+esc(row.mentor)+'</p></div><div class="col-span-1 text-center"><span class="ftg-track-chip">'+esc(row.path.replace(' Path',''))+'</span></div><div class="col-span-1 text-center font-bold text-[#1a5f4f]">'+row.completion+'</div><div class="col-span-1 text-center font-bold text-[#8b5cf6]">'+row.quality+'</div><div class="col-span-1 text-center font-bold text-[#f97316]">'+row.engagement+'</div><div class="col-span-1 text-center font-bold text-[#22c55e]">'+row.innovation+'</div><div class="col-span-2 text-center text-base font-bold">'+Number(row.total).toFixed(1)+'</div><div class="col-span-1 text-center text-slate-400">—</div>';table.appendChild(item);});var foot=document.createElement('div');foot.className='ftg-kpi-source';foot.innerHTML='<b>Alur data otomatis:</b> '+(data.flow||[]).map(esc).join(' → ')+'<small>Dihitung ulang dari database · '+new Date(data.generated_at).toLocaleString('id-ID')+'</small>';table.appendChild(foot);
+      var subtitle=$('header p');if(subtitle&&/peserta/i.test(subtitle.textContent))subtitle.textContent=rows.length+' peserta · Data KPI realtime';
+      var btns={all:byId('btn-filter-all-lb'),career:byId('btn-filter-career-lb'),ent:byId('btn-filter-ent-lb')};function filter(value){$all('[data-lb-path]',table).forEach(function(item){item.style.display=value==='all'||item.getAttribute('data-lb-path')===value?'':'none';});}if(btns.all)btns.all.onclick=function(){filter('all');};if(btns.career)btns.career.onclick=function(){filter('career');};if(btns.ent)btns.ent.onclick=function(){filter('ent');};
+    }).catch(function(error){table.innerHTML='';if(header)table.appendChild(header);var failed=document.createElement('div');failed.className='ftg-kpi-error';failed.innerHTML='<b>Data KPI belum dapat dimuat.</b><span>'+esc(error.message)+'</span><button type="button">Coba lagi</button>';table.appendChild(failed);$('button',failed).onclick=function(){table.removeAttribute('data-real-loading');initRealLeaderboard();};});
   }
 
   /* ================================================================
@@ -4562,8 +4576,14 @@
     if(showActionLoader){var label=USER_ACTION_CONTEXT.label||'perubahan',title=/hapus|delete/i.test(label)?'Menghapus data…':/kirim|send/i.test(label)?'Mengirim data…':/unggah|upload/i.test(label)?'Mengunggah data…':'Menyimpan perubahan…';hideActionLoader=operationLoader(title,'Mohon tunggu. Data sedang diproses dengan aman dan jangan klik ulang.');}
     options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
     var timer=null,controller=null;
-    if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},25000);}
-    return fetch(path, options).then(function (r) { return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || 'Permintaan gagal'); return data; }); }).catch(function(error){if(error&&error.name==='AbortError')throw new Error('Server terlalu lama merespons. Silakan coba lagi.');throw error;}).finally(function(){if(timer)clearTimeout(timer);if(hideActionLoader)hideActionLoader();});
+    if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},requestMethod==='GET'?35000:90000);}
+    function execute(retried){
+      return fetch(path,options).then(function(r){return r.json().catch(function(){return {};}).then(function(data){
+        if(r.status===401&&!retried&&sb){return sb.auth.refreshSession().then(function(result){var session=result.data&&result.data.session;if(!session)throw new Error('Sesi login berakhir. Silakan masuk kembali.');AUTH.user=session.user;AUTH.accessToken=session.access_token;options.headers.Authorization='Bearer '+session.access_token;return execute(true);});}
+        if(!r.ok)throw new Error(data.error||'Permintaan gagal');return data;
+      });});
+    }
+    return execute(false).catch(function(error){if(error&&error.name==='AbortError')throw new Error('Server terlalu lama merespons. Data belum diubah; silakan coba lagi.');throw error;}).finally(function(){if(timer)clearTimeout(timer);if(hideActionLoader)hideActionLoader();});
   }
   var API_MEMORY_CACHE = {}, API_INFLIGHT = {};
   function cachedApiRequest(key, path, options, ttl, force) {
@@ -4732,7 +4752,14 @@
       '<button type="button" id="suSave" style="width:100%;margin-top:4px;border:0;background:#1a5f4f;color:#fff;border-radius:10px;padding:11px;font-weight:800;cursor:pointer">Buat Akun Aman</button>', function (box, close) {
         var button=$('#suSave',box),status=$('#suStatus',box);
         function trackPreview(){if(isMentee)return;var track=$('#suPath',box).value,eligible=Object.keys(AUTH.profilesById).map(function(id){return AUTH.profilesById[id];}).filter(function(p){return p.role==='mentee'&&p.status==='active'&&p.path===track&&!p.mentor_id;});$('#suTrackPreview',box).innerHTML='<b>'+eligible.length+' mentee belum punya mentor di '+esc(track)+'</b>'+(eligible.length?'<span>'+eligible.slice(0,8).map(function(p){return esc(p.full_name);}).join(' · ')+'</span>':'<span>Pairing lama tetap dipertahankan.</span>');}
-        if(!isMentee){$('#suPath',box).addEventListener('change',trackPreview);trackPreview();}
+        if(!isMentee){
+          $('#suPath',box).addEventListener('change',trackPreview);trackPreview();
+          var expertiseInputs=$all('[data-su-expertise]',box),expertiseHint=document.createElement('div');
+          expertiseHint.className='ftg-choice-count';expertiseHint.setAttribute('aria-live','polite');
+          var expertiseGrid=expertiseInputs[0]&&expertiseInputs[0].closest('.ftg-admin-mentor-expertise');if(expertiseGrid)expertiseGrid.parentNode.insertBefore(expertiseHint,expertiseGrid);
+          function updateExpertise(changed){var selected=expertiseInputs.filter(function(input){return input.checked;});if(selected.length>5&&changed){changed.checked=false;selected=expertiseInputs.filter(function(input){return input.checked;});status.style.color='#dc2626';status.textContent='Maksimal 5 keahlian. Hapus satu pilihan sebelum memilih yang lain.';}expertiseHint.textContent=selected.length+'/5 keahlian dipilih';expertiseHint.classList.toggle('is-complete',selected.length>0);}
+          expertiseInputs.forEach(function(input){input.addEventListener('change',function(){updateExpertise(input);});});updateExpertise();
+        }
         button.addEventListener('click', function () {
           var name=$('#suName',box).value.trim(),email=$('#suEmail',box).value.trim().toLowerCase(),password=$('#suPassword',box).value;
           if(!name||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){status.style.color='#dc2626';status.textContent='Nama lengkap dan email valid wajib diisi.';return;}
@@ -4821,6 +4848,8 @@
   }
   function openAuditSuite(){return apiRequest('/api/operations?resource=audit').then(function(d){modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Audit Log</h3><div style="max-height:450px;overflow:auto">'+(d.logs||[]).map(function(a){return '<p style="font-size:10px;border-bottom:1px solid #f1f5f9;padding:7px"><b>'+esc(a.action)+'</b> · '+esc((a.profiles&&a.profiles.full_name)||'Sistem')+'<br><span style="color:#94a3b8">'+new Date(a.created_at).toLocaleString('id-ID')+' · '+esc(a.entity_type||'')+'</span></p>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});}
   function mountMenteeProgramSuite(){if(PAGE.indexOf('mentee-dashboard')!==0||!AUTH.profile)return;var host=$('main > div.px-8'),old=byId('mentee-program-suite');if(!host||old)return;var sec=document.createElement('section');sec.id='mentee-program-suite';sec.className='bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';sec.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="font-size:15px;font-weight:800">🗓️ Agenda, Presensi & Sertifikat</h2><p style="font-size:11px;color:#64748b">Satu tempat untuk kegiatan program dan kelulusanmu.</p></div><div style="display:flex;gap:6px"><a href="/api/calendar?public=1" class="ftg-suite-secondary">Kalender</a><button id="myAttendance" class="ftg-suite-secondary">Presensi</button><button id="myCertificate" class="ftg-suite-primary">Sertifikat</button></div></div>';host.insertBefore(sec,host.firstChild);$('#myAttendance',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=attendance').then(function(d){modal('<h3 style="font-weight:800">Riwayat Kehadiran</h3>'+((d.records||[]).map(function(r){return '<p style="padding:7px;border-bottom:1px solid #f1f5f9;font-size:11px"><b>'+esc((r.attendance_sessions||{}).title||'Kegiatan')+'</b><span style="float:right">'+esc(r.status)+'</span></p>';}).join('')||'<p style="color:#64748b">Belum ada data presensi.</p>'));});});$('#myCertificate',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=certificate').then(function(d){if(d.certificate){var u='certificate.html?code='+encodeURIComponent(d.certificate.verification_code);modal('<div style="text-align:center"><h3 style="font-weight:800">🎓 Sertifikat '+esc(d.certificate.certificate_number)+'</h3><p style="margin:8px">'+esc(d.certificate.recipient_name)+'</p><a href="'+u+'" target="_blank" class="ftg-suite-primary">Lihat & cetak sertifikat</a></div>');}else{var e=d.eligibility||{};modal('<h3 style="font-weight:800">Syarat Sertifikat</h3><p>Tugas: '+(e.completion||0)+'% / '+((e.requirements||{}).completion||80)+'%</p><p>Kehadiran: '+(e.attendance||0)+'% / '+((e.requirements||{}).attendance||80)+'%</p><p>Nilai: '+(e.quality||0)+' / '+((e.requirements||{}).quality||75)+'</p><p style="margin-top:8px;color:#b45309">Sertifikat diterbitkan panitia setelah seluruh syarat terpenuhi.</p>');}});});}
+  function mountUpcomingEvents(){if(PAGE.indexOf('mentee-dashboard')!==0)return;var suite=byId('mentee-program-suite');if(!suite||byId('menteeUpcomingEvents'))return;var host=document.createElement('div');host.id='menteeUpcomingEvents';host.className='ftg-upcoming-events';host.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> Memuat jadwal terdekat…';suite.appendChild(host);function load(){apiRequest('/api/operations?resource=events').then(function(data){var upcoming=(data.events||[]).filter(function(item){return new Date(item.starts_at).getTime()>=Date.now();}).slice(0,3);host.innerHTML=upcoming.length?'<b>Jadwal terdekat</b>'+upcoming.map(function(item){return '<a href="/api/calendar?public=1"><time>'+new Date(item.starts_at).toLocaleDateString(UI_LANGUAGE==='en'?'en-US':'id-ID',{day:'2-digit',month:'short'})+'</time><span><strong>'+esc(item.title)+'</strong><small>'+new Date(item.starts_at).toLocaleString(UI_LANGUAGE==='en'?'en-US':'id-ID')+(item.location?' · '+esc(item.location):'')+'</small></span></a>';}).join(''):'<span>Belum ada agenda mendatang.</span>';applyLanguage(host);}).catch(function(error){host.innerHTML='<span>Jadwal belum dapat dimuat. <button type="button">Coba lagi</button></span>';$('button',host).onclick=load;});}load();document.addEventListener('ftg:events-changed',load,{once:true});}
+
   function openRecordingManager() {
     return apiRequest('/api/operations?resource=recordings').then(function(data){
       var rows=data.recordings||[];
@@ -5171,6 +5200,19 @@
   function openBackupManager() {
     apiRequest('/api/backups').then(function(data){var rows=data.backups||[];modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Backup & Pemulihan</h3><p style="font-size:10px;color:#64748b;margin:4px 0 10px">Restore melakukan merge aman dan selalu membuat safety backup lebih dahulu.</p><div id="backupRows">'+(rows.length?rows.map(function(b){return '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;border:1px solid #e2e8f0;border-radius:10px;padding:9px;margin:6px 0"><div><b style="font-size:11px;color:#334155">'+esc(b.label)+'</b><p style="font-size:9px;color:#94a3b8">'+new Date(b.created_at).toLocaleString('id-ID')+'</p></div><button data-restore-backup="'+esc(b.id)+'" class="ftg-action-secondary">Preview</button></div>';}).join(''):'<p style="font-size:11px;color:#94a3b8">Belum ada backup.</p>')+'</div>',function(box,close){$all('[data-restore-backup]',box).forEach(function(btn){btn.addEventListener('click',function(){var id=btn.getAttribute('data-restore-backup');apiRequest('/api/backups',{method:'POST',body:JSON.stringify({action:'preview',id:id})}).then(function(preview){var total=Object.keys(preview.counts||{}).reduce(function(n,k){return n+preview.counts[k];},0);if(!confirm('Pulihkan '+total+' record dari "'+preview.backup.label+'"?\n\nSafety backup akan dibuat otomatis.'))return;var phrase=prompt('Ketik PULIHKAN untuk melanjutkan');if(phrase!=='PULIHKAN')return;return apiRequest('/api/backups',{method:'POST',body:JSON.stringify({action:'restore',id:id,confirmation:phrase})}).then(function(){close();toast('Data berhasil dipulihkan dengan safety backup','✅');location.reload();});}).catch(function(e){toast(e.message,'⚠️');});});});});}).catch(function(e){toast(e.message,'⚠️');});
   }
+  var UI_LANGUAGE=localStorage.getItem('ftg-language')==='en'?'en':'id',LANGUAGE_ORIGINALS=new WeakMap(),LANGUAGE_BUSY=false;
+  var LANGUAGE_EN={
+    'Dashboard':'Dashboard','Design Thinking':'Design Thinking','Workshop Library':'Workshop Library','Tugas Saya':'My Assignments','Progress Saya':'My Progress','Jurnal Saya':'My Journal','Feedback Mentor':'Mentor Feedback','Leaderboard':'Leaderboard','Keluar':'Sign Out',
+    'Mentee Saya':'My Mentees','Tugas & Review':'Assignments & Reviews','Berikan Feedback':'Give Feedback','Progress Grup':'Group Progress','Monitoring':'Monitoring','Pusat Program':'Program Center','Kelola Akun':'Manage Accounts',
+    'Opening Ceremony':'Opening Ceremony','Closing Ceremony':'Closing Ceremony','Kalender':'Calendar','Presensi':'Attendance','Sertifikat':'Certificate','Cari':'Search','Simpan Perubahan':'Save Changes','Buat Akun Aman':'Create Secure Account',
+    'Kalender Program':'Program Calendar','Tambahkan ke kalender':'Add to calendar','Tugas & Pengumpulan Program':'Program Assignments & Submissions','Tugas Baru':'New Assignment','Lihat detail':'View details','Tutup detail':'Close details',
+    'Cohort & Pairing':'Cohort & Pairing','Kurikulum & Canvas':'Curriculum & Canvas','Tugas & Pengumpulan':'Assignments & Submissions','Email & Notifikasi':'Email & Notifications','Program Publik':'Public Program','Papan Informasi':'Information Board','LMS & Rekaman':'LMS & Recordings','Pengaturan':'Settings','Rubrik':'Rubric','Kesehatan Program':'Program Health','Audit Log':'Audit Log',
+    'Tambah Mentee':'Add Mentee','Tambah Mentor':'Add Mentor','Semua Akun':'All Accounts','Semua role':'All roles','Nama lengkap':'Full name','Email aktif':'Active email','Password sementara':'Temporary password','Jalur mentee':'Mentee track',
+    'Belum ada agenda.':'No schedule yet.','Menyimpan…':'Saving…','Coba Lagi':'Try Again','Simpan Pairing':'Save Pairing','Belum ditentukan':'Not assigned','Minggu aktif':'Active week','Bulan aktif':'Active month','Akses fitur':'Feature access'
+  };
+  function applyLanguage(root){if(LANGUAGE_BUSY)return;LANGUAGE_BUSY=true;try{var scope=root||document,walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT),nodes=[],node;while((node=walker.nextNode()))nodes.push(node);nodes.forEach(function(textNode){var parent=textNode.parentElement;if(!parent||/^(SCRIPT|STYLE|TEXTAREA|INPUT)$/.test(parent.tagName))return;if(!LANGUAGE_ORIGINALS.has(textNode))LANGUAGE_ORIGINALS.set(textNode,textNode.nodeValue);var original=LANGUAGE_ORIGINALS.get(textNode),trimmed=original.trim(),translated=UI_LANGUAGE==='en'&&LANGUAGE_EN[trimmed];textNode.nodeValue=translated?original.replace(trimmed,translated):original;});$all('[placeholder]',scope).forEach(function(input){if(!input.dataset.ftgIdPlaceholder)input.dataset.ftgIdPlaceholder=input.placeholder;var original=input.dataset.ftgIdPlaceholder;input.placeholder=UI_LANGUAGE==='en'?(LANGUAGE_EN[original]||original):original;});document.documentElement.lang=UI_LANGUAGE;}finally{LANGUAGE_BUSY=false;}}
+  function mountLanguageControl(){var header=$('main header')||$('header');if(!header||byId('ftgLanguageControl'))return;var label=document.createElement('label');label.className='ftg-language-control';label.innerHTML='<i class="fa-solid fa-language"></i><select id="ftgLanguageControl" aria-label="Bahasa / Language"><option value="id">ID</option><option value="en">EN</option></select>';var actions=$('.ftg-header-actions',header)||header.lastElementChild||header;actions.insertBefore(label,actions.firstChild);var select=$('#ftgLanguageControl',label);select.value=UI_LANGUAGE;select.addEventListener('change',function(){UI_LANGUAGE=select.value;localStorage.setItem('ftg-language',UI_LANGUAGE);applyLanguage(document);toast(UI_LANGUAGE==='en'?'Language changed to English':'Bahasa diubah ke Indonesia','🌐');});applyLanguage(document);if(!document.body.getAttribute('data-ftg-language-watch')){document.body.setAttribute('data-ftg-language-watch','1');new MutationObserver(function(records){if(UI_LANGUAGE!=='en'||LANGUAGE_BUSY)return;records.forEach(function(record){record.addedNodes.forEach(function(added){if(added.nodeType===1)applyLanguage(added);});});}).observe(document.body,{childList:true,subtree:true});}}
+
   function wireGlobalUX() {
     if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');
     document.addEventListener('click',function(event){var button=event.target.closest&&event.target.closest('button,input[type="submit"]');if(!button||button.disabled)return;USER_ACTION_CONTEXT={at:Date.now(),label:(button.textContent||button.value||button.getAttribute('aria-label')||'perubahan').trim(),button:button};},true);
@@ -5199,7 +5241,7 @@
       else if (PAGE.indexOf('assignment-submission') === 0) initAssignment();
       else if (/^(mentor-dashboard|mentor-mentee|mentor-review)/.test(PAGE)) initMentorDashboard();
       else if (PAGE.indexOf('mentor-feedback') === 0) initMentorFeedback();
-      else if (PAGE.indexOf('kpi-leaderboard') === 0) initLeaderboardLive();
+      else if (PAGE.indexOf('kpi-leaderboard') === 0) initRealLeaderboard();
       else if (PAGE.indexOf('workshop-library') === 0) initWorkshopLibrary();
       else if (PAGE.indexOf('progress-tracker') === 0) initProgressTracker();
       else if (PAGE.indexOf('closing-ceremony') === 0) initClosing();
@@ -5216,12 +5258,12 @@
     try { mountMentorOperations(); mountMentorLearningMonitor(); } catch (e) { console.warn(e); }
     try { mountMentorGooglePanel(); } catch (e) { console.warn(e); }
     try { mountAdminOperations(); } catch (e) { console.warn(e); }
-    try { mountMenteeProgramSuite(); } catch (e) { console.warn(e); }
+    try { mountMenteeProgramSuite(); mountUpcomingEvents(); } catch (e) { console.warn(e); }
     try { mountMenteeAnnouncementBoard(); } catch (e) { console.warn(e); }
     try { mountAdminDiscipline(); } catch (e) { reportError(e); }
     try { mountSecureAccountAdmin(); } catch (e) { reportError(e); }
     try { mountAdminInsights(); } catch (e) { reportError(e); }
-    try { wireGlobalUX(); mountProfileControl(); mountOnboarding(); } catch (e) { reportError(e); }
+    try { wireGlobalUX(); mountProfileControl(); mountLanguageControl(); mountOnboarding(); } catch (e) { reportError(e); }
     try { if (PAGE.indexOf('assignment-submission') === 0) insertAssignmentSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('mentor-feedback') === 0) insertFeedbackSide(); } catch (e) { console.warn(e); }
     try { if (PAGE.indexOf('progress-tracker') === 0) { unlockDefinerBadges(); insertPrintButton(); insertTargetsCard(); } } catch (e) { console.warn(e); }
