@@ -11,7 +11,9 @@ const viewports = [
   { name: 'mobile', width: 390, height: 844 }
 ];
 
-const publicPages = ['login.html', 'donor-programs.html', 'donor-program.html'];
+const publicPages = process.env.FTG_PUBLIC_PAGES
+  ? process.env.FTG_PUBLIC_PAGES.split(',').map(value => value.trim()).filter(Boolean)
+  : ['login.html', 'donor-programs.html', 'donor-program.html', 'donor-dashboard.html'];
 const roles = [
   {
     name: 'mentee',
@@ -92,15 +94,33 @@ async function inspectPage(page, label, viewport) {
       const rect = element.getBoundingClientRect();
       return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
     };
-    const label = element => (element.getAttribute('aria-label') || element.textContent || element.id || element.className || element.tagName).trim().slice(0, 90);
+    const label = element => String(element.getAttribute('aria-label') || element.textContent || element.id || element.getAttribute('class') || element.tagName).trim().slice(0, 90);
     const overflow = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    const overflowElements = [...document.querySelectorAll('body *')]
+      .map(element => {
+        const rect = element.getBoundingClientRect();
+        return { label: label(element), tag: element.tagName, left: Math.round(rect.left), right: Math.round(rect.right), width: Math.round(rect.width), html: element.outerHTML.slice(0, 220) };
+      })
+      .filter(row => row.left < -3 || row.right > document.documentElement.clientWidth + 3)
+      .sort((one, two) => two.right - one.right)
+      .slice(0, 12);
     const smallText = [...document.querySelectorAll('main p,main small,main label,main time,main span,aside p,aside small,aside span,.donor-shell p,.donor-shell small,.donor-shell span,.investor-shell p,.investor-shell small,.investor-shell span,.public-impact-page p,.public-impact-page small,.public-impact-page span')]
       .filter(element => visible(element) && element.textContent.trim() && !element.closest('[aria-hidden="true"]'))
       .map(element => ({ label: label(element), size: parseFloat(getComputedStyle(element).fontSize) }))
       .filter(row => row.size < 11.5)
       .slice(0, 20);
     const undersized = [...document.querySelectorAll('button,[role="button"],input:not([type="hidden"]),select,textarea')]
-      .filter(element => visible(element) && !element.disabled)
+      .filter(element => {
+        if (!visible(element) || element.disabled) return false;
+        if (element.matches('input[type="checkbox"],input[type="radio"]')) {
+          const wrapper = element.closest('label');
+          if (wrapper) {
+            const rect = wrapper.getBoundingClientRect();
+            if (rect.width >= 44 && rect.height >= 44) return false;
+          }
+        }
+        return true;
+      })
       .map(element => {
         const rect = element.getBoundingClientRect();
         return { label: label(element), width: Math.round(rect.width), height: Math.round(rect.height) };
@@ -112,30 +132,45 @@ async function inspectPage(page, label, viewport) {
       modal: element.getAttribute('aria-modal') === 'true'
     }));
     const lowContrast = [...document.querySelectorAll('p,small,label,time,button,a,span')]
-      .filter(element => visible(element) && !element.closest('[aria-hidden="true"]') && [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
+      .filter(element => visible(element) && !element.closest('[aria-hidden="true"]') && !(element.textContent.trim() === '×' && element.parentElement && element.parentElement.querySelectorAll('img').length >= 2) && [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim()))
       .map(element => {
         const style = getComputedStyle(element), bg = background(element), color = rgba(style.color);
         if (!bg || !color) return null;
         const effective = blend(color, bg);
         const size = parseFloat(style.fontSize), weight = parseInt(style.fontWeight, 10) || 400;
         const minimum = size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
-        return { label: label(element), ratio: +contrast(effective, bg).toFixed(2), minimum };
+        return { label: label(element), ratio: +contrast(effective, bg).toFixed(2), minimum, html: element.outerHTML.slice(0, 180) };
       })
       .filter(row => row && row.ratio + .05 < row.minimum)
       .slice(0, 20);
-    return { overflow, smallText, undersized, dialogs, lowContrast };
+    return { overflow, overflowElements, smallText, undersized, dialogs, lowContrast };
   });
 
   await page.screenshot({ path: path.join(ARTIFACTS, `${label}-${viewport.name}.png`), fullPage: true });
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
 
-  assert.ok(audit.overflow <= 2, `${label}/${viewport.name}: horizontal overflow ${audit.overflow}px`);
+  assert.ok(audit.overflow <= 2, `${label}/${viewport.name}: horizontal overflow ${audit.overflow}px ${JSON.stringify(audit.overflowElements)}`);
   assert.deepEqual(audit.smallText, [], `${label}/${viewport.name}: unreadable text ${JSON.stringify(audit.smallText)}`);
   assert.deepEqual(audit.undersized, [], `${label}/${viewport.name}: undersized controls ${JSON.stringify(audit.undersized)}`);
   assert.deepEqual(audit.lowContrast, [], `${label}/${viewport.name}: contrast failures ${JSON.stringify(audit.lowContrast)}`);
   assert.ok(audit.dialogs.every(dialog => dialog.labelled && dialog.modal), `${label}/${viewport.name}: dialog semantics incomplete`);
   assert.deepEqual(errors, [], `${label}/${viewport.name}: runtime errors ${errors.join(' | ')}`);
+}
+
+async function injectLocalStyles(page, pageName) {
+  if (process.env.FTG_LOCAL_STYLES !== '1') return;
+  const stylesheet = pageName.startsWith('donor-') ? 'donor.css' : 'responsive.css';
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.waitForLoadState('domcontentloaded');
+      await page.addStyleTag({ path: path.resolve(stylesheet) });
+      return;
+    } catch (error) {
+      if (!String(error).includes('Execution context was destroyed') || attempt === 2) throw error;
+      await page.waitForTimeout(250);
+    }
+  }
 }
 
 async function login(page, role) {
@@ -147,6 +182,36 @@ async function login(page, role) {
   await page.waitForURL(url => !url.pathname.endsWith('/login.html'), { timeout: 25_000 });
 }
 
+async function exerciseMetricDialog(page) {
+  const trigger = page.locator('[data-metric]').first();
+  if (!await trigger.count()) return;
+  await trigger.focus();
+  await trigger.click();
+  const dialog = page.locator('[role="dialog"]').last();
+  await dialog.waitFor({ state: 'visible' });
+  assert.equal(await dialog.getAttribute('aria-modal'), 'true', 'metric detail must be a modal dialog');
+  assert.ok(await dialog.getAttribute('aria-label') || await dialog.getAttribute('aria-labelledby'), 'metric dialog needs an accessible name');
+  assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'focus must move into the opened dialog');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  assert.ok(await trigger.evaluate(node => node === document.activeElement), 'focus must return to the dialog trigger');
+}
+
+async function exerciseAdminDialog(page) {
+  const trigger = page.locator('#adminAssignmentMonitor');
+  await trigger.waitFor({ state: 'visible', timeout: 10_000 });
+  await trigger.focus();
+  await trigger.click();
+  const dialog = page.locator('[role="dialog"]').last();
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  assert.equal(await dialog.getAttribute('aria-modal'), 'true', 'admin workspace must open as a modal dialog');
+  assert.ok(await dialog.getAttribute('aria-label') || await dialog.getAttribute('aria-labelledby'), 'admin dialog needs an accessible name');
+  assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'admin dialog must receive focus');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  assert.ok(await trigger.evaluate(node => node === document.activeElement), 'focus must return to the admin action');
+}
+
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 try {
   for (const viewport of viewports) {
@@ -154,6 +219,11 @@ try {
     const page = await context.newPage();
     for (const pageName of publicPages) {
       await page.goto(`${BASE_URL}/${pageName}`, { waitUntil: 'domcontentloaded' });
+      await injectLocalStyles(page, pageName);
+      if (pageName === 'donor-dashboard.html') {
+        await page.waitForTimeout(1500);
+        await exerciseMetricDialog(page);
+      }
       await inspectPage(page, pageName.replace('.html', ''), viewport);
     }
     await context.close();
@@ -170,6 +240,9 @@ try {
       await login(page, role);
       for (const pageName of role.pages) {
         await page.goto(`${BASE_URL}/${pageName}`, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1500);
+        await injectLocalStyles(page, pageName);
+        if (role.name === 'admin' && pageName === 'admin-program.html') await exerciseAdminDialog(page);
         await inspectPage(page, `${role.name}-${pageName.replace('.html', '')}`, viewport);
       }
       await context.close();

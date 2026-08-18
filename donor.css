@@ -43,11 +43,20 @@ img,video,iframe,svg{max-width:100%}
 p,small,label,time,dt,dd,figcaption,.donor-shell span,.investor-shell span,.public-impact-page span{font-size:max(12px,.75rem)!important;line-height:1.5}
 button,input,select,textarea,a{font-size:max(13px,.8125rem)!important}
 button{min-width:44px}
+select{min-width:44px}
 button,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),select,.public-button,.donor-button,.investor-tabs a{min-height:44px}
 button,.public-button,.donor-button{display:inline-flex;align-items:center;justify-content:center}
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--investor-focus)!important;outline-offset:3px!important}
 ::placeholder{color:#64748b!important;opacity:1}
 .public-button.is-orange,.donor-button.is-orange{background:#c2410c!important;color:#fff!important}
+.public-button.is-donate{background:#c2410c!important;color:#fff!important}
+.donor-brand>span,.donor-language button{color:#475569!important}
+.donor-eyebrow{color:#c2410c!important}
+.donor-badge.is-verified{color:#166534!important;background:#dcfce7!important}
+.donor-badge.is-draft{color:#78350f!important;background:#fef3c7!important;border-color:#f59e0b!important}
+.investor-tabs a{color:#52616e!important}
+.trust-empty,.trust-empty span{color:#475569!important}
+.investor-principles>div:first-child>span{color:#fdba74!important}
 .donor-sroi-box,.donor-big-ratio{background:linear-gradient(135deg,#6734d7,#7c3aed)!important}
 .trust-target{min-height:44px}
 .trust-target:hover{transform:none;box-shadow:0 8px 24px #102b3c12}
