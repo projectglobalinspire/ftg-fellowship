@@ -572,7 +572,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   assert.match(await text('admin-program.html'), /app\.js\?v=67/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=60/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=61/);
   assert.match(await text('admin-dashboard.html'), /app\.js\?v=67/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
@@ -665,6 +665,9 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(app, /PAGE\.indexOf\('mentee-dashboard'\) !== 0 \|\| myRole\(\) !== 'mentee'/);
   assert.match(app, /id='adminAnnouncements'/);
   assert.match(css, /\.ftg-mentee-announcement/);
+  assert.match(css, /grid-template-columns:minmax\(0,1fr\) 250px;height:250px/);
+  assert.match(css, /\.ftg-mentee-announcement-poster img\{width:100%;height:100%;object-fit:contain/);
+  assert.match(css, /\.ftg-mentee-announcement\{grid-template-columns:1fr;height:auto\}/);
   assert.match(css, /#announcementForm\{display:flex/);
   assert.match(css, /\.ftg-announcement-actions\{order:-3;position:sticky/);
   assert.match(css, /\.ftg-track-manager/);
