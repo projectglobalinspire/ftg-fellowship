@@ -19,7 +19,7 @@ const roles = [
     name: 'mentee',
     email: process.env.FTG_MENTEE_EMAIL,
     password: process.env.FTG_MENTEE_PASSWORD,
-    pages: ['mentee-dashboard.html', 'assignment-submission.html', 'design-thinking-module.html', 'workshop-library.html']
+    pages: ['mentee-dashboard.html', 'assignment-submission.html', 'design-thinking-module.html', 'workshop-library.html', 'progress-tracker.html', 'jurnal.html', 'mentor-feedback.html', 'kpi-leaderboard.html']
   },
   {
     name: 'mentor',
@@ -31,7 +31,7 @@ const roles = [
     name: 'admin',
     email: process.env.FTG_ADMIN_EMAIL,
     password: process.env.FTG_ADMIN_PASSWORD,
-    pages: ['admin-dashboard.html', 'admin-program.html', 'admin-akun.html']
+    pages: ['admin-dashboard.html', 'admin-program.html', 'admin-akun.html', 'kpi-leaderboard.html']
   }
 ];
 
@@ -173,6 +173,14 @@ async function injectLocalStyles(page, pageName) {
   }
 }
 
+async function installLocalAssets(page) {
+  if (process.env.FTG_LOCAL_ASSETS !== '1') return;
+  const app = await fs.readFile(path.resolve('app.js'), 'utf8');
+  const responsive = await fs.readFile(path.resolve('responsive.css'), 'utf8');
+  await page.route('**/app.js*', route => route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: app }));
+  await page.route('**/responsive.css*', route => route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', body: responsive }));
+}
+
 async function login(page, role) {
   await page.goto(`${BASE_URL}/login.html#role=${role.name}`, { waitUntil: 'domcontentloaded' });
   if (role.name === 'mentor') await page.locator('#tabMentor').click();
@@ -251,11 +259,46 @@ async function exerciseAdminCalendar(page) {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+const languageExpectations = {
+  'admin-dashboard.html': [['Monitoring Program','Program Monitoring'],['Mentee Online Sekarang','Mentees Online Now'],['Aktivitas Program','Program Activity']],
+  'admin-program.html': [['Pusat Operasi Program','Program Operations Center'],['Operasional program tanpa berpindah dashboard','Run the program from one dashboard'],['Pembelajaran','Learning'],['Kegiatan & peserta','Activities & participants']],
+  'admin-akun.html': [['Semua Akun','All Accounts'],['Ringkasan Peran','Role Summary'],['Cara Kerja Akun','How Accounts Work']],
+  'mentee-dashboard.html': [['Tantangan Minggu Ini','This Week’s Challenges'],['Mentor Kamu','Your Mentor'],['Lanjut Belajar','Continue Learning']],
+  'assignment-submission.html': [['Instruksi Tugas:','Assignment Instructions:'],['Riwayat Pengiriman','Submission History'],['Simpan Draft','Save Draft']],
+  'design-thinking-module.html': [['Perjalanan 4 Minggu','Four-Week Journey'],['Simpan Progres','Save Progress'],['Apa yang perlu dikumpulkan:','What to submit:']],
+  'workshop-library.html': [['Semua peserta hadir workshop yang sama','All participants attend the same workshop'],['Mulai Pre-Work','Start Pre-Work']],
+  'progress-tracker.html': [['Keseluruhan Program (3 Bulan)','Overall Program (3 Months)'],['Stats Minggu Ini','This Week’s Stats']],
+  'mentor-dashboard.html': [['Antrian Review','Review Queue'],['Aksi Cepat','Quick Actions'],['Kirim Pesan Grup','Send Group Message']],
+  'mentor-mentee.html': [['Kirim Pesan Grup','Send Group Message'],['Perlu perhatian','Needs attention']],
+  'mentor-review.html': [['Ringkasan Review','Review Summary'],['Panduan Menilai','Assessment Guide'],['Bobot Penilaian','Assessment Weights']],
+  'mentor-feedback.html': [['Rangkuman Penilaian','Assessment Summary'],['Yang Perlu Diperbaiki:','Areas to Improve:']],
+  'kpi-leaderboard.html': [['Bagaimana KPI Dihitung?','How Is KPI Calculated?'],['Posisi kamu saat ini','Your current position']]
+};
+
+async function auditLanguageRoundTrip(page, pageName) {
+  const expected = languageExpectations[pageName];
+  if (!expected) return;
+  const control = page.locator('#ftgLanguageControl');
+  await control.waitFor({ state: 'visible', timeout: 15_000 });
+  await control.selectOption('en');
+  await page.waitForTimeout(250);
+  let bodyText = await page.locator('body').innerText();
+  for (const [indonesian, english] of expected) {
+    assert.ok(bodyText.includes(english), `${pageName}: English UI is missing "${english}"`);
+    assert.ok(!bodyText.includes(indonesian), `${pageName}: Indonesian UI remained after switching to English: "${indonesian}"`);
+  }
+  await control.selectOption('id');
+  await page.waitForTimeout(250);
+  bodyText = await page.locator('body').innerText();
+  for (const [indonesian] of expected) assert.ok(bodyText.includes(indonesian), `${pageName}: Indonesian UI did not restore "${indonesian}"`);
+}
+
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
 try {
   for (const viewport of viewports) {
     const context = await browser.newContext({ viewport });
     const page = await context.newPage();
+    await installLocalAssets(page);
     for (const pageName of publicPages) {
       await page.goto(`${BASE_URL}/${pageName}`, { waitUntil: 'domcontentloaded' });
       await injectLocalStyles(page, pageName);
@@ -276,6 +319,7 @@ try {
     for (const viewport of viewports) {
       const context = await browser.newContext({ viewport });
       const page = await context.newPage();
+      await installLocalAssets(page);
       await login(page, role);
       for (const pageName of role.pages) {
         await page.goto(`${BASE_URL}/${pageName}`, { waitUntil: 'domcontentloaded' });
@@ -286,6 +330,7 @@ try {
           await exerciseAdminDialog(page);
           await exerciseAdminCalendar(page);
         }
+        await auditLanguageRoundTrip(page, pageName);
         await inspectPage(page, `${role.name}-${pageName.replace('.html', '')}`, viewport);
       }
       await context.close();
