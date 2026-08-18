@@ -1305,37 +1305,102 @@
     LAST_TOAST={message:msg,at:Date.now()};
     if (!toastWrap) {
       toastWrap = document.createElement('div');
-      toastWrap.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end;';
+      toastWrap.className = 'ftg-toast-wrap';
+      toastWrap.setAttribute('aria-live', 'polite');
+      toastWrap.setAttribute('aria-relevant', 'additions');
+      toastWrap.setAttribute('aria-atomic', 'false');
       document.body.appendChild(toastWrap);
     }
     var el = document.createElement('div');
-    el.style.cssText = 'background:#2c3e50;color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;max-width:min(340px,calc(100vw - 32px));opacity:0;transform:translateY(10px);transition:all .25s ease;';
-    el.innerHTML = '<span style="font-size:16px">' + (icon || '✅') + '</span><span>' + esc(msg) + '</span>';
+    var isError = /⚠|❌|error|gagal|tidak berhasil|terputus|berakhir/i.test(String(icon || '') + ' ' + msg);
+    el.className = 'ftg-toast' + (isError ? ' is-error' : '');
+    el.setAttribute('role', isError ? 'alert' : 'status');
+    el.innerHTML = '<span class="ftg-toast-icon" aria-hidden="true">' + (icon || '✅') + '</span><span class="ftg-toast-message">' + esc(msg) + '</span><button type="button" class="ftg-toast-close" aria-label="Tutup notifikasi"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>';
     toastWrap.appendChild(el);
+    var removeTimer;
+    function removeToast() {
+      clearTimeout(removeTimer);
+      el.classList.add('is-leaving');
+      setTimeout(function () { el.remove(); }, 260);
+    }
+    $('.ftg-toast-close', el).addEventListener('click', removeToast);
     requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
-    setTimeout(function () {
-      el.style.opacity = '0'; el.style.transform = 'translateY(10px)';
-      setTimeout(function () { el.remove(); }, 300);
-    }, 3200);
+    removeTimer = setTimeout(removeToast, isError ? 8000 : 5000);
   }
 
   /* ---------- Modal ---------- */
+  var MODAL_STACK = [];
+  function syncModalLayers() {
+    var top = MODAL_STACK.length ? MODAL_STACK[MODAL_STACK.length - 1] : null;
+    $all('.ftg-modal-ov').forEach(function (overlay) {
+      var active = top && top.overlay === overlay;
+      overlay.toggleAttribute('inert', !active);
+      overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
+    });
+    $all('body > :not(.ftg-modal-ov):not(.ftg-toast-wrap):not(.ftg-operation-loading)').forEach(function (node) {
+      node.toggleAttribute('inert', !!top);
+    });
+    document.body.classList.toggle('ftg-modal-open', !!top);
+  }
   function modal(html, onMount) {
+    var opener = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     var ov = document.createElement('div');
     ov.className = 'ftg-modal-ov';
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);';
     var box = document.createElement('div');
     box.className = 'ftg-modal-box';
     box.style.cssText = 'background:#fff;border-radius:20px;max-width:480px;width:100%;padding:26px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto;';
-    box.innerHTML = html;
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('tabindex', '-1');
+    var content = document.createElement('div');
+    content.className = 'ftg-modal-content';
+    content.innerHTML = html;
     var modalClose = document.createElement('button');
     modalClose.type = 'button';
     modalClose.className = 'ftg-modal-close';
     modalClose.setAttribute('aria-label', 'Tutup dialog');
     modalClose.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-    box.insertBefore(modalClose, box.firstChild);
+    var toolbar = document.createElement('div');
+    toolbar.className = 'ftg-modal-toolbar';
+    toolbar.appendChild(modalClose);
+    box.appendChild(toolbar);
+    box.appendChild(content);
+    var heading = $('h1,h2,h3,h4', content);
+    if (heading) {
+      if (!heading.id) heading.id = 'ftg-modal-title-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+      box.setAttribute('aria-labelledby', heading.id);
+    } else box.setAttribute('aria-label', 'Dialog FTG Fellowship');
     ov.appendChild(box);
+    var closed = false, detached = false;
+    var record = { overlay: ov, box: box, opener: opener };
+    function focusables() {
+      return $all('a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])', box).filter(function (el) {
+        return !el.hidden && el.getAttribute('aria-hidden') !== 'true' && (el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+      });
+    }
+    function cleanupLayer(restoreFocus) {
+      var index = MODAL_STACK.indexOf(record);
+      if (index >= 0) MODAL_STACK.splice(index, 1);
+      document.removeEventListener('keydown', onKeydown, true);
+      syncModalLayers();
+      if (restoreFocus && opener && document.contains(opener) && typeof opener.focus === 'function') setTimeout(function () { opener.focus(); }, 0);
+    }
+    function onKeydown(event) {
+      if (!MODAL_STACK.length || MODAL_STACK[MODAL_STACK.length - 1] !== record) return;
+      if (event.key === 'Escape') { event.preventDefault(); shut(); return; }
+      if (event.key !== 'Tab') return;
+      var items = focusables();
+      if (!items.length) { event.preventDefault(); box.focus(); return; }
+      var first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
     function shut() {
+      if (closed) return;
+      closed = true;
+      cleanupLayer(true);
+      if (detached) { box.remove(); return; }
       ov.style.transition = 'opacity .18s ease';
       box.style.transition = 'transform .18s ease, opacity .18s ease';
       ov.style.opacity = '0';
@@ -1343,14 +1408,27 @@
       box.style.opacity = '0';
       setTimeout(function () { box.remove(); ov.remove(); }, 190);
     }
+    function detach() {
+      if (detached || closed) return;
+      detached = true;
+      cleanupLayer(false);
+      ov.remove();
+    }
     ov.addEventListener('click', function (e) { if (e.target === ov) shut(); });
     modalClose.addEventListener('click', shut);
     document.body.appendChild(ov);
+    MODAL_STACK.push(record);
+    document.addEventListener('keydown', onKeydown, true);
+    syncModalLayers();
     var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box);
     if(eventStart&&!eventStart.value){var nextHour=new Date();nextHour.setMinutes(0,0,0);nextHour.setHours(nextHour.getHours()+1);eventStart.value=localDateTimeValue(nextHour);if(eventEnd&&!eventEnd.value)eventEnd.value=localDateTimeValue(new Date(nextHour.getTime()+3600000));eventStart.setAttribute('aria-label','Tanggal dan jam mulai');if(eventEnd)eventEnd.setAttribute('aria-label','Tanggal dan jam selesai');eventStart.addEventListener('change',function(){var selected=new Date(eventStart.value);if(eventEnd&&!isNaN(selected))eventEnd.value=localDateTimeValue(new Date(selected.getTime()+3600000));});}
     if (onMount) onMount(box, shut);
     if(typeof applyLanguage==='function')applyLanguage(box);
-    return { close: shut, box: box, overlay: ov };
+    requestAnimationFrame(function () {
+      var initial = $('[autofocus]', box) || focusables().filter(function (el) { return !el.classList.contains('ftg-modal-close'); })[0] || modalClose;
+      if (initial && typeof initial.focus === 'function') initial.focus(); else box.focus();
+    });
+    return { close: shut, detach: detach, box: box, content: content, overlay: ov };
   }
 
   /* ---------- Sidebar navigation wiring ---------- */
@@ -2991,7 +3069,8 @@
     view.box.classList.add('ftg-inline-task-box');
     view.box.removeAttribute('style');
     workspace.appendChild(view.box);
-    if (view.overlay) view.overlay.remove();
+    if (view.detach) view.detach();
+    else if (view.overlay) view.overlay.remove();
     left.insertBefore(workspace, left.firstChild);
     function restore() {
       builtIn.forEach(function (section) { section.style.display = ''; });
@@ -4656,13 +4735,20 @@
   function operationLoader(title, detail) {
     var previous = document.querySelector('.ftg-operation-loading');
     if (previous) previous.remove();
+    var busyTarget = $('main') || document.body;
+    var previousBusy = busyTarget.getAttribute('aria-busy');
     var overlay = document.createElement('div');
     overlay.className = 'ftg-operation-loading';
-    overlay.setAttribute('role', 'status'); overlay.setAttribute('aria-live', 'polite');
+    overlay.setAttribute('role', 'status'); overlay.setAttribute('aria-live', 'polite'); overlay.setAttribute('aria-atomic', 'true');
     overlay.innerHTML = '<div class="ftg-operation-loading-card"><span class="ftg-operation-spinner"><i></i><i></i><i></i></span><b>' + esc(title || 'Menyiapkan data') + '</b><small>' + esc(detail || 'Mengambil data terbaru dengan aman…') + '</small><span class="ftg-operation-progress"><i></i></span></div>';
+    busyTarget.setAttribute('aria-busy', 'true');
     document.body.appendChild(overlay);
     requestAnimationFrame(function () { overlay.classList.add('is-visible'); });
-    return function () { overlay.classList.remove('is-visible'); setTimeout(function () { overlay.remove(); }, 180); };
+    return function () {
+      overlay.classList.remove('is-visible');
+      if (previousBusy === null) busyTarget.removeAttribute('aria-busy'); else busyTarget.setAttribute('aria-busy', previousBusy);
+      setTimeout(function () { overlay.remove(); }, 180);
+    };
   }
   function accountLoadingSkeleton() {
     return '<div class="ftg-account-skeleton" aria-label="Memuat daftar akun">' + [1,2,3,4,5,6].map(function () { return '<div><i></i><span><b></b><small></small></span><em></em><em></em></div>'; }).join('') + '</div>';

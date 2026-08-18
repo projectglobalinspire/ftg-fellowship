@@ -4,12 +4,17 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/smoke.mjs",
-    "check": "node --check app.js && node --test tests/smoke.mjs"
+    "check": "node --check app.js && node --check donor.js && node --test tests/smoke.mjs",
+    "test:browser": "node tests/browser.mjs",
+    "qa": "npm run check && npm run test:browser"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "nodemailer": "^9.0.5"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   }
 }

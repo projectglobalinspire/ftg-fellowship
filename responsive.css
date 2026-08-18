@@ -690,3 +690,153 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
 @media(max-width:780px){.ftg-modal-box:has(.ftg-announcement-admin){width:calc(100vw - 20px)!important;padding:18px!important}.ftg-announcement-admin-layout{grid-template-columns:1fr}.ftg-announcement-admin-layout>aside{position:static}.ftg-announcement-admin-layout>aside #announcementList{grid-template-columns:repeat(2,minmax(0,1fr));max-height:210px}.ftg-announcement-actions{margin:12px -16px -16px}.ftg-mentee-announcement{grid-template-columns:1fr;height:auto}.ftg-mentee-announcement-poster{width:100%;height:220px;max-height:220px;order:-1;border-left:0;border-bottom:1px solid rgba(255,255,255,.16)}.ftg-mentee-announcement-copy{padding:20px}.ftg-announcement-progress{right:0}.ftg-announcement-kicker>span{display:none}}
 @media(max-width:520px){.ftg-announcement-admin-head{align-items:flex-start;flex-direction:column}.ftg-announcement-admin-head .ftg-suite-primary{width:100%}.ftg-announcement-admin-layout>aside #announcementList{grid-template-columns:1fr}.ftg-announcement-poster{grid-template-columns:1fr}.ftg-announcement-poster>div{width:100%;height:170px;grid-row:auto}.ftg-announcement-actions{flex-wrap:wrap}.ftg-announcement-actions .is-danger{width:100%;margin:0}.ftg-announcement-actions .ftg-suite-primary{width:100%}.ftg-announcement-controls [data-announcement-next] span{display:none}.ftg-mentee-announcement-copy h2{font-size:18px}}
 @media(prefers-reduced-motion:reduce){.ftg-mentee-announcement-copy,.ftg-mentee-announcement-poster,.ftg-mentee-announcement-art{transition:none}.ftg-announcement-progress i{animation:none;transform:scaleX(1)}}
+
+/* ================================================================
+   Anti-slop remediation 001: readable, reachable, resilient UI
+   Shared primitives live here so role dashboards stop patching each
+   dialog independently.
+   ================================================================ */
+:root{
+  --ftg-text:#1e3347;
+  --ftg-muted:#58687a;
+  --ftg-muted-soft:#64748b;
+  --ftg-orange-accessible:#c2410c;
+  --ftg-purple-accessible:#7c3aed;
+  --ftg-control-height:44px;
+  --ftg-focus:#0369a1;
+}
+
+/* Modal primitive: a real toolbar in document flow, no floating close
+   control and no negative margins that can cover headings or actions. */
+body.ftg-modal-open{overflow:hidden!important}
+.ftg-modal-ov{box-sizing:border-box;overflow:auto;overscroll-behavior:contain}
+.ftg-modal-box{
+  display:flex;
+  flex-direction:column;
+  width:min(680px,calc(100vw - 32px))!important;
+  max-width:min(680px,calc(100vw - 32px))!important;
+  max-height:min(90dvh,920px)!important;
+  padding:0!important;
+  overflow:hidden!important;
+}
+.ftg-modal-box-wide{width:min(920px,calc(100vw - 32px))!important;max-width:min(920px,calc(100vw - 32px))!important}
+.ftg-track-manager-dialog{width:min(820px,calc(100vw - 32px))!important;max-width:min(820px,calc(100vw - 32px))!important}
+.ftg-modal-box:has(.ftg-announcement-admin){width:min(1040px,calc(100vw - 32px))!important;max-width:min(1040px,calc(100vw - 32px))!important}
+.ftg-modal-box:has(.ftg-recording-admin-head){width:min(900px,calc(100vw - 32px))!important;max-width:min(900px,calc(100vw - 32px))!important}
+.ftg-modal-toolbar{
+  position:sticky;
+  top:0;
+  z-index:30;
+  display:flex;
+  flex:0 0 auto;
+  justify-content:flex-end;
+  min-height:56px;
+  padding:8px 12px 4px;
+  border-bottom:1px solid #edf2f7;
+  background:#fff;
+}
+.ftg-modal-close{
+  position:static!important;
+  float:none!important;
+  width:44px!important;
+  height:44px!important;
+  min-width:44px!important;
+  min-height:44px!important;
+  margin:0!important;
+  border-radius:10px;
+  box-shadow:none;
+}
+.ftg-modal-content{
+  min-width:0;
+  padding:20px 24px 24px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.ftg-modal-content>*{min-width:0;max-width:100%}
+.ftg-modal-content h1,.ftg-modal-content h2,.ftg-modal-content h3,.ftg-modal-content h4{overflow-wrap:anywhere}
+.ftg-inline-task-box{display:block!important;max-height:none!important;overflow:visible!important}
+.ftg-inline-task-box .ftg-modal-toolbar{display:none}
+.ftg-inline-task-box .ftg-modal-content{padding:0;overflow:visible}
+
+/* One notification primitive, readable and announced by assistive tech. */
+.ftg-toast-wrap{position:fixed;right:20px;bottom:20px;z-index:130000;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none}
+.ftg-toast{display:grid;grid-template-columns:24px minmax(0,1fr) 44px;align-items:center;gap:10px;width:min(440px,calc(100vw - 32px));min-height:56px;padding:8px 8px 8px 14px;border:1px solid #365267;border-radius:12px;background:#263b4d;color:#fff;font-size:13px;font-weight:650;line-height:1.45;box-shadow:0 14px 34px rgba(15,23,42,.28);opacity:0;transform:translateY(10px);transition:opacity .24s ease,transform .24s ease;pointer-events:auto}
+.ftg-toast.is-error{border-color:#fecaca;background:#7f1d1d}
+.ftg-toast.is-leaving{opacity:0!important;transform:translateY(8px)!important}
+.ftg-toast-icon{font-size:18px;text-align:center}.ftg-toast-message{min-width:0;overflow-wrap:anywhere}
+.ftg-toast-close{width:44px;height:44px;min-width:44px;border:0;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+
+/* Reachability: every real control has a thumb-sized hit area. */
+button{min-width:44px}
+button,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),select{min-height:var(--ftg-control-height)}
+aside nav a,.ftg-suite-primary,.ftg-suite-secondary,.ftg-suite-danger,.ftg-action-primary,.ftg-action-secondary,.ftg-photo-button,.donor-button,.public-button{min-height:var(--ftg-control-height)!important;display:inline-flex;align-items:center;justify-content:center}
+input[type="checkbox"],input[type="radio"]{width:20px!important;height:20px!important;min-width:20px;accent-color:#176b57}
+label:has(>input[type="checkbox"]),label:has(>input[type="radio"]){min-height:44px;align-items:center}
+.ftg-inline-task-toolbar button,.ftg-donor-access button,.trust-modal-close,.donor-stars button{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+.ftg-deadline-preset{min-height:44px;padding:9px 13px;font-size:13px}
+.ftg-announcement-controls>button{height:44px!important;min-height:44px!important;font-size:12px!important;padding:0 13px!important}
+.ftg-announcement-controls>button:first-child{width:44px!important}
+.ftg-announcement-dots [data-announcement-slide]{position:relative;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;background:transparent!important}
+.ftg-announcement-dots [data-announcement-slide]::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:999px;background:rgba(255,255,255,.45);transform:translate(-50%,-50%);transition:width .2s ease,background .2s ease}
+.ftg-announcement-dots [data-announcement-slide].is-active::after{width:24px;background:#fdba74}
+
+/* Legibility and contrast. Metadata stays subordinate through weight and
+   spacing, not through unreadable 7-10px text. */
+main p,main small,main label,main time,main figcaption,main dd,main dt,main span,
+aside p,aside small,aside label,aside time,aside span,
+.ftg-modal-box p,.ftg-modal-box small,.ftg-modal-box label,.ftg-modal-box time,
+.donor-shell p,.donor-shell small,.donor-shell label,.donor-shell time,.investor-shell p,.investor-shell small,.investor-shell label,.investor-shell time{font-size:max(12px,.75rem)!important;line-height:1.5}
+main button,main input,main select,main textarea,main a,aside button,aside a,
+.ftg-modal-box button,.ftg-modal-box input,.ftg-modal-box select,.ftg-modal-box textarea,
+.donor-shell button,.donor-shell input,.donor-shell select,.donor-shell textarea,.donor-shell a,
+.investor-shell button,.investor-shell input,.investor-shell select,.investor-shell textarea,.investor-shell a{font-size:max(13px,.8125rem)!important}
+main .text-slate-400,main [class*="text-[#94a3b8]"],.ftg-modal-box [style*="#94a3b8"],.donor-shell [style*="#94a3b8"]{color:var(--ftg-muted)!important}
+main [style*="color:#718096"],.ftg-modal-box [style*="color:#718096"],.donor-shell [style*="color:#708197"]{color:var(--ftg-muted)!important}
+main [class*="text-[#f97316]"]{color:var(--ftg-orange-accessible)!important}
+main [class*="text-[#8b5cf6]"]{color:var(--ftg-purple-accessible)!important}
+aside [class*="text-white/"],main [class*="text-white/"]{color:#dbeafe!important}
+main [class*="bg-[#f97316]"][class*="text-white"],button[style*="background:#f97316"],.donor-button.is-orange{background:var(--ftg-orange-accessible)!important;color:#fff!important}
+main [class*="bg-[#8b5cf6]"][class*="text-white"],button[style*="background:#8b5cf6"]{background:var(--ftg-purple-accessible)!important;color:#fff!important}
+.ftg-welcome-hero.is-mentee{background:linear-gradient(140deg,#9a3412,#c2410c 58%,#b45309)}
+.ftg-announcement-kicker small,.ftg-assignment-monitor-head span,.ftg-workshop-manager-head small,.ftg-workshop-detail>small,.ftg-mail-admin-head small,.ftg-donor-admin-head small{color:#b45309!important}
+::placeholder{color:#64748b!important;opacity:1}
+
+/* Do not hide layout defects at page level. Content reflows; only data
+   tables receive their own horizontal scroll container. */
+body:has(main[data-design-id]){overflow-x:auto}
+main[data-design-id],main[data-design-id]>*{min-width:0;max-width:100%}
+main img,main video,main iframe,.ftg-modal-box img,.donor-shell img,.investor-shell img{max-width:100%;height:auto}
+main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box small,.ftg-modal-box label{overflow-wrap:anywhere}
+.ftg-suite-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.ftg-track-list article{overflow:visible}
+.ftg-track-fields input{white-space:normal}
+
+/* Motion only communicates state. Remove blanket page/card motion while
+   preserving loaders, charts, dialogs and the intentional carousel. */
+@media(prefers-reduced-motion:no-preference){
+  body.ftg-anim main>header,body.ftg-anim main>div>*{animation:none!important}
+  main section,main article{transition:border-color .18s ease,box-shadow .18s ease}
+  main section.shadow-sm:hover,main article.shadow-sm:hover{transform:none!important}
+  aside nav a:hover{padding-left:inherit}
+  main header .relative>span.absolute{animation:none!important}
+}
+
+@media(max-width:780px){
+  .ftg-modal-ov{align-items:flex-end!important;padding:8px!important}
+  .ftg-modal-box,.ftg-modal-box-wide,.ftg-track-manager-dialog,.ftg-modal-box:has(.ftg-announcement-admin){width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;max-height:94dvh!important;border-radius:16px 16px 8px 8px!important}
+  .ftg-modal-toolbar{min-height:52px;padding:6px 8px 2px}
+  .ftg-modal-content{padding:16px}
+  .ftg-suite-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ftg-toast-wrap{right:10px;bottom:calc(10px + env(safe-area-inset-bottom))}
+  .ftg-toast{width:calc(100vw - 20px)}
+  .ftg-mail-compose,.ftg-donor-admin-layout,.ftg-recording-admin-grid,.ftg-canvas-workspace{grid-template-columns:1fr!important}
+  .ftg-mail-preview,.ftg-donor-admin-layout>aside,.ftg-canvas-side{position:static!important}
+}
+@media(max-width:520px){
+  .ftg-suite-grid{grid-template-columns:1fr}
+  .ftg-track-list article{grid-template-columns:1fr!important}
+  .ftg-track-actions{grid-column:1;justify-content:stretch}
+  .ftg-track-actions>*{flex:1;min-height:44px}
+  .ftg-announcement-dots{max-width:100%;overflow-x:auto;scrollbar-width:thin}
+}
