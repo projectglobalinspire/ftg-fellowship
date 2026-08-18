@@ -153,11 +153,26 @@ test('Fasil can open and persist a new assignment without a modal race', async (
   assert.match(monitor, /openAssignmentEditor\(null,function\(\)/);
   assert.doesNotMatch(monitor, /shut\(\);\s*setTimeout\(function\(\)\{\s*openAssignmentEditor/, 'monitor must not close before the child editor opens');
   assert.match(monitor, /create\.setAttribute\('aria-busy','true'\)/);
+  assert.match(monitor, /if\(!editor\|\|!editor\.overlay\|\|!document\.contains\(editor\.overlay\)\)throw new Error/);
   assert.match(monitor, /Assignment editor failed/);
   assert.ok(editorStart > -1 && editorEnd > editorStart, 'assignment editor must exist');
+  assert.match(editor, /return modal\(/, 'assignment editor must return its mounted modal handle');
+  assert.match(editor, /availableMentees = menteeIds\(\)\.filter/);
   assert.match(editor, /structuredAssignmentSave\(candidate, true\)\.then/);
   assert.ok(editor.indexOf('structuredAssignmentSave(candidate, true)') < editor.indexOf('close();'), 'server save must finish before closing the editor');
   assert.match(editor, /Assignment save failed/);
+});
+
+test('failed and stacked modals cannot leave the dashboard frozen', async () => {
+  const app = await text('app.js');
+  const modalStart = app.indexOf('var MODAL_STACK = []');
+  const modalEnd = app.indexOf('/* ---------- Sidebar navigation wiring ---------- */', modalStart);
+  const source = app.slice(modalStart, modalEnd);
+  assert.ok(modalStart > -1 && modalEnd > modalStart, 'shared modal manager must exist');
+  assert.match(source, /overlay\.style\.zIndex = String\(9998 \+ Math\.max\(0, layerIndex\) \* 4\)/);
+  assert.match(source, /overlay\.style\.pointerEvents = active \? 'auto' : 'none'/);
+  assert.match(source, /catch \(error\) \{[\s\S]*cleanupLayer\(false\);[\s\S]*ov\.remove\(\);[\s\S]*Modal mount failed/);
+  assert.match(source, /if \(!closed && document\.contains\(ov\)\) ov\.classList\.add\('is-visible'\)/);
 });
 
 test('secure Fasil account creation has one production handler and visible progress', async () => {
@@ -314,7 +329,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=80/);
+    assert.match(await text(file), /app\.js\?v=81/);
   }
 });
 
@@ -336,7 +351,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=80/);
+    assert.match(await text(file), /app\.js\?v=81/);
   }
 });
 
@@ -620,8 +635,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=80/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=80/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=81/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=81/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -630,9 +645,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=80/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=81/);
   assert.match(await text('admin-program.html'), /responsive\.css\?v=75/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=80/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=81/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);

@@ -979,7 +979,7 @@
       var div = document.createElement('div');
       div.id = 'printRekap';
       div.innerHTML =
-        '<div style="font-family:Inter,Arial,sans-serif;padding:24px">' +
+        '<div style="font-family:Aptos,Segoe UI,Arial,sans-serif;padding:24px">' +
         '<h1 style="font-size:20px;font-weight:800;color:#2c3e50;margin-bottom:2px">Rekap Nilai Mentee — Bulan 1, Minggu 2</h1>' +
         '<p style="font-size:12px;color:#64748b;margin-bottom:16px">FTG × GI Future Builders Fellowship 2026 · Mentor: Bapak Faris · Dicetak ' + todayStr() + '</p>' +
         '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
@@ -1334,7 +1334,10 @@
   function syncModalLayers() {
     var top = MODAL_STACK.length ? MODAL_STACK[MODAL_STACK.length - 1] : null;
     $all('.ftg-modal-ov').forEach(function (overlay) {
+      var layerIndex = MODAL_STACK.map(function (item) { return item.overlay; }).indexOf(overlay);
       var active = top && top.overlay === overlay;
+      overlay.style.zIndex = String(9998 + Math.max(0, layerIndex) * 4);
+      overlay.style.pointerEvents = active ? 'auto' : 'none';
       overlay.toggleAttribute('inert', !active);
       overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
     });
@@ -1419,12 +1422,20 @@
     document.addEventListener('keydown', onKeydown, true);
     syncModalLayers();
     requestAnimationFrame(function () {
-      requestAnimationFrame(function () { ov.classList.add('is-visible'); });
+      requestAnimationFrame(function () { if (!closed && document.contains(ov)) ov.classList.add('is-visible'); });
     });
-    var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box);
-    if(eventStart&&!eventStart.value){var nextHour=new Date();nextHour.setMinutes(0,0,0);nextHour.setHours(nextHour.getHours()+1);eventStart.value=localDateTimeValue(nextHour);if(eventEnd&&!eventEnd.value)eventEnd.value=localDateTimeValue(new Date(nextHour.getTime()+3600000));eventStart.setAttribute('aria-label','Tanggal dan jam mulai');if(eventEnd)eventEnd.setAttribute('aria-label','Tanggal dan jam selesai');eventStart.addEventListener('change',function(){var selected=new Date(eventStart.value);if(eventEnd&&!isNaN(selected))eventEnd.value=localDateTimeValue(new Date(selected.getTime()+3600000));});}
-    if (onMount) onMount(box, shut);
-    if(typeof applyLanguage==='function')applyLanguage(box);
+    try {
+      var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box);
+      if(eventStart&&!eventStart.value){var nextHour=new Date();nextHour.setMinutes(0,0,0);nextHour.setHours(nextHour.getHours()+1);eventStart.value=localDateTimeValue(nextHour);if(eventEnd&&!eventEnd.value)eventEnd.value=localDateTimeValue(new Date(nextHour.getTime()+3600000));eventStart.setAttribute('aria-label','Tanggal dan jam mulai');if(eventEnd)eventEnd.setAttribute('aria-label','Tanggal dan jam selesai');eventStart.addEventListener('change',function(){var selected=new Date(eventStart.value);if(eventEnd&&!isNaN(selected))eventEnd.value=localDateTimeValue(new Date(selected.getTime()+3600000));});}
+      if (onMount) onMount(box, shut);
+      if(typeof applyLanguage==='function')applyLanguage(box);
+    } catch (error) {
+      closed = true;
+      cleanupLayer(false);
+      ov.remove();
+      console.error('Modal mount failed:', error);
+      throw error;
+    }
     requestAnimationFrame(function () {
       var initial = $('[autofocus]', box) || focusables().filter(function (el) { return !el.classList.contains('ftg-modal-close'); })[0] || modalClose;
       if (initial && typeof initial.focus === 'function') initial.focus(); else box.focus();
@@ -3399,11 +3410,13 @@
     var selected = task ? (task.targets || []).slice() : menteeIds().slice();
     var defaultRubric = [{ label: 'Kedalaman analisis', weight: 40, max: 100 }, { label: 'Keselarasan nilai', weight: 25, max: 100 }, { label: 'Kualitas refleksi', weight: 20, max: 100 }, { label: 'Ketepatan waktu', weight: 15, max: 100 }];
     var rubric = task && task.rubric ? task.rubric : defaultRubric;
-    var adminRubrics = (G.programSettings && G.programSettings.rubricTemplates) || [];
-    modal(
+    var adminRubrics = (G.programSettings && Array.isArray(G.programSettings.rubricTemplates)) ? G.programSettings.rubricTemplates : [];
+    var assignmentTemplates = Array.isArray(G.assignmentTemplates) ? G.assignmentTemplates : [];
+    var availableMentees = menteeIds().filter(function (id) { return MENTEES[id] && MENTEES[id].name; });
+    return modal(
       '<h3 style="font-weight:800;color:#1e293b;font-size:17px;margin-bottom:3px">' + (task ? '✏️ Edit Tugas' : '➕ Berikan Tugas Baru') + '</h3>' +
       '<p style="font-size:11px;color:#64748b;margin-bottom:14px">Tugas dan notifikasi langsung muncul pada akun mentee. Durasi standar otomatis <b>1 minggu</b> dan dapat diubah mentor.</p>' +
-      (!task && G.assignmentTemplates.length ? '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Gunakan template</label><select id="mentorTaskTemplatePick" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:11px;background:#fff;margin-bottom:9px"><option value="">Mulai dari kosong</option>' + G.assignmentTemplates.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>'; }).join('') + '</select>' : '') +
+      (!task && assignmentTemplates.length ? '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Gunakan template</label><select id="mentorTaskTemplatePick" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;font-size:11px;background:#fff;margin-bottom:9px"><option value="">Mulai dari kosong</option>' + assignmentTemplates.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.title) + '</option>'; }).join('') + '</select>' : '') +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Judul tugas *</label>' +
       '<input id="mentorTaskTitle" value="' + esc(task ? task.title : '') + '" placeholder="Contoh: Riset Masalah Pengguna" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;margin-bottom:10px">' +
       '<label style="font-size:11px;font-weight:800;color:#334155;display:block;margin-bottom:4px">Instruksi *</label>' +
@@ -3419,10 +3432,10 @@
       (adminRubrics.length ? '<select id="mentorRubricTemplate" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:8px;background:#fff;margin-bottom:6px"><option value="">Pilih template rubrik panitia</option>' + adminRubrics.map(function(r,i){return '<option value="'+i+'">'+esc(r.name)+'</option>';}).join('') + '</select>' : '') +
       '<textarea id="mentorTaskRubric" rows="4" style="width:100%;border:1px solid #cbd5e1;border-radius:10px;padding:9px 11px;font-size:12px;resize:vertical">' + esc(rubric.map(function (r) { return r.label + ' | ' + r.weight + ' | ' + (r.max || 100); }).join('\n')) + '</textarea>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:11px 0 6px"><label style="font-size:11px;font-weight:800;color:#334155">Berikan kepada *</label><button id="mentorTaskAll" type="button" style="border:0;background:#e8f5ef;color:#166534;border-radius:8px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer">Pilih Semua</button></div>' +
-      '<div id="mentorTaskTargets" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:130px;overflow:auto">' + menteeIds().map(function (id) {
+      '<div id="mentorTaskTargets" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:130px;overflow:auto">' + availableMentees.map(function (id) {
         var m = MENTEES[id];
         return '<label style="display:flex;align-items:center;gap:7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:7px;font-size:11px;color:#334155;cursor:pointer"><input type="checkbox" value="' + id + '" ' + (selected.indexOf(id) > -1 ? 'checked' : '') + '> ' + esc(m.name) + '</label>';
-      }).join('') + '</div>' +
+      }).join('') + (availableMentees.length ? '' : '<p style="grid-column:1/-1;padding:10px;color:#b45309;background:#fff7ed;border-radius:9px;font-size:11px">Belum ada akun mentee aktif. Tambahkan mentee dari Kelola Akun terlebih dahulu.</p>') + '</div>' +
       '<label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:11px;color:#475569"><input id="mentorTaskTemplate" type="checkbox"> Simpan juga sebagai template mentor</label>' +
       '<button id="mentorTaskSave" type="button" style="margin-top:12px;width:100%;border:0;background:#1a5f4f;color:#fff;border-radius:12px;padding:11px;font-size:13px;font-weight:800;cursor:pointer">' + (task ? 'Simpan Perubahan' : 'Berikan Tugas & Kirim Notifikasi') + '</button>',
       function (box, close) {
@@ -3430,7 +3443,7 @@
         if (rubricTemplate) rubricTemplate.addEventListener('change', function () { var picked=adminRubrics[+this.value]; if(picked) $('#mentorTaskRubric',box).value=(picked.criteria||[]).map(function(r){return r.label+' | '+r.weight+' | '+(r.max||100);}).join('\n'); });
         var templatePick = $('#mentorTaskTemplatePick', box);
         if (templatePick) templatePick.addEventListener('change', function () {
-          var t = G.assignmentTemplates.filter(function (x) { return x.id === templatePick.value; })[0]; if (!t) return;
+          var t = assignmentTemplates.filter(function (x) { return x.id === templatePick.value; })[0]; if (!t) return;
           $('#mentorTaskTitle', box).value = t.title || ''; $('#mentorTaskDesc', box).value = t.description || ''; $('#mentorTaskPoints', box).value = t.points || 0; $('#mentorTaskLink', box).value = t.referenceLink || ''; $('#mentorTaskChecklist', box).value = (t.checklist || []).join('\n'); $('#mentorTaskRubric', box).value = (t.rubric || []).map(function (r) { return r.label + ' | ' + r.weight + ' | ' + (r.max || 100); }).join('\n');
         });
         $('#mentorTaskAll', box).addEventListener('click', function () {
@@ -3501,6 +3514,7 @@
               pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari ' + currentMentorName() + ': ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
             });
             if ($('#mentorTaskTemplate', box).checked) {
+              if (!Array.isArray(G.assignmentTemplates)) G.assignmentTemplates = [];
               G.assignmentTemplates.unshift({ id: 'tpl-' + Date.now(), title: title, description: desc, points: task.points, referenceLink: task.referenceLink, checklist: checklist, rubric: rubricRows, at: new Date().toISOString() });
             }
             addAudit(isNew ? 'assignment.create' : 'assignment.update', title, targets.join(','));
@@ -5146,7 +5160,7 @@
     return cachedApiRequest('admin-operations','/api/operations',null,30000).then(function(data){var mentees=(data.profiles||[]).filter(function(p){return p.role==='mentee';});modal('<h3 style="font-weight:800;color:#1e293b">🎓 Sertifikat Otomatis</h3><p style="font-size:11px;color:#64748b">Sistem memeriksa tugas, kehadiran, nilai, dan status peserta sebelum menerbitkan.</p><div style="max-height:380px;overflow:auto">'+mentees.map(function(p){return '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f1f5f9;padding:8px"><span><b style="font-size:11px">'+esc(p.full_name)+'</b><small style="display:block;color:#64748b">'+esc(p.status)+'</small></span><button data-cert="'+p.id+'" class="ftg-suite-secondary">Periksa & Terbitkan</button></div>';}).join('')+'</div>',function(box){$all('[data-cert]',box).forEach(function(b){b.addEventListener('click',function(){b.disabled=true;apiRequest('/api/operations',{method:'POST',body:JSON.stringify({action:'certificate_issue',mentee_id:b.getAttribute('data-cert')})}).then(function(x){toast('Sertifikat '+x.certificate.certificate_number+' diterbitkan','🎓');b.textContent='Terbit';}).catch(function(e){toast(e.message,'⚠️');b.disabled=false;});});});});}).catch(function(e){toast(e.message,'⚠️');});
   }
   function openHealthSuite() {
-    return cachedApiRequest('admin-operations','/api/operations',null,30000).then(function(d){var mentees=(d.profiles||[]).filter(function(p){return p.role==='mentee';}),subs=d.submissions||[],assignments=(d.assignments||[]).filter(function(a){return a.status==='published';}),history=d.review_history||[],now=Date.now();var rows=mentees.map(function(p){var own=subs.filter(function(s){return s.mentee_id===p.id;}),risk=[];if((p.warning_level||0)>0)risk.push('Peringatan '+p.warning_level);if(!p.google_email)risk.push('Drive belum terhubung');if(!p.last_active_at||now-new Date(p.last_active_at).getTime()>7*86400000)risk.push('Tidak aktif >7 hari');var late=assignments.filter(function(a){return a.deadline&&new Date(a.deadline).getTime()<now&&!own.some(function(s){return s.assignment_id===a.id&&s.submitted_at;});}).length;if(late)risk.push(late+' tugas terlambat');if(own.some(function(s){return s.status==='submitted'&&!(s.reviews||[]).length;}))risk.push('Belum direview');var ownIds=new Set(own.map(function(s){return s.id;})),scores=history.filter(function(h){return ownIds.has(h.submission_id)&&h.decision==='approved';}).map(function(h){return +h.score;});if(scores.length>=2&&scores[scores.length-1]<scores[scores.length-2])risk.push('Nilai menurun');return {p:p,risk:risk};});modal('<h3 style="font-weight:800;color:#1e293b">❤️ Kesehatan Program</h3><p style="font-size:10px;color:#64748b">Deteksi otomatis aktivitas, keterlambatan, review, nilai, kehadiran, dan Drive.</p><div style="max-height:420px;overflow:auto">'+rows.map(function(x){return '<div style="border-left:4px solid '+(x.risk.length?'#ef4444':'#22c55e')+';padding:8px;margin:6px 0;background:#f8fafc"><b style="font-size:11px">'+esc(x.p.full_name)+'</b><p style="font-size:10px;color:'+(x.risk.length?'#b91c1c':'#166534')+'">'+(x.risk.join(' · ')||'Kondisi sehat')+'</p></div>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});
+    return cachedApiRequest('admin-operations','/api/operations',null,30000).then(function(d){var mentees=(d.profiles||[]).filter(function(p){return p.role==='mentee';}),subs=d.submissions||[],assignments=(d.assignments||[]).filter(function(a){return a.status==='published';}),history=d.review_history||[],now=Date.now();var rows=mentees.map(function(p){var own=subs.filter(function(s){return s.mentee_id===p.id;}),risk=[];if((p.warning_level||0)>0)risk.push('Peringatan '+p.warning_level);if(!p.google_email)risk.push('Drive belum terhubung');if(!p.last_active_at||now-new Date(p.last_active_at).getTime()>7*86400000)risk.push('Tidak aktif >7 hari');var late=assignments.filter(function(a){return a.deadline&&new Date(a.deadline).getTime()<now&&!own.some(function(s){return s.assignment_id===a.id&&s.submitted_at;});}).length;if(late)risk.push(late+' tugas terlambat');if(own.some(function(s){return s.status==='submitted'&&!(s.reviews||[]).length;}))risk.push('Belum direview');var ownIds=new Set(own.map(function(s){return s.id;})),scores=history.filter(function(h){return ownIds.has(h.submission_id)&&h.decision==='approved';}).map(function(h){return +h.score;});if(scores.length>=2&&scores[scores.length-1]<scores[scores.length-2])risk.push('Nilai menurun');return {p:p,risk:risk};});modal('<h3 style="font-weight:800;color:#1e293b">❤️ Kesehatan Program</h3><p style="font-size:10px;color:#64748b">Deteksi otomatis aktivitas, keterlambatan, review, nilai, kehadiran, dan Drive.</p><div style="max-height:420px;overflow:auto">'+rows.map(function(x){return '<div style="border:1px solid '+(x.risk.length?'#fecaca':'#bbf7d0')+';border-radius:10px;padding:8px;margin:6px 0;background:'+(x.risk.length?'#fff7f7':'#f5fff8')+'"><b style="font-size:11px">'+esc(x.p.full_name)+'</b><p style="font-size:10px;color:'+(x.risk.length?'#b91c1c':'#166534')+'">'+(x.risk.join(' · ')||'Kondisi sehat')+'</p></div>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});
   }
   function openAuditSuite(){return cachedApiRequest('operations-audit','/api/operations?resource=audit',null,30000).then(function(d){modal('<h3 style="font-weight:800;color:#1e293b">🛡️ Audit Log</h3><div style="max-height:450px;overflow:auto">'+(d.logs||[]).map(function(a){return '<p style="font-size:10px;border-bottom:1px solid #f1f5f9;padding:7px"><b>'+esc(a.action)+'</b> · '+esc((a.profiles&&a.profiles.full_name)||'Sistem')+'<br><span style="color:#94a3b8">'+new Date(a.created_at).toLocaleString('id-ID')+' · '+esc(a.entity_type||'')+'</span></p>';}).join('')+'</div>');}).catch(function(e){toast(e.message,'⚠️');});}
   function mountMenteeProgramSuite(){if(PAGE.indexOf('mentee-dashboard')!==0||!AUTH.profile)return;var host=$('main > div.px-8'),old=byId('mentee-program-suite');if(!host||old)return;var sec=document.createElement('section');sec.id='mentee-program-suite';sec.className='bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';sec.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center"><div><h2 style="font-size:15px;font-weight:800">🗓️ Agenda, Presensi & Sertifikat</h2><p style="font-size:11px;color:#64748b">Satu tempat untuk kegiatan program dan kelulusanmu.</p></div><div style="display:flex;gap:6px"><a href="#" data-mentee-calendar class="ftg-suite-secondary">Kalender</a><button id="myAttendance" class="ftg-suite-secondary">Presensi</button><button id="myCertificate" class="ftg-suite-primary">Sertifikat</button></div></div>';host.insertBefore(sec,host.firstChild);$('#myAttendance',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=attendance').then(function(d){modal('<h3 style="font-weight:800">Riwayat Kehadiran</h3>'+((d.records||[]).map(function(r){return '<p style="padding:7px;border-bottom:1px solid #f1f5f9;font-size:11px"><b>'+esc((r.attendance_sessions||{}).title||'Kegiatan')+'</b><span style="float:right">'+esc(r.status)+'</span></p>';}).join('')||'<p style="color:#64748b">Belum ada data presensi.</p>'));});});$('#myCertificate',sec).addEventListener('click',function(){apiRequest('/api/operations?resource=certificate').then(function(d){if(d.certificate){var u='certificate.html?code='+encodeURIComponent(d.certificate.verification_code);modal('<div style="text-align:center"><h3 style="font-weight:800">🎓 Sertifikat '+esc(d.certificate.certificate_number)+'</h3><p style="margin:8px">'+esc(d.certificate.recipient_name)+'</p><a href="'+u+'" target="_blank" class="ftg-suite-primary">Lihat & cetak sertifikat</a></div>');}else{var e=d.eligibility||{};modal('<h3 style="font-weight:800">Syarat Sertifikat</h3><p>Tugas: '+(e.completion||0)+'% / '+((e.requirements||{}).completion||80)+'%</p><p>Kehadiran: '+(e.attendance||0)+'% / '+((e.requirements||{}).attendance||80)+'%</p><p>Nilai: '+(e.quality||0)+' / '+((e.requirements||{}).quality||75)+'</p><p style="margin-top:8px;color:#b45309">Sertifikat diterbitkan panitia setelah seluruh syarat terpenuhi.</p>');}});});}
@@ -5207,11 +5221,12 @@
           create.setAttribute('aria-busy','true');
           create.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan…</span>';
           try{
-            openAssignmentEditor(null,function(){
+            var editor=openAssignmentEditor(null,function(){
               invalidateApiCache('admin-operations');
               shut();
               setTimeout(openAssignmentMonitor,230);
             });
+            if(!editor||!editor.overlay||!document.contains(editor.overlay))throw new Error('Form tugas gagal dipasang pada halaman.');
             requestAnimationFrame(function(){create.disabled=false;create.removeAttribute('aria-busy');create.innerHTML=original;});
           }catch(error){
             create.disabled=false;
