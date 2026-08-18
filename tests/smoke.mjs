@@ -290,7 +290,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=67/);
+    assert.match(await text(file), /app\.js\?v=68/);
   }
 });
 
@@ -312,7 +312,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=67/);
+    assert.match(await text(file), /app\.js\?v=68/);
   }
 });
 
@@ -561,8 +561,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=67/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=67/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=68/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=68/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -571,9 +571,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=67/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=61/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=67/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=68/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=62/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=68/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
     assert.match(await text(page), /donor\.css\?v=6/);
@@ -671,6 +671,18 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(css, /#announcementForm\{display:flex/);
   assert.match(css, /\.ftg-announcement-actions\{order:-3;position:sticky/);
   assert.match(css, /\.ftg-track-manager/);
+});
+
+test('Fasil dialogs keep controls separated, closable and responsive', async () => {
+  const app = await text('app.js');
+  const css = await text('responsive.css');
+  assert.match(app, /box\.insertBefore\(modalClose, box\.firstChild\)/);
+  assert.match(app, /class="ftg-track-actions"/);
+  assert.match(app, /classList\.add\('ftg-modal-box-wide','ftg-track-manager-dialog'\)/);
+  assert.match(css, /\.ftg-modal-close\{position:sticky/);
+  assert.match(css, /\.ftg-track-manager-dialog\{width:min\(820px/);
+  assert.match(css, /\.ftg-track-list article\{grid-template-columns:44px minmax\(0,1fr\) 88px!important/);
+  assert.match(css, /\.ftg-track-actions\{grid-column:1\/-1/);
 });
 
 test('slow Fasil screens use parallel data, deduped cache and visible loading feedback', async () => {
