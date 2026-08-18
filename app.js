@@ -1402,12 +1402,9 @@
       closed = true;
       cleanupLayer(true);
       if (detached) { box.remove(); return; }
-      ov.style.transition = 'opacity .18s ease';
-      box.style.transition = 'transform .18s ease, opacity .18s ease';
-      ov.style.opacity = '0';
-      box.style.transform = 'scale(.95) translateY(6px)';
-      box.style.opacity = '0';
-      setTimeout(function () { box.remove(); ov.remove(); }, 190);
+      ov.classList.add('is-closing');
+      ov.classList.remove('is-visible');
+      setTimeout(function () { box.remove(); ov.remove(); }, 210);
     }
     function detach() {
       if (detached || closed) return;
@@ -1421,6 +1418,9 @@
     MODAL_STACK.push(record);
     document.addEventListener('keydown', onKeydown, true);
     syncModalLayers();
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { ov.classList.add('is-visible'); });
+    });
     var eventStart=$('#eventStart',box),eventEnd=$('#eventEnd',box);
     if(eventStart&&!eventStart.value){var nextHour=new Date();nextHour.setMinutes(0,0,0);nextHour.setHours(nextHour.getHours()+1);eventStart.value=localDateTimeValue(nextHour);if(eventEnd&&!eventEnd.value)eventEnd.value=localDateTimeValue(new Date(nextHour.getTime()+3600000));eventStart.setAttribute('aria-label','Tanggal dan jam mulai');if(eventEnd)eventEnd.setAttribute('aria-label','Tanggal dan jam selesai');eventStart.addEventListener('change',function(){var selected=new Date(eventStart.value);if(eventEnd&&!isNaN(selected))eventEnd.value=localDateTimeValue(new Date(selected.getTime()+3600000));});}
     if (onMount) onMount(box, shut);
@@ -3096,7 +3096,7 @@
         var sub = taskSubmission(MID, task.id);
         var reviewed = sub && sub.review && sub.review.decision !== 'revision', sent = sub && sub.submittedAt;
         var life = assignmentStatus(task, sub), color = life.color, status = life.label;
-        return '<article style="border:1px solid #e2e8f0;border-left:4px solid ' + color + ';border-radius:13px;padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between">' +
+        return '<article style="border:1px solid ' + color + ';border-radius:13px;padding:12px;display:flex;gap:12px;align-items:center;justify-content:space-between">' +
           '<div><p style="font-size:13px;font-weight:800;color:#1e293b">' + esc(task.title) + '</p><p style="font-size:11px;color:#64748b;margin-top:2px">' + esc(dueLabel(task.deadline)) + ' · +' + (+task.points || 0) + ' poin</p><p style="font-size:10px;color:' + color + ';font-weight:800;margin-top:4px">' + status + '</p></div>' +
           '<button type="button" data-open-mentor-task="' + esc(task.id) + '" style="border:0;background:' + color + ';color:#fff;border-radius:10px;padding:8px 12px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">' + (reviewed ? 'Lihat Nilai' : (life.key === 'revision' ? 'Revisi' : (sent ? 'Edit' : 'Kerjakan'))) + '</button></article>';
       }).join('') + '</div>';
@@ -4615,7 +4615,7 @@
     if (!versions.length && !reviews.length) return '';
     return '<details style="margin:10px 0;border:1px solid #e2e8f0;border-radius:12px;padding:9px;background:#fff"><summary style="cursor:pointer;font-size:11px;font-weight:800;color:#334155">Riwayat versi & feedback (' + versions.length + ' versi)</summary><div style="max-height:180px;overflow:auto;margin-top:7px">' + versions.slice().reverse().map(function (v) {
       var related = reviews.filter(function (r) { return Number(r.version) === Number(v.number); });
-      return '<div style="border-left:3px solid #8b5cf6;padding:6px 9px;margin:6px 0;background:#f8fafc"><b style="font-size:10px;color:#6d28d9">Versi ' + v.number + '</b><small style="float:right;color:#94a3b8">' + esc(v.at ? new Date(v.at).toLocaleString('id-ID') : '') + '</small><p style="font-size:10px;color:#475569;margin-top:4px">' + esc((v.text || 'Lampiran/link').slice(0, 180)) + '</p>' + related.map(function (r) { return '<p style="font-size:10px;color:' + (r.decision === 'revision' ? '#b91c1c' : '#166534') + ';margin-top:5px"><b>' + (r.decision === 'revision' ? 'Revisi diminta' : 'Disetujui') + ' · ' + r.score + '/100:</b> ' + esc(r.text) + '</p>'; }).join('') + '</div>';
+      return '<div style="border:1px solid #ddd6fe;border-radius:8px;padding:6px 9px;margin:6px 0;background:#f8fafc"><b style="font-size:10px;color:#6d28d9">Versi ' + v.number + '</b><small style="float:right;color:#64748b">' + esc(v.at ? new Date(v.at).toLocaleString('id-ID') : '') + '</small><p style="font-size:10px;color:#475569;margin-top:4px">' + esc((v.text || 'Lampiran/link').slice(0, 180)) + '</p>' + related.map(function (r) { return '<p style="font-size:10px;color:' + (r.decision === 'revision' ? '#b91c1c' : '#166534') + ';margin-top:5px"><b>' + (r.decision === 'revision' ? 'Revisi diminta' : 'Disetujui') + ' · ' + r.score + '/100:</b> ' + esc(r.text) + '</p>'; }).join('') + '</div>';
     }).join('') + '</div></details>';
   }
   function mountMenteeWorkCenter() {
@@ -5612,11 +5612,12 @@
     $all('main .h-2 > div, main .h-1\\.5 > div, main .progress-bar').forEach(function (bar) {
       var w = bar.style.width;
       if (!w || w === '0%') return;
+      bar.style.transformOrigin = 'left center';
       bar.style.transition = 'none';
-      bar.style.width = '0%';
+      bar.style.transform = 'scaleX(0)';
       setTimeout(function () {
         bar.style.transition = '';
-        bar.style.width = w;
+        bar.style.transform = 'scaleX(1)';
       }, 80);
     });
   }
@@ -5626,11 +5627,6 @@
     initSupabase();
     var authReady = false;
     bindS();
-    document.body.classList.add('ftg-anim');
-    // lepas kelas animasi setelah selesai — animation-fill "both" meninggalkan
-    // stacking context permanen yang membuat dropdown notifikasi tertutup kartu
-    setTimeout(function () { document.body.classList.remove('ftg-anim'); }, 1600);
-
     // identitas sidebar & menu peran diganti SEKETIKA — tidak ada kilasan "Arya"
     try { personalize(); } catch (e) { console.warn(e); }
     finally { document.documentElement.classList.add('ftg-role-ready'); }

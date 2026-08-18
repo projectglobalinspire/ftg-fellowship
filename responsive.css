@@ -119,7 +119,8 @@ aside[data-design-id] > :not(nav) { flex-shrink: 0; }
 
   /* bar progres mengalir, tidak loncat */
   main .h-2 > div, main .h-1\.5 > div, main .progress-bar {
-    transition: width .9s cubic-bezier(.22, 1, .36, 1);
+    transform-origin: left center;
+    transition: transform .24s cubic-bezier(.23, 1, .32, 1);
   }
 
   /* modal muncul membesar halus */
@@ -129,8 +130,7 @@ aside[data-design-id] > :not(nav) { flex-shrink: 0; }
   .ftg-modal-box { animation: ftgPop .28s cubic-bezier(.22, 1, .36, 1) both; }
 
   /* item nav & baris daftar */
-  aside nav a { transition: background-color .2s ease, color .2s ease, padding-left .2s ease; }
-  aside nav a:hover { padding-left: 16px; }
+  aside nav a { transition: background-color .14s cubic-bezier(.23, 1, .32, 1), color .14s cubic-bezier(.23, 1, .32, 1); }
 
   /* dropdown notifikasi muncul membesar dari lonceng */
   .ftg-dd { animation: ftgPop .22s cubic-bezier(.22, 1, .36, 1) both; transform-origin: top right; }
@@ -704,6 +704,11 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
   --ftg-purple-accessible:#7c3aed;
   --ftg-control-height:44px;
   --ftg-focus:#0369a1;
+  --ftg-motion-fast:140ms;
+  --ftg-motion-ui:190ms;
+  --ftg-motion-panel:240ms;
+  --ftg-ease-out:cubic-bezier(.23,1,.32,1);
+  --ftg-ease-in-out:cubic-bezier(.77,0,.175,1);
 }
 
 /* Modal primitive: a real toolbar in document flow, no floating close
@@ -779,8 +784,8 @@ label:has(>input[type="checkbox"]),label:has(>input[type="radio"]){min-height:44
 .ftg-announcement-controls>button{height:44px!important;min-height:44px!important;font-size:12px!important;padding:0 13px!important}
 .ftg-announcement-controls>button:first-child{width:44px!important}
 .ftg-announcement-dots [data-announcement-slide]{position:relative;width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;background:transparent!important}
-.ftg-announcement-dots [data-announcement-slide]::after{content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:999px;background:rgba(255,255,255,.45);transform:translate(-50%,-50%);transition:width .2s ease,background .2s ease}
-.ftg-announcement-dots [data-announcement-slide].is-active::after{width:24px;background:#fdba74}
+.ftg-announcement-dots [data-announcement-slide]::after{content:"";position:absolute;left:50%;top:50%;width:24px;height:8px;border-radius:999px;background:rgba(255,255,255,.45);transform:translate(-50%,-50%) scaleX(.34);transition:transform var(--ftg-motion-ui) var(--ftg-ease-in-out),background-color var(--ftg-motion-fast) var(--ftg-ease-out)}
+.ftg-announcement-dots [data-announcement-slide].is-active::after{background:#fdba74;transform:translate(-50%,-50%) scaleX(1)}
 
 /* Legibility and contrast. Metadata stays subordinate through weight and
    spacing, not through unreadable 7-10px text. */
@@ -924,3 +929,70 @@ main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box sma
   .ftg-track-actions>*{flex:1;min-height:44px}
   .ftg-announcement-dots{max-width:100%;overflow-x:auto;scrollbar-width:thin}
 }
+
+/* FTG motion system: frequent navigation is instant; only state changes move. */
+button,a,input,textarea,select{
+  transition-property:color,background-color,border-color,box-shadow,opacity,transform;
+  transition-duration:var(--ftg-motion-fast);
+  transition-timing-function:var(--ftg-ease-out);
+}
+button:not(:disabled):active,
+a[class*="rounded"]:active,
+.ftg-suite-primary:active,.ftg-suite-secondary:active,
+.ftg-action-primary:active,.ftg-action-secondary:active{
+  transform:scale(.97)!important;
+}
+
+/* Progress keeps its actual value while reveal motion stays on the compositor. */
+main .h-2>div,main .h-1\.5>div,main .progress-bar{
+  transform-origin:left center;
+  transition:transform var(--ftg-motion-panel) var(--ftg-ease-out)!important;
+}
+
+/* One interruptible overlay pattern for every dashboard. */
+.ftg-modal-ov{
+  opacity:0;
+  animation:none!important;
+  transition:opacity var(--ftg-motion-ui) var(--ftg-ease-out)!important;
+}
+.ftg-modal-ov>.ftg-modal-box{
+  opacity:0;
+  transform:translateY(8px) scale(.97);
+  animation:none!important;
+  transition:opacity var(--ftg-motion-ui) var(--ftg-ease-out),transform var(--ftg-motion-panel) var(--ftg-ease-out)!important;
+}
+.ftg-modal-ov.is-visible{opacity:1}
+.ftg-modal-ov.is-visible>.ftg-modal-box{opacity:1;transform:translateY(0) scale(1)}
+.ftg-modal-ov.is-closing{pointer-events:none}
+.ftg-modal-ov.is-closing>.ftg-modal-box{transform:translateY(6px) scale(.98)}
+.ftg-toast{transition:opacity var(--ftg-motion-ui) var(--ftg-ease-out),transform var(--ftg-motion-ui) var(--ftg-ease-out)!important}
+.ftg-operation-loading{transition:opacity var(--ftg-motion-fast) var(--ftg-ease-out)!important}
+
+/* Native browser surfaces follow the FTG palette. */
+::selection{background:#b9e5d8;color:#102b3c}
+*{scrollbar-color:#9bb8ae transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:#9bb8ae;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:#6f978a;background-clip:padding-box}
+
+@media(hover:hover) and (pointer:fine){
+  button:not(:disabled):hover,.ftg-suite-primary:hover,.ftg-action-primary:hover{box-shadow:0 7px 18px rgba(23,107,87,.16)}
+  .ftg-profile-control:hover,.ftg-suite-grid button:hover,#announcementList>button:hover{transform:translateY(-1px)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  button,a,input,textarea,select,.ftg-modal-ov,.ftg-modal-box,.ftg-toast,.ftg-operation-loading,
+  main .h-2>div,main .h-1\.5>div,main .progress-bar{
+    transition-duration:1ms!important;
+    animation-duration:1ms!important;
+    animation-iteration-count:1!important;
+  }
+  .ftg-modal-ov>.ftg-modal-box,.ftg-modal-ov.is-visible>.ftg-modal-box,
+  .ftg-modal-ov.is-closing>.ftg-modal-box{transform:none!important}
+  button:not(:disabled):active,a[class*="rounded"]:active{transform:none!important}
+}
+
+/* Refine legacy email preview without changing its information structure. */
+.ftg-mail-preview>div{border:1px solid #dce8e4;border-top-width:1px}
+.ftg-mail-preview p{border:1px solid #b7dfd2;border-left-width:1px;color:#315e51}
