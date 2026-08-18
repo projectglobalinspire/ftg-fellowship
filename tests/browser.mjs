@@ -259,6 +259,27 @@ async function exerciseAdminCalendar(page) {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+async function exerciseSecureAccountCreation(page) {
+  await page.route('**/api/admin-users', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const payload = route.request().postDataJSON();
+    assert.equal(payload.initials, 'QR', 'secure account request must include generated initials');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ profile: { id: 'qa-account', ...payload }, temporary_password: 'QA-only-password', paired: 0 })
+    });
+  });
+  await page.locator('#btnAddMentee').click();
+  const dialog = page.locator('[role="dialog"]').last();
+  await dialog.waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('#suName').fill('QA Runtime');
+  await page.locator('#suEmail').fill('qa-runtime@example.test');
+  await page.locator('#suSave').click();
+  await page.getByText('Akun berhasil dibuat & approved', { exact: true }).waitFor({ state: 'visible', timeout: 10_000 });
+  await page.keyboard.press('Escape');
+}
+
 const languageExpectations = {
   'admin-dashboard.html': [['Monitoring Program','Program Monitoring'],['Mentee Online Sekarang','Mentees Online Now'],['Aktivitas Program','Program Activity']],
   'admin-program.html': [['Pusat Operasi Program','Program Operations Center'],['Operasional program tanpa berpindah dashboard','Run the program from one dashboard'],['Pembelajaran','Learning'],['Kegiatan & peserta','Activities & participants']],
@@ -330,6 +351,7 @@ try {
           await exerciseAdminDialog(page);
           await exerciseAdminCalendar(page);
         }
+        if (role.name === 'admin' && pageName === 'admin-akun.html') await exerciseSecureAccountCreation(page);
         await auditLanguageRoundTrip(page, pageName);
         await inspectPage(page, `${role.name}-${pageName.replace('.html', '')}`, viewport);
       }

@@ -134,6 +134,7 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.match(app, /assignmentMonitor\.addEventListener/);
   assert.match(app, /notificationButton\.addEventListener/);
   assert.match(app, /function openBusy\(button,opener\)/);
+  assert.ok(app.indexOf('function openBusy(button, opener)') < app.indexOf('function upgradeMenteeCalendar()'), 'busy/error helper must be shared before participant calendar actions');
   assert.match(app, /aria-busy/);
   assert.match(app, /Membuka…/);
   assert.match(app, /Server terlalu lama merespons/);
@@ -142,6 +143,10 @@ test('Fasil navigation is split, warm and every program action is wired', async 
 test('secure Fasil account creation has one production handler and visible progress', async () => {
   const app = await text('app.js');
   const api = await text('api/admin-users.js');
+  const sharedInitials = app.indexOf('function initialsOf(name)');
+  const adminDashboard = app.indexOf('function initAdminDashboard()');
+  assert.ok(sharedInitials > -1 && sharedInitials < adminDashboard, 'initialsOf must be a shared helper, not scoped inside the legacy admin dashboard');
+  assert.equal((app.match(/function initialsOf\(name\)/g) || []).length, 1, 'initialsOf must have one source of truth');
   assert.match(app, /Produksi memakai[\s\S]*mountSecureAccountAdmin/);
   assert.match(app, /id="suStatus"/);
   assert.match(app, /Membuat akun…/);

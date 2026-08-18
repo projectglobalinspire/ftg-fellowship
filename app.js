@@ -139,6 +139,10 @@
     var r = myRole();
     return r === 'mentee' ? 'mentee-' + myMenteeId() : (r || 'anon');
   }
+  function initialsOf(name) {
+    var words = String(name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return words.map(function (word) { return word.charAt(0).toUpperCase(); }).join('') || 'FT';
+  }
 
   /* migrasi dokumen lama (Arya tunggal) -> bentuk multi-mentee */
   function normalizeG(raw) {
@@ -800,9 +804,6 @@
           toast('Akun ' + em + ' dihapus', '🗑');
         });
       });
-    }
-    function initialsOf(name) {
-      return name.trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('');
     }
     function addAccountModal(role) {
       var isMentee = role === 'mentee';
@@ -4750,6 +4751,29 @@
       if (previousBusy === null) busyTarget.removeAttribute('aria-busy'); else busyTarget.setAttribute('aria-busy', previousBusy);
       setTimeout(function () { overlay.remove(); }, 180);
     };
+  }
+  // Shared by participant and Fasil actions. Keep this outside page-specific
+  // mounts so a calendar button can never lose its busy/error state handler.
+  function openBusy(button, opener) {
+    if (!button || button.disabled || button.getAttribute('aria-busy') === 'true') return;
+    var original = button.innerHTML;
+    var label = (button.textContent || 'modul').trim();
+    var hideLoader = operationLoader('Membuka ' + label, 'Menyiapkan modul dan data terbaru…');
+    button.setAttribute('aria-busy', 'true');
+    button.setAttribute('aria-disabled', 'true');
+    button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><b>Membuka…</b>';
+    var result;
+    try { result = opener(); } catch (error) { result = Promise.reject(error); }
+    return Promise.resolve(result).catch(function (error) {
+      toast((error && error.message) || ('Modul ' + label + ' gagal dibuka. Silakan coba lagi.'), '⚠️');
+      console.error('Action failed:', label, error);
+      throw error;
+    }).finally(function () {
+      hideLoader();
+      button.removeAttribute('aria-busy');
+      button.removeAttribute('aria-disabled');
+      button.innerHTML = original;
+    });
   }
   function accountLoadingSkeleton() {
     return '<div class="ftg-account-skeleton" aria-label="Memuat daftar akun">' + [1,2,3,4,5,6].map(function () { return '<div><i></i><span><b></b><small></small></span><em></em><em></em></div>'; }).join('') + '</div>';
