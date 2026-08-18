@@ -5,6 +5,22 @@
 * { -webkit-tap-highlight-color: transparent; }
 html, body { max-width: 100%; }
 
+/* Dashboard shell mengikuti viewport nyata. Sebelumnya beberapa halaman
+   memaksa 900px sehingga layar pendek dapat digulir ke ekor kosong. */
+body:has(main[data-design-id]) {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+main[data-design-id] {
+  min-height: 100vh !important;
+  min-height: 100dvh !important;
+  box-sizing: border-box;
+}
+main[data-design-id] > :last-child {
+  margin-bottom: 0 !important;
+}
+
 /* Jangan tampilkan template statis sebelum sesi dan profil server tervalidasi.
    Ini menghilangkan kilasan nama/role lama serta flicker saat masuk dashboard. */
 html:not(.ftg-auth-ready):not(.ftg-auth-warm) main[data-design-id],html:not(.ftg-auth-ready):not(.ftg-auth-warm) aside[data-design-id]{visibility:hidden;opacity:0}

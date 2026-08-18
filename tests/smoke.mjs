@@ -388,6 +388,19 @@ test('sidebar footer status never overlaps logout or content', async () => {
   assert.doesNotMatch(app, /b\.style\.cssText = 'position:fixed;bottom:10px;left:12px/);
 });
 
+test('all dashboard shells follow the real viewport without a 900px scroll tail', async () => {
+  const responsive = await text('responsive.css');
+  for (const page of htmlFiles) {
+    const html = await text(page);
+    assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
+    if (/main\s+data-design-id=/.test(html)) {
+      assert.match(html, /responsive\.css\?v=64/, `${page} must load the no-scroll-tail shell`);
+    }
+  }
+  assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
+  assert.match(responsive, /main\[data-design-id\][\s\S]*min-height:\s*100dvh\s*!important/);
+});
+
 test('header notification and profile controls stay grouped on the right', async () => {
   const app = await text('app.js');
   const responsive = await text('responsive.css');
@@ -572,7 +585,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   assert.match(await text('admin-program.html'), /app\.js\?v=69/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=63/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=64/);
   assert.match(await text('admin-dashboard.html'), /app\.js\?v=69/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=7/);
