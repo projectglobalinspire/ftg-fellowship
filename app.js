@@ -1338,15 +1338,17 @@
       var active = top && top.overlay === overlay;
       overlay.style.zIndex = String(9998 + Math.max(0, layerIndex) * 4);
       overlay.style.pointerEvents = active ? 'auto' : 'none';
-      overlay.toggleAttribute('inert', !active);
+      /* The backdrop and focus trap already isolate the active dialog. Native
+         inert repeatedly toggled on this large dashboard can lock Chromium. */
+      overlay.removeAttribute('inert');
       overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
     });
     $all('body > :not(.ftg-modal-ov):not(.ftg-toast-wrap):not(.ftg-operation-loading)').forEach(function (node) {
-      node.toggleAttribute('inert', !!top);
+      node.removeAttribute('inert');
     });
     document.body.classList.toggle('ftg-modal-open', !!top);
   }
-  function modal(html, onMount) {
+  function modal(html, onMount, onClose) {
     var opener = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     var ov = document.createElement('div');
     ov.className = 'ftg-modal-ov';
@@ -1404,6 +1406,9 @@
       if (closed) return;
       closed = true;
       cleanupLayer(true);
+      if (typeof onClose === 'function') {
+        try { onClose(); } catch (error) { console.error('Modal close callback failed:', error); }
+      }
       if (detached) { box.remove(); return; }
       ov.classList.add('is-closing');
       ov.classList.remove('is-visible');
@@ -1420,6 +1425,9 @@
     document.body.appendChild(ov);
     MODAL_STACK.push(record);
     document.addEventListener('keydown', onKeydown, true);
+    /* Move focus into the new layer before synchronizing the modal stack so
+       Chromium never has to reconcile focus with a closing dialog. */
+    try { box.focus({ preventScroll: true }); } catch (_) { box.focus(); }
     syncModalLayers();
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { if (!closed && document.contains(ov)) ov.classList.add('is-visible'); });
@@ -3403,7 +3411,7 @@
     { m: 5, week: 'w1', task: 'Tugas Week 1 — Values Matrix' }
   ];
 
-  function openAssignmentEditor(task, onSaved) {
+  function openAssignmentEditor(task, onSaved, onClosed) {
     task = task || null;
     var defaultDeadline = localDateTimeValue(defaultAssignmentDeadline(7));
     var minimumDeadline = localDateTimeValue(new Date(Date.now() + 5 * 60000));
@@ -3530,7 +3538,8 @@
             console.error('Assignment save failed:', error);
           });
         });
-      }
+      },
+      function () { if (typeof onClosed === 'function') onClosed(); }
     );
   }
 
@@ -5233,25 +5242,26 @@
         var create=$('#assignmentMonitorCreate',box);
         if(create)create.addEventListener('click',function(){
           if(create.disabled||create.getAttribute('aria-busy')==='true')return;
-          var original=create.innerHTML;
           create.disabled=true;
           create.setAttribute('aria-busy','true');
           create.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan…</span>';
-          try{
-            var editor=openAssignmentEditor(null,function(){
-              invalidateApiCache('admin-operations');
-              shut();
+          /* Avoid stacking the editor over this monitor. The previous nested
+             dialog could lock Chromium's focus/inert processing and freeze. */
+          shut();
+          setTimeout(function(){
+            try{
+              var editor=openAssignmentEditor(null,function(){
+                invalidateApiCache('admin-operations');
+              },function(){
+                setTimeout(openAssignmentMonitor,230);
+              });
+              if(!editor||!editor.overlay||!document.contains(editor.overlay))throw new Error('Form tugas gagal dipasang pada halaman.');
+            }catch(error){
+              toast((error&&error.message)||'Form tugas gagal dibuka. Silakan coba lagi.','⚠️');
+              console.error('Assignment editor failed:',error);
               setTimeout(openAssignmentMonitor,230);
-            });
-            if(!editor||!editor.overlay||!document.contains(editor.overlay))throw new Error('Form tugas gagal dipasang pada halaman.');
-            requestAnimationFrame(function(){create.disabled=false;create.removeAttribute('aria-busy');create.innerHTML=original;});
-          }catch(error){
-            create.disabled=false;
-            create.removeAttribute('aria-busy');
-            create.innerHTML=original;
-            toast((error&&error.message)||'Form tugas gagal dibuka. Silakan coba lagi.','⚠️');
-            console.error('Assignment editor failed:',error);
-          }
+            }
+          },230);
         });
         $all('[data-monitor-task]',box).forEach(function(button){button.addEventListener('click',function(){var detail=$('[data-monitor-detail="'+button.getAttribute('data-monitor-task')+'"]',box);if(detail){detail.hidden=!detail.hidden;button.textContent=detail.hidden?'Lihat detail':'Tutup detail';}});});
       });
@@ -5608,9 +5618,9 @@
   var LANGUAGE_DATE_WORDS={Senin:'Monday',Selasa:'Tuesday',Rabu:'Wednesday',Kamis:'Thursday',Jumat:'Friday',"Jum'at":'Friday',Sabtu:'Saturday',Minggu:'Sunday',Januari:'January',Februari:'February',Maret:'March',April:'April',Mei:'May',Juni:'June',Juli:'July',Agustus:'August',September:'September',Oktober:'October',November:'November',Desember:'December',Jan:'Jan',Feb:'Feb',Mar:'Mar',Apr:'Apr',Jun:'Jun',Jul:'Jul',Ags:'Aug',Sep:'Sep',Okt:'Oct',Nov:'Nov',Des:'Dec'};
   var LANGUAGE_INLINE={'Monitoring Program':'Program Monitoring','Diperbarui real-time':'Updated in real time','Belum ditentukan':'Not assigned','Belum Dikerjakan':'Not started','Menunggu Review':'Awaiting Review','Sudah Dinilai':'Reviewed','Belum dinilai':'Not reviewed','Tidak hadir':'Absent','Tidak aktif':'Inactive','peserta aktif':'active participants','tugas terlambat':'late assignments','kata ditulis':'words written','hari lagi':'days remaining','hari lalu':'days ago','jam lalu':'hours ago'};
   function translateUiText(value){var text=String(value||''),trimmed=text.trim();if(!trimmed)return text;var translated=LANGUAGE_EN[trimmed],prefix='';if(!translated){var prefixed=trimmed.match(/^([^A-Za-zÀ-ÿ0-9"“(]+)(.+)$/u);if(prefixed&&LANGUAGE_EN[prefixed[2]]){prefix=prefixed[1];translated=prefix+LANGUAGE_EN[prefixed[2]];}}if(!translated){for(var i=0;i<LANGUAGE_PATTERNS.length;i++){if(LANGUAGE_PATTERNS[i][0].test(trimmed)){translated=trimmed.replace(LANGUAGE_PATTERNS[i][0],LANGUAGE_PATTERNS[i][1]);break;}}}if(!translated)translated=trimmed;translated=translated.replace(/\bMinggu\s+(\d+)\s+dari\s+Bulan\s+(\d+)\b/gi,'Week $1 of Month $2').replace(/\bBulan\s+(\d+)(\s*[·,]\s*)Minggu\s+(\d+)\b/gi,'Month $1$2Week $3').replace(/\bMinggu\s+(?=\d)/gi,'Week ').replace(/\bBulan\s+(?=\d)/gi,'Month ');Object.keys(LANGUAGE_DATE_WORDS).sort(function(a,b){return b.length-a.length;}).forEach(function(word){translated=translated.replace(new RegExp('\\b'+word.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','g'),LANGUAGE_DATE_WORDS[word]);});Object.keys(LANGUAGE_INLINE).sort(function(a,b){return b.length-a.length;}).forEach(function(phrase){translated=translated.split(phrase).join(LANGUAGE_INLINE[phrase]);});return text.replace(trimmed,translated);}
-  function applyLanguage(root){if(LANGUAGE_BUSY)return;LANGUAGE_BUSY=true;try{var scope=root||document,walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT),nodes=[],node;while((node=walker.nextNode()))nodes.push(node);nodes.forEach(function(textNode){var parent=textNode.parentElement;if(!parent||/^(SCRIPT|STYLE|TEXTAREA|INPUT|OPTION)$/.test(parent.tagName)||parent.closest('[data-no-translate]'))return;var current=textNode.nodeValue,last=LANGUAGE_RENDERED.get(textNode);if(!LANGUAGE_ORIGINALS.has(textNode)||(last!==undefined&&current!==last)){LANGUAGE_ORIGINALS.set(textNode,current);}var original=LANGUAGE_ORIGINALS.get(textNode),rendered=UI_LANGUAGE==='en'?translateUiText(original):original;textNode.nodeValue=rendered;LANGUAGE_RENDERED.set(textNode,rendered);});$all('input,textarea,select,option,button,[aria-label],[title]',scope).forEach(function(element){['placeholder','aria-label','title'].forEach(function(attr){if(!element.hasAttribute(attr))return;var key='ftgId'+attr.replace(/-([a-z])/g,function(_,c){return c.toUpperCase();}).replace(/^./,function(c){return c.toUpperCase();}),renderedKey='ftgRendered'+key.slice(5),current=element.getAttribute(attr),last=element.dataset[renderedKey];if(!element.dataset[key]||(last!==undefined&&current!==last))element.dataset[key]=current;var original=element.dataset[key],rendered=UI_LANGUAGE==='en'?translateUiText(original):original;element.setAttribute(attr,rendered);element.dataset[renderedKey]=rendered;});if(element.tagName==='OPTION'){if(!element.dataset.ftgIdText)element.dataset.ftgIdText=element.textContent;element.textContent=UI_LANGUAGE==='en'?translateUiText(element.dataset.ftgIdText):element.dataset.ftgIdText;}if((element.tagName==='INPUT'||element.tagName==='BUTTON')&&/^(submit|button)$/.test(element.type||'')&&element.value){if(!element.dataset.ftgIdValue)element.dataset.ftgIdValue=element.value;element.value=UI_LANGUAGE==='en'?translateUiText(element.dataset.ftgIdValue):element.dataset.ftgIdValue;}});document.documentElement.lang=UI_LANGUAGE;}finally{LANGUAGE_BUSY=false;}}
+  function applyLanguage(root){if(LANGUAGE_BUSY)return;LANGUAGE_BUSY=true;try{var scope=root||document,walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT),nodes=[],node;while((node=walker.nextNode()))nodes.push(node);nodes.forEach(function(textNode){var parent=textNode.parentElement;if(!parent||/^(SCRIPT|STYLE|TEXTAREA|INPUT|OPTION)$/.test(parent.tagName)||parent.closest('[data-no-translate]'))return;var current=textNode.nodeValue,last=LANGUAGE_RENDERED.get(textNode);if(!LANGUAGE_ORIGINALS.has(textNode)||(last!==undefined&&current!==last)){LANGUAGE_ORIGINALS.set(textNode,current);}var original=LANGUAGE_ORIGINALS.get(textNode),rendered=UI_LANGUAGE==='en'?translateUiText(original):original;if(current!==rendered)textNode.nodeValue=rendered;LANGUAGE_RENDERED.set(textNode,rendered);});$all('input,textarea,select,option,button,[aria-label],[title]',scope).forEach(function(element){['placeholder','aria-label','title'].forEach(function(attr){if(!element.hasAttribute(attr))return;var key='ftgId'+attr.replace(/-([a-z])/g,function(_,c){return c.toUpperCase();}).replace(/^./,function(c){return c.toUpperCase();}),renderedKey='ftgRendered'+key.slice(5),current=element.getAttribute(attr),last=element.dataset[renderedKey];if(!element.dataset[key]||(last!==undefined&&current!==last))element.dataset[key]=current;var original=element.dataset[key],rendered=UI_LANGUAGE==='en'?translateUiText(original):original;if(current!==rendered)element.setAttribute(attr,rendered);element.dataset[renderedKey]=rendered;});if(element.tagName==='OPTION'){if(!element.dataset.ftgIdText)element.dataset.ftgIdText=element.textContent;var optionText=UI_LANGUAGE==='en'?translateUiText(element.dataset.ftgIdText):element.dataset.ftgIdText;if(element.textContent!==optionText)element.textContent=optionText;}if((element.tagName==='INPUT'||element.tagName==='BUTTON')&&/^(submit|button)$/.test(element.type||'')&&element.value){if(!element.dataset.ftgIdValue)element.dataset.ftgIdValue=element.value;var controlValue=UI_LANGUAGE==='en'?translateUiText(element.dataset.ftgIdValue):element.dataset.ftgIdValue;if(element.value!==controlValue)element.value=controlValue;}});document.documentElement.lang=UI_LANGUAGE;}finally{LANGUAGE_BUSY=false;}}
   window.FTG_I18N={translate:translateUiText,apply:applyLanguage,setLanguage:function(language){UI_LANGUAGE=language==='en'?'en':'id';applyLanguage(document);return UI_LANGUAGE;},getLanguage:function(){return UI_LANGUAGE;}};
-  function mountLanguageControl(){var header=$('main header')||$('header');if(!header||byId('ftgLanguageControl'))return;var label=document.createElement('label');label.className='ftg-language-control';label.innerHTML='<i class="fa-solid fa-language"></i><select id="ftgLanguageControl" aria-label="Bahasa / Language"><option value="id">ID</option><option value="en">EN</option></select>';var actions=$('.ftg-header-actions',header)||header.lastElementChild||header;actions.insertBefore(label,actions.firstChild);var select=$('#ftgLanguageControl',label);select.value=UI_LANGUAGE;select.addEventListener('change',function(){UI_LANGUAGE=select.value;localStorage.setItem('ftg-language',UI_LANGUAGE);applyLanguage(document);toast(UI_LANGUAGE==='en'?'Language changed to English':'Bahasa diubah ke Indonesia','🌐');});applyLanguage(document);if(!document.body.getAttribute('data-ftg-language-watch')){document.body.setAttribute('data-ftg-language-watch','1');new MutationObserver(function(records){if(LANGUAGE_BUSY)return;records.forEach(function(record){record.addedNodes.forEach(function(added){if(added.nodeType===1||added.nodeType===3)applyLanguage(added.nodeType===3?added.parentElement:added);});});}).observe(document.body,{childList:true,subtree:true});}}
+  function mountLanguageControl(){var header=$('main header')||$('header');if(!header||byId('ftgLanguageControl'))return;var label=document.createElement('label');label.className='ftg-language-control';label.innerHTML='<i class="fa-solid fa-language"></i><select id="ftgLanguageControl" aria-label="Bahasa / Language"><option value="id">ID</option><option value="en">EN</option></select>';var actions=$('.ftg-header-actions',header)||header.lastElementChild||header;actions.insertBefore(label,actions.firstChild);var select=$('#ftgLanguageControl',label);select.value=UI_LANGUAGE;select.addEventListener('change',function(){UI_LANGUAGE=select.value;localStorage.setItem('ftg-language',UI_LANGUAGE);applyLanguage(document);toast(UI_LANGUAGE==='en'?'Language changed to English':'Bahasa diubah ke Indonesia','🌐');});applyLanguage(document);if(!document.body.getAttribute('data-ftg-language-watch')){document.body.setAttribute('data-ftg-language-watch','1');new MutationObserver(function(records){if(LANGUAGE_BUSY)return;records.forEach(function(record){record.addedNodes.forEach(function(added){if(added.nodeType===3&&added.parentElement&&added.parentElement.tagName==='OPTION')return;if(added.nodeType===1||added.nodeType===3)applyLanguage(added.nodeType===3?added.parentElement:added);});});}).observe(document.body,{childList:true,subtree:true});}}
 
   function wireGlobalUX() {
     if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');

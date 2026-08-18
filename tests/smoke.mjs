@@ -145,13 +145,13 @@ test('Fasil can open and persist a new assignment without a modal race', async (
   const monitorStart = app.indexOf('function openAssignmentMonitor()');
   const monitorEnd = app.indexOf('function openAdminNotificationCenter()', monitorStart);
   const monitor = app.slice(monitorStart, monitorEnd);
-  const editorStart = app.indexOf('function openAssignmentEditor(task, onSaved)');
+  const editorStart = app.indexOf('function openAssignmentEditor(task, onSaved, onClosed)');
   const editorEnd = app.indexOf('function mountMentorAssignmentManager()', editorStart);
   const editor = app.slice(editorStart, editorEnd);
   assert.ok(monitorStart > -1 && monitorEnd > monitorStart, 'assignment monitor must exist');
   assert.match(monitor, /assignmentMonitorCreate/);
   assert.match(monitor, /openAssignmentEditor\(null,function\(\)/);
-  assert.doesNotMatch(monitor, /shut\(\);\s*setTimeout\(function\(\)\{\s*openAssignmentEditor/, 'monitor must not close before the child editor opens');
+  assert.match(monitor, /shut\(\);\s*setTimeout\(function\(\)\{\s*try\{\s*var editor=openAssignmentEditor/, 'monitor must close before the editor opens to prevent nested modal deadlocks');
   assert.match(monitor, /create\.setAttribute\('aria-busy','true'\)/);
   assert.match(monitor, /if\(!editor\|\|!editor\.overlay\|\|!document\.contains\(editor\.overlay\)\)throw new Error/);
   assert.match(monitor, /Assignment editor failed/);
@@ -329,7 +329,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=82/);
+    assert.match(await text(file), /app\.js\?v=83/);
   }
 });
 
@@ -351,7 +351,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=82/);
+    assert.match(await text(file), /app\.js\?v=83/);
   }
 });
 
@@ -635,8 +635,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=82/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=82/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=83/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=83/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -645,9 +645,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=82/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=83/);
   assert.match(await text('admin-program.html'), /responsive\.css\?v=76/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=82/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=83/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);

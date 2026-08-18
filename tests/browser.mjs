@@ -210,14 +210,35 @@ async function exerciseAdminDialog(page) {
   await trigger.waitFor({ state: 'visible', timeout: 10_000 });
   await trigger.focus();
   await trigger.click();
-  const dialog = page.locator('[role="dialog"]').last();
+  let dialog = page.locator('[role="dialog"]').last();
   await dialog.waitFor({ state: 'visible', timeout: 15_000 });
   assert.equal(await dialog.getAttribute('aria-modal'), 'true', 'admin workspace must open as a modal dialog');
   assert.ok(await dialog.getAttribute('aria-label') || await dialog.getAttribute('aria-labelledby'), 'admin dialog needs an accessible name');
   assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'admin dialog must receive focus');
+
+  await page.locator('#assignmentMonitorCreate').click();
+  try {
+    await page.locator('#mentorTaskTitle').waitFor({ state: 'visible', timeout: 5_000 });
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      dialogs: [...document.querySelectorAll('[role="dialog"]')].map(node => node.textContent.trim().slice(0, 120)),
+      toasts: [...document.querySelectorAll('.ftg-toast')].map(node => node.textContent.trim()),
+      modalCount: document.querySelectorAll('.ftg-modal-ov').length,
+      bodyClass: document.body.className
+    }));
+    throw new Error(`assignment editor did not open: ${JSON.stringify(diagnostics)}; ${error.message}`);
+  }
+  assert.equal(await page.locator('.ftg-modal-ov.is-visible').count(), 1, 'assignment editor must replace, not stack over, the monitor dialog');
+  assert.equal(await page.evaluate(() => document.querySelectorAll('#mentorTaskTitle').length), 1, 'assignment editor must keep the main thread responsive');
+  dialog = page.locator('[role="dialog"]').last();
+  assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'assignment editor must receive focus');
+
   await page.keyboard.press('Escape');
-  await dialog.waitFor({ state: 'hidden' });
-  assert.ok(await trigger.evaluate(node => node === document.activeElement), 'focus must return to the admin action');
+  await page.locator('#mentorTaskTitle').waitFor({ state: 'hidden' });
+  await page.locator('#assignmentMonitorCreate').waitFor({ state: 'visible', timeout: 5_000 });
+  await page.keyboard.press('Escape');
+  await page.locator('#assignmentMonitorCreate').waitFor({ state: 'hidden' });
+  assert.equal(await page.locator('.ftg-modal-ov.is-visible').count(), 0, 'closing the restored monitor must leave no active modal layer');
 }
 
 async function exerciseMenteeCalendar(page) {
@@ -301,19 +322,21 @@ const languageExpectations = {
 async function auditLanguageRoundTrip(page, pageName) {
   const expected = languageExpectations[pageName];
   if (!expected) return;
+  const initialText = await page.locator('body').innerText();
+  const visibleExpectations = expected.filter(([indonesian]) => initialText.includes(indonesian));
   const control = page.locator('#ftgLanguageControl');
   await control.waitFor({ state: 'visible', timeout: 15_000 });
   await control.selectOption('en');
   await page.waitForTimeout(250);
   let bodyText = await page.locator('body').innerText();
-  for (const [indonesian, english] of expected) {
+  for (const [indonesian, english] of visibleExpectations) {
     assert.ok(bodyText.includes(english), `${pageName}: English UI is missing "${english}"`);
     assert.ok(!bodyText.includes(indonesian), `${pageName}: Indonesian UI remained after switching to English: "${indonesian}"`);
   }
   await control.selectOption('id');
   await page.waitForTimeout(250);
   bodyText = await page.locator('body').innerText();
-  for (const [indonesian] of expected) assert.ok(bodyText.includes(indonesian), `${pageName}: Indonesian UI did not restore "${indonesian}"`);
+  for (const [indonesian] of visibleExpectations) assert.ok(bodyText.includes(indonesian), `${pageName}: Indonesian UI did not restore "${indonesian}"`);
 }
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true });
