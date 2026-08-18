@@ -800,6 +800,7 @@ main [style*="color:#f97316"],.ftg-modal-box [style*="color:#f97316"]{color:#c24
 main [style*="color:#ea580c"],.ftg-modal-box [style*="color:#ea580c"]{color:#9a3412!important}
 main [style*="color:#8b5cf6"],.ftg-modal-box [style*="color:#8b5cf6"]{color:#6d28d9!important}
 .ftg-profile-photo[style*="background"]{background:#c2410c!important;color:#fff!important}
+.ftg-profile-control.ftg-profile-photo{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
 #ftgLmsDate{color:#475569!important}
 body:has(main[data-design-id="main-wl-g7h8i9"]) aside [class*="text-[#8b5cf6]"]{color:#ddd6fe!important}
 body:has(main[data-design-id="main-wl-g7h8i9"]) article[data-design-id^="workshop-career"]{opacity:1!important}
