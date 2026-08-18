@@ -125,7 +125,7 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.doesNotMatch(app, /PAGE\.indexOf\('admin-'\) !== 0/);
   assert.match(app, /PAGE\.indexOf\('admin-dashboard'\) === 0\) initAdminDashboard/);
   assert.match(css, /ftg-auth-warm/);
-  for (const id of ['adminGlobalTask','adminCohort','adminSettings','adminRubrics','adminCalendar','adminAttendance','adminCertificates','adminHealth','adminAudit','adminExcel','adminPdf','adminRecordings','adminLearning','adminAssignmentMonitor','adminNotifications','adminDonorPortal']) {
+  for (const id of ['adminGlobalTask','adminCohort','adminSettings','adminRubrics','adminCalendar','adminAttendance','adminCertificates','adminHealth','adminAudit','adminExcel','adminPdf','adminRecordings','adminLearning','adminWorkshopSchedule','adminAssignmentMonitor','adminNotifications','adminAnnouncements','adminDonorPortal','adminInvestorTrust','adminTracks']) {
     assert.match(app, new RegExp(`['"]${id}['"]`), `${id} missing`);
   }
   assert.match(app, /\$\('#adminCohort', sec\)\.addEventListener/);
@@ -133,11 +133,31 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.match(app, /learningButton\.addEventListener/);
   assert.match(app, /assignmentMonitor\.addEventListener/);
   assert.match(app, /notificationButton\.addEventListener/);
-  assert.match(app, /function openBusy\(button,opener\)/);
+  assert.match(app, /function openBusy\(button,\s*opener\)/);
   assert.ok(app.indexOf('function openBusy(button, opener)') < app.indexOf('function upgradeMenteeCalendar()'), 'busy/error helper must be shared before participant calendar actions');
   assert.match(app, /aria-busy/);
   assert.match(app, /Membuka…/);
   assert.match(app, /Server terlalu lama merespons/);
+});
+
+test('Fasil can open and persist a new assignment without a modal race', async () => {
+  const app = await text('app.js');
+  const monitorStart = app.indexOf('function openAssignmentMonitor()');
+  const monitorEnd = app.indexOf('function openAdminNotificationCenter()', monitorStart);
+  const monitor = app.slice(monitorStart, monitorEnd);
+  const editorStart = app.indexOf('function openAssignmentEditor(task, onSaved)');
+  const editorEnd = app.indexOf('function mountMentorAssignmentManager()', editorStart);
+  const editor = app.slice(editorStart, editorEnd);
+  assert.ok(monitorStart > -1 && monitorEnd > monitorStart, 'assignment monitor must exist');
+  assert.match(monitor, /assignmentMonitorCreate/);
+  assert.match(monitor, /openAssignmentEditor\(null,function\(\)/);
+  assert.doesNotMatch(monitor, /shut\(\);\s*setTimeout\(function\(\)\{\s*openAssignmentEditor/, 'monitor must not close before the child editor opens');
+  assert.match(monitor, /create\.setAttribute\('aria-busy','true'\)/);
+  assert.match(monitor, /Assignment editor failed/);
+  assert.ok(editorStart > -1 && editorEnd > editorStart, 'assignment editor must exist');
+  assert.match(editor, /structuredAssignmentSave\(candidate, true\)\.then/);
+  assert.ok(editor.indexOf('structuredAssignmentSave(candidate, true)') < editor.indexOf('close();'), 'server save must finish before closing the editor');
+  assert.match(editor, /Assignment save failed/);
 });
 
 test('secure Fasil account creation has one production handler and visible progress', async () => {
@@ -294,7 +314,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=79/);
+    assert.match(await text(file), /app\.js\?v=80/);
   }
 });
 
@@ -316,7 +336,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=79/);
+    assert.match(await text(file), /app\.js\?v=80/);
   }
 });
 
@@ -600,8 +620,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=79/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=79/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=80/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=80/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -610,9 +630,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=79/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=80/);
   assert.match(await text('admin-program.html'), /responsive\.css\?v=75/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=79/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=80/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);

@@ -1795,16 +1795,33 @@
     });
   }
 
-  function structuredAssignmentSave(task) {
-    if (!sb || !AUTH.user || !['mentor', 'admin'].includes(AUTH.profile.role)) return Promise.resolve();
+  function structuredAssignmentSave(task, rethrow) {
+    if (!sb || !AUTH.user || !AUTH.profile || !['mentor', 'admin'].includes(AUTH.profile.role)) return Promise.resolve();
     return sb.from('assignments').upsert({ id: task.id, cohort_id: AUTH.profile.cohort_id || null, title: task.title, description: task.description, deadline: task.deadline ? deadlineDate(task.deadline).toISOString() : null, points: task.points || 0, reference_link: task.referenceLink || null, checklist: task.checklist || [], rubric: task.rubric || [], status: task.active === false ? 'archived' : 'published', is_template: false, created_by: AUTH.user.id, updated_at: new Date().toISOString() }).then(function (r) {
       if (r.error) throw r.error;
       var ids = (task.targets || []).map(function (n) { return AUTH.profilesByNumber[n] && AUTH.profilesByNumber[n].id; }).filter(Boolean);
-      return sb.from('assignment_targets').delete().eq('assignment_id', task.id).then(function () { return ids.length ? sb.from('assignment_targets').insert(ids.map(function (id) { return { assignment_id: task.id, mentee_id: id }; })) : null; });
+      return sb.from('assignment_targets').delete().eq('assignment_id', task.id).then(function (targetDelete) {
+        if (targetDelete.error) throw targetDelete.error;
+        if (!ids.length) return null;
+        return sb.from('assignment_targets').insert(ids.map(function (id) { return { assignment_id: task.id, mentee_id: id }; })).then(function (targetInsert) {
+          if (targetInsert.error) throw targetInsert.error;
+          return targetInsert;
+        });
+      });
     }).then(function () {
       var notices = (task.targets || []).map(function (n) { var p = AUTH.profilesByNumber[n]; return p && { user_id: p.id, type: 'assignment', title: 'Tugas baru', body: task.title + ' · ' + dueLabel(task.deadline), href: 'mentee-dashboard.html#tugas', delivery: { in_app: 'sent' } }; }).filter(Boolean);
-      return notices.length ? apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ notifications:notices }) }) : null;
-    }).catch(reportError);
+      if (!notices.length) return { notificationSent: false };
+      return apiRequest('/api/notifications', { method:'POST', body:JSON.stringify({ notifications:notices }) }).then(function () {
+        return { notificationSent: true };
+      }).catch(function (error) {
+        reportError(error);
+        return { notificationSent: false, notificationError: error };
+      });
+    }).catch(function (error) {
+      reportError(error);
+      if (rethrow) throw error;
+      return null;
+    });
   }
   function structuredSubmissionSave(task, sub, createVersion) {
     if (!sb || !AUTH.user || AUTH.profile.role !== 'mentee') return Promise.resolve();
@@ -3435,6 +3452,8 @@
           });
         });
         $('#mentorTaskSave', box).addEventListener('click', function () {
+          var saveButton = this;
+          if (saveButton.disabled || saveButton.getAttribute('aria-busy') === 'true') return;
           var title = $('#mentorTaskTitle', box).value.trim();
           var desc = $('#mentorTaskDesc', box).value.trim();
           var deadline = $('#mentorTaskDeadline', box).value;
@@ -3451,26 +3470,51 @@
           var weightTotal = rubricRows.reduce(function (sum, r) { return sum + r.weight; }, 0);
           if (!rubricRows.length || weightTotal !== 100) { toast('Total bobot rubrik harus tepat 100%', '⚠️'); return; }
           var isNew = !task;
-          if (isNew) {
-            task = { id: 'task-' + Date.now(), createdAt: new Date().toISOString(), createdBy: (mySession() || {}).name || 'Mentor', active: true };
-            mentorAssignments().unshift(task);
-          }
-          task.title = title; task.description = desc; task.deadline = deadlineAt.toISOString();
-          task.points = Math.max(0, +$('#mentorTaskPoints', box).value || 0);
-          task.referenceLink = $('#mentorTaskLink', box).value.trim(); task.targets = targets;
-          task.checklist = checklist; task.rubric = rubricRows;
-          task.updatedAt = new Date().toISOString();
-          targets.forEach(function (id) {
-            pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari ' + currentMentorName() + ': ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
+          var candidate = Object.assign({}, task || {
+            id: 'task-' + Date.now(),
+            createdAt: new Date().toISOString(),
+            createdBy: (mySession() || {}).name || 'Mentor',
+            active: true
+          }, {
+            title: title,
+            description: desc,
+            deadline: deadlineAt.toISOString(),
+            points: Math.max(0, +$('#mentorTaskPoints', box).value || 0),
+            referenceLink: $('#mentorTaskLink', box).value.trim(),
+            targets: targets,
+            checklist: checklist,
+            rubric: rubricRows,
+            updatedAt: new Date().toISOString()
           });
-          saveState(); close(); toast(isNew ? 'Tugas diberikan dan notifikasi terkirim' : 'Perubahan tugas tersimpan', '✅');
-          if ($('#mentorTaskTemplate', box).checked) {
-            G.assignmentTemplates.unshift({ id: 'tpl-' + Date.now(), title: title, description: desc, points: task.points, referenceLink: task.referenceLink, checklist: checklist, rubric: rubricRows, at: new Date().toISOString() });
-          }
-          addAudit(isNew ? 'assignment.create' : 'assignment.update', title, targets.join(','));
-          saveState();
-          structuredAssignmentSave(task);
-          if (onSaved) onSaved();
+          var originalLabel = saveButton.innerHTML;
+          saveButton.disabled = true;
+          saveButton.setAttribute('aria-busy', 'true');
+          saveButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan tugas…';
+          structuredAssignmentSave(candidate, true).then(function (result) {
+            if (isNew) {
+              task = candidate;
+              mentorAssignments().unshift(task);
+            } else {
+              Object.assign(task, candidate);
+            }
+            targets.forEach(function (id) {
+              pushEventTo(id, isNew ? '📚' : '✏️', (isNew ? 'Tugas baru dari ' + currentMentorName() + ': ' : 'Tugas diperbarui: ') + title + ' · ' + dueLabel(task.deadline), 'mentee');
+            });
+            if ($('#mentorTaskTemplate', box).checked) {
+              G.assignmentTemplates.unshift({ id: 'tpl-' + Date.now(), title: title, description: desc, points: task.points, referenceLink: task.referenceLink, checklist: checklist, rubric: rubricRows, at: new Date().toISOString() });
+            }
+            addAudit(isNew ? 'assignment.create' : 'assignment.update', title, targets.join(','));
+            saveState();
+            close();
+            toast(result && result.notificationError ? 'Tugas tersimpan. Notifikasi otomatis tertunda dan dapat dikirim ulang dari panel Fasil.' : (isNew ? 'Tugas diberikan dan notifikasi terkirim' : 'Perubahan tugas tersimpan'), result && result.notificationError ? '⚠️' : '✅');
+            if (onSaved) onSaved(task);
+          }).catch(function (error) {
+            saveButton.disabled = false;
+            saveButton.removeAttribute('aria-busy');
+            saveButton.innerHTML = originalLabel;
+            toast((error && error.message) || 'Tugas gagal disimpan. Periksa koneksi lalu coba lagi.', '⚠️');
+            console.error('Assignment save failed:', error);
+          });
         });
       }
     );
@@ -4767,7 +4811,7 @@
     return Promise.resolve(result).catch(function (error) {
       toast((error && error.message) || ('Modul ' + label + ' gagal dibuka. Silakan coba lagi.'), '⚠️');
       console.error('Action failed:', label, error);
-      throw error;
+      return null;
     }).finally(function () {
       hideLoader();
       button.removeAttribute('aria-busy');
@@ -5153,7 +5197,32 @@
       var profiles={};(data.profiles||[]).forEach(function(p){profiles[p.id]=p;});
       var submissions=data.submissions||[];
       var rows=(data.assignments||[]).map(function(task){var related=submissions.filter(function(s){return s.assignment_id===task.id;}),sent=related.filter(function(s){return !!s.submitted_at;}),reviewed=related.filter(function(s){return s.status==='approved';});return {task:task,related:related,sent:sent,reviewed:reviewed};});
-      modal('<div class="ftg-assignment-monitor"><div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Tugas & Pengumpulan Program</h3><p>Fasil melihat status lintas mentor tanpa membuka dashboard mentee.</p></div><button id="assignmentMonitorCreate" type="button" class="ftg-suite-primary"><i class="fa-solid fa-plus"></i><span>Tugas Baru</span></button></div><div class="ftg-assignment-monitor-list">'+rows.map(function(item){return '<article><div><b>'+esc(item.task.title)+'</b><small>'+(item.task.deadline?'Deadline '+new Date(item.task.deadline).toLocaleString('id-ID'):'Tanpa deadline')+' · '+esc(item.task.status)+'</small></div><div><span><b>'+item.sent.length+'</b> terkumpul</span><span><b>'+item.reviewed.length+'</b> dinilai</span><button type="button" data-monitor-task="'+esc(item.task.id)+'">Lihat detail</button></div></article><div data-monitor-detail="'+esc(item.task.id)+'" hidden>'+item.related.map(function(sub){var p=profiles[sub.mentee_id]||{};return '<div><span><b>'+esc(p.full_name||'Mentee')+'</b><small>'+esc(p.email||'')+'</small></span><em>'+esc(sub.status)+'</em><time>'+(sub.updated_at?new Date(sub.updated_at).toLocaleString('id-ID'):'—')+'</time></div>';}).join('')+'</div>';}).join('')+'</div></div>',function(box,shut){box.style.maxWidth='850px';var create=$('#assignmentMonitorCreate',box);if(create)create.addEventListener('click',function(){shut();setTimeout(function(){openAssignmentEditor(null,function(){invalidateApiCache('admin-operations');openAssignmentMonitor();});},210);});$all('[data-monitor-task]',box).forEach(function(button){button.addEventListener('click',function(){var detail=$('[data-monitor-detail="'+button.getAttribute('data-monitor-task')+'"]',box);if(detail){detail.hidden=!detail.hidden;button.textContent=detail.hidden?'Lihat detail':'Tutup detail';}});});});
+      modal('<div class="ftg-assignment-monitor"><div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Tugas & Pengumpulan Program</h3><p>Fasil melihat status lintas mentor tanpa membuka dashboard mentee.</p></div><button id="assignmentMonitorCreate" type="button" class="ftg-suite-primary"><i class="fa-solid fa-plus"></i><span>Tugas Baru</span></button></div><div class="ftg-assignment-monitor-list">'+rows.map(function(item){return '<article><div><b>'+esc(item.task.title)+'</b><small>'+(item.task.deadline?'Deadline '+new Date(item.task.deadline).toLocaleString('id-ID'):'Tanpa deadline')+' · '+esc(item.task.status)+'</small></div><div><span><b>'+item.sent.length+'</b> terkumpul</span><span><b>'+item.reviewed.length+'</b> dinilai</span><button type="button" data-monitor-task="'+esc(item.task.id)+'">Lihat detail</button></div></article><div data-monitor-detail="'+esc(item.task.id)+'" hidden>'+item.related.map(function(sub){var p=profiles[sub.mentee_id]||{};return '<div><span><b>'+esc(p.full_name||'Mentee')+'</b><small>'+esc(p.email||'')+'</small></span><em>'+esc(sub.status)+'</em><time>'+(sub.updated_at?new Date(sub.updated_at).toLocaleString('id-ID'):'—')+'</time></div>';}).join('')+'</div>';}).join('')+'</div></div>',function(box,shut){
+        box.style.maxWidth='850px';
+        var create=$('#assignmentMonitorCreate',box);
+        if(create)create.addEventListener('click',function(){
+          if(create.disabled||create.getAttribute('aria-busy')==='true')return;
+          var original=create.innerHTML;
+          create.disabled=true;
+          create.setAttribute('aria-busy','true');
+          create.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><span>Menyiapkan…</span>';
+          try{
+            openAssignmentEditor(null,function(){
+              invalidateApiCache('admin-operations');
+              shut();
+              setTimeout(openAssignmentMonitor,230);
+            });
+            requestAnimationFrame(function(){create.disabled=false;create.removeAttribute('aria-busy');create.innerHTML=original;});
+          }catch(error){
+            create.disabled=false;
+            create.removeAttribute('aria-busy');
+            create.innerHTML=original;
+            toast((error&&error.message)||'Form tugas gagal dibuka. Silakan coba lagi.','⚠️');
+            console.error('Assignment editor failed:',error);
+          }
+        });
+        $all('[data-monitor-task]',box).forEach(function(button){button.addEventListener('click',function(){var detail=$('[data-monitor-detail="'+button.getAttribute('data-monitor-task')+'"]',box);if(detail){detail.hidden=!detail.hidden;button.textContent=detail.hidden?'Lihat detail':'Tutup detail';}});});
+      });
     }).catch(function(error){toast(error.message,'⚠️');});
   }
   function openAdminNotificationCenter() {
@@ -5271,14 +5340,22 @@
     var total = 0, submitted = 0, reviewed = 0; mentorAssignments().forEach(function (t) { (t.targets || []).forEach(function (id) { total++; var s = taskSubmission(id, t.id); if (s && s.submittedAt) submitted++; if (s && s.review && s.review.decision !== 'revision') reviewed++; }); });
     var sec = document.createElement('section'); sec.id = 'admin-operations'; sec.className = 'bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-5';
     sec.innerHTML = '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><h2 style="font-size:15px;font-weight:800;color:#1e293b">🏛️ Pusat Operasi Program</h2><p style="font-size:11px;color:#64748b">Semua kendali program, peserta, pembelajaran, kehadiran, dan pelaporan.</p></div><button id="adminGlobalTask" class="ftg-suite-primary">+ Tugas Global</button></div><div class="ftg-suite-grid"><button id="adminCohort">👥<b>Cohort & Pairing</b></button><button id="adminSettings">⚙️<b>Pengaturan</b></button><button id="adminRubrics">🎯<b>Rubrik</b></button><button id="adminCalendar">🗓️<b>Kalender</b></button><button id="adminAttendance">📷<b>Presensi QR</b></button><button id="adminCertificates">🎓<b>Sertifikat</b></button><button id="adminHealth">❤️<b>Kesehatan Program</b></button><button id="adminAudit">🛡️<b>Audit Log</b></button><button id="adminExcel">📊<b>Unduh Excel</b></button><button id="adminPdf">📄<b>Laporan PDF</b></button></div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px"><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#1a5f4f">' + G.cohorts.length + '</b><p style="font-size:9px;color:#64748b">Cohort</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#8b5cf6">' + Object.keys(G.pairings || {}).length + '</b><p style="font-size:9px;color:#64748b">Pairing</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#f97316">' + submitted + '/' + total + '</b><p style="font-size:9px;color:#64748b">Terkumpul</p></div><div style="background:#f8fafc;border-radius:10px;padding:9px"><b style="font-size:18px;color:#16a34a">' + reviewed + '</b><p style="font-size:9px;color:#64748b">Dinilai</p></div></div>';
-    function openBusy(button,opener){if(button.disabled||button.getAttribute('aria-busy')==='true')return;var original=button.innerHTML,label=(button.textContent||'modul').trim(),hideLoader=operationLoader('Membuka '+label,'Menyiapkan modul dan data terbaru…');button.setAttribute('aria-busy','true');button.setAttribute('aria-disabled','true');button.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i><b>Membuka…</b>';var result;try{result=opener();}catch(error){result=Promise.reject(error);}Promise.resolve(result).catch(function(error){toast((error&&error.message)||('Modul '+label+' gagal dibuka. Silakan coba lagi.'),'⚠️');console.error('Admin action failed:',label,error);}).finally(function(){hideLoader();button.removeAttribute('aria-busy');button.removeAttribute('aria-disabled');button.innerHTML=original;});}
     host.insertBefore(sec, host.firstChild);
     $('#adminCohort', sec).addEventListener('click', function(){openBusy(this,openCohortManager);});
-    $('#adminGlobalTask', sec).addEventListener('click', function () { openAssignmentEditor(null, mountAdminOperations); });
-    $('#adminSettings', sec).addEventListener('click', openProgramSettingsSuite);
-    $('#adminRubrics',sec).addEventListener('click',openRubricSuite);
+    $('#adminGlobalTask', sec).addEventListener('click', function () {
+      openBusy(this,function(){
+        return openAssignmentEditor(null,function(){
+          invalidateApiCache('admin-operations');
+          var current=$('#admin-operations');
+          if(current)current.remove();
+          mountAdminOperations();
+        });
+      });
+    });
+    $('#adminSettings', sec).addEventListener('click', function(){openBusy(this,openProgramSettingsSuite);});
+    $('#adminRubrics',sec).addEventListener('click',function(){openBusy(this,openRubricSuite);});
     $('#adminCalendar',sec).addEventListener('click',function(){openBusy(this,openEventManager);});
-    $('#adminAttendance',sec).addEventListener('click',openAttendanceSuite);
+    $('#adminAttendance',sec).addEventListener('click',function(){openBusy(this,openAttendanceSuite);});
     $('#adminCertificates',sec).addEventListener('click',function(){openBusy(this,openCertificateSuite);});
     $('#adminHealth',sec).addEventListener('click',function(){openBusy(this,openHealthSuite);});
     $('#adminAudit',sec).addEventListener('click',function(){openBusy(this,openAuditSuite);});
@@ -5299,9 +5376,9 @@
     var assignmentMonitor=document.createElement('button');assignmentMonitor.id='adminAssignmentMonitor';assignmentMonitor.innerHTML='<i class="fa-solid fa-list-check"></i><b>Tugas & Pengumpulan</b>';
     if(suiteGrid)suiteGrid.insertBefore(assignmentMonitor,suiteGrid.children[2]||null);assignmentMonitor.addEventListener('click',function(){openBusy(this,openAssignmentMonitor);});
     var notificationButton=document.createElement('button');notificationButton.id='adminNotifications';notificationButton.innerHTML='<i class="fa-solid fa-envelope-open-text"></i><b>Email & Notifikasi</b>';
-    if(suiteGrid)suiteGrid.insertBefore(notificationButton,suiteGrid.children[3]||null);notificationButton.addEventListener('click',openAdminNotificationCenter);
+    if(suiteGrid)suiteGrid.insertBefore(notificationButton,suiteGrid.children[3]||null);notificationButton.addEventListener('click',function(){openBusy(this,openAdminNotificationCenter);});
     var announcementButton=document.createElement('button');announcementButton.id='adminAnnouncements';announcementButton.innerHTML='<i class="fa-solid fa-bullhorn"></i><b>Papan Informasi</b>';
-    if(suiteGrid)suiteGrid.insertBefore(announcementButton,suiteGrid.children[4]||null);announcementButton.addEventListener('click',openAnnouncementManager);
+    if(suiteGrid)suiteGrid.insertBefore(announcementButton,suiteGrid.children[4]||null);announcementButton.addEventListener('click',function(){openBusy(this,openAnnouncementManager);});
     var donorButton=document.createElement('button');donorButton.id='adminDonorPortal';donorButton.innerHTML='<i class="fa-solid fa-hand-holding-heart"></i><b>Program Publik</b>';
     if(suiteGrid)suiteGrid.insertBefore(donorButton,suiteGrid.children[4]||null);donorButton.addEventListener('click',function(){openBusy(this,openDonorPortalManager);});
     var trustButton=document.createElement('button');trustButton.id='adminInvestorTrust';trustButton.innerHTML='<i class="fa-solid fa-shield-halved"></i><b>Investor Trust Center</b>';
