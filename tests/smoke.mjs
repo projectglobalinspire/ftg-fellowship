@@ -140,6 +140,16 @@ test('Fasil navigation is split, warm and every program action is wired', async 
   assert.match(app, /Server terlalu lama merespons/);
 });
 
+test('application pages use precompiled Tailwind CSS instead of the browser compiler', async () => {
+  for (const file of htmlFiles) {
+    const html = await text(file);
+    if (!/app\.js\?v=85/.test(html)) continue;
+    assert.doesNotMatch(html, /cdn\.tailwindcss\.com/, `${file} must not run the Tailwind compiler in production`);
+    assert.match(html, /tailwind-static\.css\?v=1/, `${file} must load the precompiled utility stylesheet`);
+  }
+  assert.ok((await text('tailwind-static.css')).length > 20_000, 'precompiled Tailwind stylesheet is unexpectedly empty');
+});
+
 test('Fasil can open and persist a new assignment without a modal race', async () => {
   const app = await text('app.js');
   const monitorStart = app.indexOf('function openAssignmentMonitor()');
@@ -329,7 +339,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=83/);
+    assert.match(await text(file), /app\.js\?v=85/);
   }
 });
 
@@ -351,7 +361,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=83/);
+    assert.match(await text(file), /app\.js\?v=85/);
   }
 });
 
@@ -433,7 +443,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=76/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=78/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -635,8 +645,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=83/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=83/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=85/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=85/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -645,9 +655,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=83/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=76/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=83/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=85/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=78/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=85/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);

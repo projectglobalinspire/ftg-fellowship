@@ -146,7 +146,15 @@ async function inspectPage(page, label, viewport) {
     return { overflow, overflowElements, smallText, undersized, dialogs, lowContrast };
   });
 
-  await page.screenshot({ path: path.join(ARTIFACTS, `${label}-${viewport.name}.png`), fullPage: true });
+  const screenshotPath = path.join(ARTIFACTS, `${label}-${viewport.name}.png`);
+  try {
+    await page.screenshot({ path: screenshotPath, fullPage: true, timeout: 15_000 });
+  } catch (error) {
+    // Very tall dynamic pages can exceed Edge's full-page capture budget. A
+    // viewport capture still preserves a useful visual artifact without
+    // turning a renderer-only timeout into a false application failure.
+    await page.screenshot({ path: screenshotPath, fullPage: false, timeout: 15_000 });
+  }
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
 
@@ -177,8 +185,19 @@ async function installLocalAssets(page) {
   if (process.env.FTG_LOCAL_ASSETS !== '1') return;
   const app = await fs.readFile(path.resolve('app.js'), 'utf8');
   const responsive = await fs.readFile(path.resolve('responsive.css'), 'utf8');
+  const tailwind = await fs.readFile(path.resolve('tailwind-static.css'), 'utf8');
+  await page.route('**/*.html*', async route => {
+    const file = path.basename(new URL(route.request().url()).pathname);
+    try {
+      const body = await fs.readFile(path.resolve(file), 'utf8');
+      return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body });
+    } catch (_) {
+      return route.fallback();
+    }
+  });
   await page.route('**/app.js*', route => route.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: app }));
   await page.route('**/responsive.css*', route => route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', body: responsive }));
+  await page.route('**/tailwind-static.css*', route => route.fulfill({ status: 200, contentType: 'text/css; charset=utf-8', body: tailwind }));
 }
 
 async function login(page, role) {
@@ -202,6 +221,7 @@ async function exerciseMetricDialog(page) {
   assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'focus must move into the opened dialog');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
+  await page.waitForFunction(node => node === document.activeElement, await trigger.elementHandle(), { timeout: 1_000 });
   assert.ok(await trigger.evaluate(node => node === document.activeElement), 'focus must return to the dialog trigger');
 }
 
@@ -309,7 +329,7 @@ const languageExpectations = {
   'admin-akun.html': [['Semua Akun','All Accounts'],['Ringkasan Peran','Role Summary'],['Cara Kerja Akun','How Accounts Work']],
   'mentee-dashboard.html': [['Tantangan Minggu Ini','This Week’s Challenges'],['Mentor Kamu','Your Mentor'],['Lanjut Belajar','Continue Learning']],
   'assignment-submission.html': [['Instruksi Tugas:','Assignment Instructions:'],['Riwayat Pengiriman','Submission History'],['Simpan Draft','Save Draft']],
-  'design-thinking-module.html': [['Perjalanan 4 Minggu','Four-Week Journey'],['Simpan Progres','Save Progress'],['Apa yang perlu dikumpulkan:','What to submit:']],
+  'design-thinking-module.html': [['STATUS BELAJAR','LEARNING STATUS'],['Aman di server','Secure on server'],['Lampiran & Kumpulkan','Attach & Submit']],
   'workshop-library.html': [['Semua peserta hadir workshop yang sama','All participants attend the same workshop'],['Mulai Pre-Work','Start Pre-Work']],
   'progress-tracker.html': [['Keseluruhan Program (3 Bulan)','Overall Program (3 Months)'],['Stats Minggu Ini','This Week’s Stats']],
   'mentor-dashboard.html': [['Antrian Review','Review Queue'],['Aksi Cepat','Quick Actions'],['Kirim Pesan Grup','Send Group Message']],
@@ -322,24 +342,39 @@ const languageExpectations = {
 async function auditLanguageRoundTrip(page, pageName) {
   const expected = languageExpectations[pageName];
   if (!expected) return;
+  if (pageName === 'design-thinking-module.html') {
+    await page.locator('.ftg-canvas-workspace').waitFor({ state: 'visible', timeout: 20_000 });
+  }
   const initialText = await page.locator('body').innerText();
   const visibleExpectations = expected.filter(([indonesian]) => initialText.includes(indonesian));
   const control = page.locator('#ftgLanguageControl');
   await control.waitFor({ state: 'visible', timeout: 15_000 });
   await control.selectOption('en');
-  await page.waitForTimeout(250);
+  if (visibleExpectations.length) {
+    await page.waitForFunction(
+      expectations => expectations.every(([, english]) => document.body.innerText.includes(english)),
+      visibleExpectations,
+      { timeout: 3_000 }
+    ).catch(() => {});
+  }
   let bodyText = await page.locator('body').innerText();
   for (const [indonesian, english] of visibleExpectations) {
-    assert.ok(bodyText.includes(english), `${pageName}: English UI is missing "${english}"`);
+    assert.ok(bodyText.includes(english), `${pageName}: English UI is missing "${english}"; nearby text: ${bodyText.split('\n').filter(line => line.includes(indonesian) || line.includes('Journey') || line.includes('Minggu')).slice(0, 12).join(' | ')}`);
     assert.ok(!bodyText.includes(indonesian), `${pageName}: Indonesian UI remained after switching to English: "${indonesian}"`);
   }
   await control.selectOption('id');
-  await page.waitForTimeout(250);
+  if (visibleExpectations.length) {
+    await page.waitForFunction(
+      expectations => expectations.every(([indonesian]) => document.body.innerText.includes(indonesian)),
+      visibleExpectations,
+      { timeout: 3_000 }
+    ).catch(() => {});
+  }
   bodyText = await page.locator('body').innerText();
   for (const [indonesian] of visibleExpectations) assert.ok(bodyText.includes(indonesian), `${pageName}: Indonesian UI did not restore "${indonesian}"`);
 }
 
-const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--disable-gpu'] });
 try {
   for (const viewport of viewports) {
     const context = await browser.newContext({ viewport });

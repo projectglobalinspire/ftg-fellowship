@@ -1352,7 +1352,10 @@
     var opener = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     var ov = document.createElement('div');
     ov.className = 'ftg-modal-ov';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(3px);';
+    /* Keep the scrim on the compositor without backdrop-filter. Admin pages
+       briefly show a loading layer before the dialog; stacking two full-screen
+       blur filters can stall Edge/GPU rendering on complex dashboards. */
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
     var box = document.createElement('div');
     box.className = 'ftg-modal-box';
     box.style.cssText = 'background:#fff;border-radius:20px;max-width:480px;width:100%;padding:26px;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto;';
@@ -5429,7 +5432,14 @@
     warmAdminControlCenter();
     if(!document.documentElement.getAttribute('data-program-refresh')){
       document.documentElement.setAttribute('data-program-refresh','1');
-      document.addEventListener('ftg:structured-ready',function(){var current=$('#admin-operations');if(current)current.remove();mountAdminOperations();});
+      document.addEventListener('ftg:structured-ready',function(){
+        // Never detach a control while its click is opening a workspace. That
+        // race left the scrim behind and could make Edge report a frozen page.
+        var userHasActed=USER_ACTION_CONTEXT.at>0;
+        var workspaceActive=!!document.querySelector('.ftg-modal-ov.is-visible,.ftg-operation-loading.is-visible');
+        if(userHasActed||workspaceActive)return;
+        var current=$('#admin-operations');if(current)current.remove();mountAdminOperations();
+      },{once:true});
     }
   }
   function mountMentorLearningMonitor() {
@@ -5610,6 +5620,10 @@
     'Semua catatan, penilaian, dan saran dari Pak Faris':'All notes, assessments, and advice from Mr. Faris','Mentor Kamu':'Your Mentor','Rangkuman Penilaian':'Assessment Summary','Yang Bagus:':'Strengths:','Yang Perlu Diperbaiki:':'Areas to Improve:','Saran Berikutnya:':'Next Steps:','Kirim Pesan':'Send Message','Kumpulkan Sekarang':'Submit Now','Tugas Minggu 2 belum dikumpulkan':'Week 2 assignment has not been submitted','Kumpulkan tugasmu untuk mendapatkan feedback dari Pak Faris!':'Submit your assignment to receive feedback from Mr. Faris!','Identifikasi Kebutuhan':'Needs Identification','Kedalaman Empati':'Depth of Empathy','Ketepatan Waktu':'Timeliness',
     'Bagaimana KPI Dihitung?':'How Is KPI Calculated?','Peserta':'Participant','Path':'Track','Total Score':'Total Score','Trend':'Trend','Posisi kamu saat ini':'Your current position','Rata-rata nilai dari mentor':'Average score from mentors','Kreativitas & orisinalitas solusi':'Creativity and originality of solutions','Streak, early submission, partisipasi':'Streak, early submission, and participation','tugas & lessons diselesaikan':'assignments and lessons completed','dari minggu lalu':'from last week','peserta lainnya':'other participants','Diperbarui setiap minggu':'Updated weekly',
     'AGENDA PESERTA':'PARTICIPANT SCHEDULE','Lihat jadwal di sini. Tambahkan agenda yang kamu pilih langsung ke Google Calendar.':'View your schedule here and add selected events directly to Google Calendar.','Tombol Google Calendar adalah pilihan utama. File .ics hanya tersedia untuk Apple Calendar, Outlook, atau aplikasi kalender lain.':'Google Calendar is the primary option. The .ics file is available for Apple Calendar, Outlook, and other calendar apps.','Buka link':'Open link','Belum ada agenda mendatang':'No upcoming events','Jadwal baru dari Fasil akan otomatis muncul di sini.':'New events from Fasil will appear here automatically.','KALENDER TERPUSAT':'CENTRAL CALENDAR','Kelola Agenda Program':'Manage Program Events','Pilih agenda untuk mengubahnya, atau buat agenda baru. Perubahan langsung tampil di dashboard peserta.':'Select an event to edit it or create a new one. Changes appear immediately on participant dashboards.','Agenda tersimpan':'Saved events','Belum ada agenda. Buat agenda pertama dari formulir.':'No events yet. Create the first event using the form.','AGENDA BARU':'NEW EVENT','EDIT AGENDA':'EDIT EVENT','Tambah kegiatan program':'Add a program event','Belum disimpan':'Not saved','Data tersimpan':'Saved','Nama kegiatan *':'Event name *','Jenis kegiatan':'Event type','Mulai *':'Starts *','Selesai':'Ends','Lokasi / ruang':'Location / room','Link meeting':'Meeting link','Keterangan':'Description','Peserta dapat membuka kalender di dashboard dan menambahkan agenda tertentu ke Google Calendar tanpa mengunduh file.':'Participants can open the calendar in their dashboard and add individual events to Google Calendar without downloading a file.','Ekspor semua (.ics)':'Export all (.ics)','Mengirim perubahan ke server...':'Sending changes to the server...','Menghapus agenda dari server...':'Deleting the event from the server...','Waktu selesai harus setelah waktu mulai.':'The end time must be after the start time.','Nama dan waktu mulai wajib diisi.':'Event name and start time are required.'
+  });
+  Object.assign(LANGUAGE_EN,{
+    'STATUS BELAJAR':'LEARNING STATUS','Aman di server':'Secure on server','Dapat dipantau':'Visible to your team','Riwayat versi':'Version history','Lampiran & Kumpulkan':'Attach & Submit',
+    'Jawaban tidak bergantung pada browser ini.':'Your answers are safely stored beyond this browser.','Mentor dan Fasil melihat progres sesuai hak akses.':'Mentors and Fasil can view progress according to their access.','Versi lama dipertahankan saat dikumpulkan ulang.':'Previous versions remain available after resubmission.'
   });
   var LANGUAGE_RENDERED=new WeakMap();
   var LANGUAGE_PATTERNS=[

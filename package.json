@@ -3,10 +3,12 @@
   "version": "2.1.0",
   "private": true,
   "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i tailwind.input.css -o tailwind-static.css --minify",
     "test": "node --test tests/smoke.mjs",
     "security": "node --test tests/security.mjs",
     "check": "node --check app.js && node --check donor.js && node --test tests/smoke.mjs",
     "test:browser": "node tests/browser.mjs",
+    "test:admin-actions": "node tests/admin-actions.mjs",
     "test:i18n": "node tests/i18n-browser.mjs",
     "qa": "npm run security && npm run check && npm run test:i18n && npm run test:browser"
   },
@@ -17,6 +19,7 @@
     "nodemailer": "^9.0.5"
   },
   "devDependencies": {
-    "playwright-core": "^1.62.1"
+    "playwright-core": "^1.62.1",
+    "tailwindcss": "^3.4.17"
   }
 }
