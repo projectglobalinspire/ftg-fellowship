@@ -394,7 +394,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=66/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=67/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -585,7 +585,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   assert.match(await text('admin-program.html'), /app\.js\?v=71/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=66/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=67/);
   assert.match(await text('admin-dashboard.html'), /app\.js\?v=71/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);

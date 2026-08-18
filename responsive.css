@@ -801,6 +801,11 @@ main [class*="bg-[#8b5cf6]"][class*="text-white"],button[style*="background:#8b5
 .ftg-welcome-hero.is-mentee{background:linear-gradient(140deg,#9a3412,#c2410c 58%,#b45309)}
 .ftg-announcement-kicker small,.ftg-assignment-monitor-head span,.ftg-workshop-manager-head small,.ftg-workshop-detail>small,.ftg-mail-admin-head small,.ftg-donor-admin-head small{color:#b45309!important}
 ::placeholder{color:#64748b!important;opacity:1}
+.login-kicker,#connBadge{color:#dbeafe!important}
+#googleLoginHelp{color:#58687a!important}
+#roleBadge{color:#c2410c!important;background:#fff7ed!important}
+#tabMentor.text-slate-500{color:#475569!important}
+body:not(:has(main[data-design-id])) .text-slate-300{color:#64748b!important}
 
 /* Do not hide layout defects at page level. Content reflows; only data
    tables receive their own horizontal scroll container. */
