@@ -398,7 +398,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=74/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=75/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -611,7 +611,7 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
   assert.match(await text('admin-program.html'), /app\.js\?v=79/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=74/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=75/);
   assert.match(await text('admin-dashboard.html'), /app\.js\?v=79/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
@@ -843,4 +843,11 @@ test('dashboard motion is purposeful, interruptible and accessible', async () =>
   assert.match(app, /ov\.classList\.add\('is-visible'\)/);
   assert.match(app, /bar\.style\.transform = 'scaleX\(0\)'/);
   assert.doesNotMatch(app, /document\.body\.classList\.add\('ftg-anim'\)/);
+});
+
+test('dashboard sidebars keep icons and labels on one stable alignment rail', async () => {
+  const css = await text('responsive.css');
+  assert.match(css, /aside\[data-design-id\]\s*>\s*nav\s*>\s*a\s*\{[\s\S]*width:\s*100%[\s\S]*justify-content:\s*flex-start\s*!important/);
+  assert.match(css, /aside\[data-design-id\]\s*>\s*nav\s*>\s*a\s*>\s*i:first-child\s*\{[\s\S]*flex:\s*0\s+0\s+20px[\s\S]*width:\s*20px\s*!important/);
+  assert.match(css, /aside\[data-design-id\]\s*>\s*nav\s*>\s*a\s*>\s*\.ml-auto\s*\{\s*margin-left:\s*auto\s*!important/);
 });
