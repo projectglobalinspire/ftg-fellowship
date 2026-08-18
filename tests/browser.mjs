@@ -123,7 +123,7 @@ async function inspectPage(page, label, viewport) {
       })
       .map(element => {
         const rect = element.getBoundingClientRect();
-        return { label: label(element), width: Math.round(rect.width), height: Math.round(rect.height) };
+        return { label: label(element), width: Math.round(rect.width), height: Math.round(rect.height), html: element.outerHTML.slice(0, 240) };
       })
       .filter(row => row.width < 44 || row.height < 44)
       .slice(0, 20);
@@ -139,7 +139,7 @@ async function inspectPage(page, label, viewport) {
         const effective = blend(color, bg);
         const size = parseFloat(style.fontSize), weight = parseInt(style.fontWeight, 10) || 400;
         const minimum = size >= 24 || (size >= 18.66 && weight >= 700) ? 3 : 4.5;
-        return { label: label(element), ratio: +contrast(effective, bg).toFixed(2), minimum, html: element.outerHTML.slice(0, 180) };
+        return { label: label(element), ratio: +contrast(effective, bg).toFixed(2), minimum, foreground: style.color, background: `rgb(${Math.round(bg.r)}, ${Math.round(bg.g)}, ${Math.round(bg.b)})`, html: element.outerHTML.slice(0, 180) };
       })
       .filter(row => row && row.ratio + .05 < row.minimum)
       .slice(0, 20);
