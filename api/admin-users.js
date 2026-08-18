@@ -1,4 +1,4 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, validPassword, adminFetch, requireRole, method } = require('./_lib');
 const { deliverEmail } = require('./_email');
 
 const DEFAULT_TRACKS = ['Career Path', 'Entrepreneur Path'];
@@ -68,7 +68,7 @@ module.exports = async function handler(req, res) {
       if (!body.email || !body.full_name || !['mentee', 'mentor', 'admin'].includes(body.role)) return send(res, 400, { error: 'Email, nama, dan role wajib valid' });
       const accountEmail = String(body.email).trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountEmail) || accountEmail.length > 254) return send(res, 400, { error:'Format email akun tidak valid' });
-      if (body.password && String(body.password).length < 8) return send(res, 400, { error:'Password sementara minimal 8 karakter' });
+      if (body.password && !validPassword(body.password)) return send(res, 400, { error:'Password minimal 10 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka' });
       const password = body.password || `${crypto.randomUUID().slice(0, 10)}Aa1!`;
       const menteeNumber = body.role === 'mentee' ? (Number(body.mentee_number) || await nextMenteeNumber()) : null;
       const activeTracks=await configuredTrackNames(false);
@@ -217,7 +217,8 @@ module.exports = async function handler(req, res) {
         authPatch.email_confirm = true;
         profilePatch.email = normalizedEmail;
       }
-      if (body.password) authPatch.password = body.password;
+      if (body.password && !validPassword(body.password)) return send(res, 400, { error:'Password minimal 10 karakter dan wajib memiliki huruf besar, huruf kecil, serta angka' });
+      if (body.password) authPatch.password = String(body.password);
       if (body.status && body.status !== currentProfile.status) authPatch.ban_duration = ['suspended', 'dropped'].includes(profilePatch.status || body.status) ? '876000h' : 'none';
       ['full_name','role','status','path','mentee_number'].forEach(key=>{if(profilePatch[key]===currentProfile[key])delete profilePatch[key];});
       if(!Object.keys(authPatch).length&&!Object.keys(profilePatch).length)return send(res,200,{ok:true,unchanged:true,mentor_profile_required:false});
@@ -259,6 +260,6 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     const message = String(error && error.message || 'Permintaan gagal');
     if (/already|registered|exist|duplicate/i.test(message)) return send(res, 409, { error:'Email ini sudah terdaftar. Gunakan email lain atau kelola akun yang sudah ada.' });
-    return send(res, 500, { error: message });
+    return serverError(req, res, error);
   }
 };

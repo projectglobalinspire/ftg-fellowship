@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, rateLimit, adminFetch, requireRole, method } = require('./_lib');
 
 const SECRET = process.env.DONOR_TOKEN_SECRET || process.env.SUPABASE_SECRET_KEY;
 const nowIso = () => new Date().toISOString();
@@ -166,6 +166,7 @@ module.exports = async function handler(req,res) {
   try {
     const state=await loadState(),body=req.body||{};
     if(req.method==='POST'&&body.action==='login'){
+      if(!rateLimit(req,res,'donor-login',{limit:5,windowMs:10*60*1000}))return;
       const email=clean(body.email,254).toLowerCase(),donor=state.portal.donors.find(d=>d.active!==false&&d.email===email&&d.code_hash===codeHash(body.code));
       if(!donor)return send(res,401,{error:'Email atau kode akses donor tidak sesuai'});
       return send(res,200,{token:donorToken(donor),donor:{id:donor.id,organization:donor.organization,contact_name:donor.contact_name,email:donor.email,program_ids:donor.program_ids||[]}});
@@ -202,5 +203,5 @@ module.exports = async function handler(req,res) {
       const programId=id(body.program_id),recipientId=clean(body.recipient_id,80),message=clean(body.message,1200);if(!(donor.program_ids||[]).includes(programId)||!message)return send(res,400,{error:'Program, penerima, dan pesan wajib valid'});const recipient=hydrated.recipients.find(r=>r.id===recipientId)||(hydrated.programs.flatMap(p=>p.beneficiaries||[]).find(r=>r.profile_id===recipientId||r.id===recipientId));if(!recipient)return send(res,404,{error:'Penerima pesan tidak ditemukan'});const row={id:crypto.randomUUID(),donor_id:donor.id,program_id:programId,recipient_id:recipientId,recipient_name:recipient.name,recipient_role:recipient.role||'mentee',message,created_at:nowIso()};state.portal.messages.push(row);state.portal.messages=state.portal.messages.slice(-1000);await saveState(state,null,'donor.message');if(/^[0-9a-f-]{36}$/i.test(recipientId))await adminFetch('/rest/v1/notifications',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({user_id:recipientId,type:'donor_message',title:`Pesan dari ${donor.organization}`,body:message,href:recipient.role==='mentor'?'mentor-dashboard.html':'mentee-dashboard.html',delivery:{in_app:'sent'}})}).catch(()=>null);return send(res,201,{ok:true,message:row});
     }
     return send(res,400,{error:'Aksi donor tidak dikenali'});
-  }catch(error){return send(res,500,{error:error.message});}
+  }catch(error){return serverError(req,res,error,'Data portal belum dapat diproses. Silakan coba lagi.');}
 };

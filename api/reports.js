@@ -1,4 +1,4 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 
 const xml = value => String(value == null ? '' : value).replace(/[&<>"']/g,c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;' }[c]));
 const cell = value => `<Cell><Data ss:Type="${typeof value === 'number' ? 'Number' : 'String'}">${xml(value)}</Data></Cell>`;
@@ -43,5 +43,5 @@ module.exports = async function handler(req, res) {
     }
     const workbook=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${sheet('Laporan Akhir',rows)}${sheet('Rekap Nilai',scoreRows)}${sheet('Kehadiran',attendanceRows)}${sheet('Status Pengumpulan',submissionRows)}${sheet('Aktivitas Mentor',mentorRows)}${sheet('Peserta Berisiko',riskRows)}</Workbook>`;
     res.statusCode=200;res.setHeader('Content-Type','application/vnd.ms-excel; charset=utf-8');res.setHeader('Content-Disposition','attachment; filename="laporan-ftg-fellowship.xls"');res.end(workbook);
-  } catch(error){return send(res,500,{error:error.message});}
+  } catch(error){return serverError(req,res,error);}
 };

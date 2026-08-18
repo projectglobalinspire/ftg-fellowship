@@ -1,4 +1,4 @@
-const { send, adminFetch, currentUser, method } = require('./_lib');
+const { send, serverError, rateLimit, adminFetch, currentUser, requireRole, method } = require('./_lib');
 const { emailProvider, senderAddress } = require('./_email');
 
 async function certificates(req, res) {
@@ -16,15 +16,19 @@ async function certificates(req, res) {
 
 async function errors(req, res) {
   if (!method(req, res, ['POST'])) return;
+  if (!rateLimit(req, res, 'client-errors', { limit:20, windowMs:5*60*1000 })) return;
   try {
     const user = await currentUser(req), body = req.body || {};
-    await adminFetch('/rest/v1/error_logs', { method:'POST', body:JSON.stringify({ user_id:user && user.id, level:String(body.level || 'error').slice(0,16), source:String(body.source || 'web').slice(0,120), message:String(body.message || 'Unknown error').slice(0,1000), context:body.context && typeof body.context === 'object' ? body.context : {} }) });
+    const context = body.context && typeof body.context === 'object' ? { role:String(body.context.role || '').slice(0,20) } : {};
+    await adminFetch('/rest/v1/error_logs', { method:'POST', body:JSON.stringify({ user_id:user && user.id, level:'error', source:String(body.source || 'web').replace(/[^a-z0-9._/-]/gi,'').slice(0,120), message:String(body.message || 'Unknown error').replace(/[\r\n]/g,' ').slice(0,500), context }) });
     return send(res, 202, { ok:true });
   } catch (_) { return send(res, 202, { ok:false }); }
 }
 
 async function health(req, res) {
   if (!method(req, res, ['GET'])) return;
+  const auth = await requireRole(req, res, ['admin']);
+  if (!auth) return;
   const provider = emailProvider();
   const result = { app:'healthy', database:'unknown', reminders:'unknown', checked_at:new Date().toISOString(), email:provider === 'not_configured' ? 'not_configured' : 'configured', email_provider:provider, email_sender:provider === 'not_configured' ? null : senderAddress(), central_drive:process.env.GOOGLE_DRIVE_REFRESH_TOKEN && process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID ? 'configured' : 'not_configured', calendar:'healthy' };
   try { await adminFetch('/rest/v1/program_settings?id=eq.1&select=id'); result.database='healthy'; } catch (_) { result.database='degraded'; }
@@ -39,5 +43,5 @@ module.exports = async function handler(req, res) {
     if (resource === 'errors') return await errors(req, res);
     if (resource === 'health') return await health(req, res);
     return send(res, 404, { error:'Endpoint sistem tidak ditemukan' });
-  } catch (error) { return send(res, 500, { error:error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

@@ -1,10 +1,11 @@
-const { send, adminFetch, method } = require('./_lib');
+const { send, serverError, adminFetch, method } = require('./_lib');
 const { deliverEmail } = require('./_email');
 
 module.exports = async function handler(req, res) {
   if (!method(req, res, ['GET', 'POST'])) return;
   const expected = process.env.CRON_SECRET;
-  if (expected && req.headers.authorization !== `Bearer ${expected}`) return send(res, 401, { error: 'Cron tidak valid' });
+  if (!expected) return send(res, 503, { error:'Layanan pengingat belum dikonfigurasi' });
+  if (req.headers.authorization !== `Bearer ${expected}`) return send(res, 401, { error: 'Cron tidak valid' });
   try {
     const settings = (await adminFetch('/rest/v1/program_settings?id=eq.1&select=reminder_days,timezone'))[0] || { reminder_days: [3, 1, 0] };
     const assignments = await adminFetch('/rest/v1/assignments?status=eq.published&deadline=not.is.null&select=id,title,deadline,assignment_targets(mentee_id),submissions(mentee_id,status)');
@@ -39,5 +40,5 @@ module.exports = async function handler(req, res) {
     }
     await adminFetch('/rest/v1/integration_status?on_conflict=service', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ service: 'reminders', status: 'healthy', detail: `${notices.length} notifikasi dikirim`, checked_at: new Date().toISOString() }) });
     return send(res, 200, { ok: true, sent: notices.length, emailed });
-  } catch (error) { return send(res, 500, { error: error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

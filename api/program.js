@@ -1,4 +1,4 @@
-const { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
+const { send, serverError, validPassword, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
 const googleLogin = require('./_google-login');
 const { deliverEmail } = require('./_email');
 
@@ -156,6 +156,7 @@ async function uploadProfilePhoto(userId, dataUrl) {
   if (!match) throw new Error('Format foto profil tidak didukung');
   const bytes = Buffer.from(match[2], 'base64');
   if (!bytes.length || bytes.length > 2 * 1024 * 1024) throw new Error('Ukuran foto profil maksimal 2MB');
+  if (!validImageBytes(bytes, match[1])) throw new Error('Isi foto tidak cocok dengan format berkas');
   const headers = { apikey:process.env.SUPABASE_SECRET_KEY, Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}` };
   const bucketUrl = `${process.env.SUPABASE_URL}/storage/v1/bucket/profile-photos`;
   let bucket = await fetch(bucketUrl, { headers });
@@ -178,17 +179,23 @@ async function updateOwnPassword(req, res) {
   const user = await currentUser(req);
   if (!user) return send(res, 401, { error:'Sesi pengguna tidak valid atau berakhir' });
   const password = String(req.body && req.body.password || '');
-  if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) return send(res, 400, { error:'Password minimal 8 karakter serta berisi huruf besar, huruf kecil, dan angka' });
+  if (!validPassword(password)) return send(res, 400, { error:'Password minimal 10 karakter serta berisi huruf besar, huruf kecil, dan angka' });
   await adminFetch(`/auth/v1/admin/users/${encodeURIComponent(user.id)}`, { method:'PUT', body:JSON.stringify({ password, user_metadata:Object.assign({}, user.user_metadata || {}, { has_password:true }) }) });
   await adminFetch('/rest/v1/audit_logs', { method:'POST', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ actor_id:user.id, action:'profile.password_update', entity_type:'profile', entity_id:user.id, detail:{ self_service:true } }) }).catch(() => null);
   return send(res, 200, { ok:true });
 }
 
 function safeHttps(value) { const input=clean(value,1200);if(!input)return'';try{const url=new URL(input);return url.protocol==='https:'?url.toString():'';}catch(_){return'';} }
+function validImageBytes(bytes,mime) {
+  if(mime==='image/jpeg')return bytes.length>=3&&bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff;
+  if(mime==='image/png')return bytes.length>=8&&bytes.subarray(0,8).equals(Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+  if(mime==='image/webp')return bytes.length>=12&&bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WEBP';
+  return false;
+}
 async function uploadAnnouncementImage(id, dataUrl) {
   const match=/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl||''));
   if(!match)throw new Error('Format poster harus JPG, PNG, atau WebP');
-  const bytes=Buffer.from(match[2],'base64');if(!bytes.length||bytes.length>4*1024*1024)throw new Error('Ukuran poster maksimal 4MB');
+  const bytes=Buffer.from(match[2],'base64');if(!bytes.length||bytes.length>4*1024*1024)throw new Error('Ukuran poster maksimal 4MB');if(!validImageBytes(bytes,match[1]))throw new Error('Isi poster tidak cocok dengan format berkas');
   const headers={apikey:process.env.SUPABASE_SECRET_KEY,Authorization:`Bearer ${process.env.SUPABASE_SECRET_KEY}`};
   let bucket=await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket/program-assets`,{headers});
   if(!bucket.ok)bucket=await fetch(`${process.env.SUPABASE_URL}/storage/v1/bucket`,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},headers),body:JSON.stringify({id:'program-assets',name:'program-assets',public:true,file_size_limit:4194304,allowed_mime_types:['image/jpeg','image/png','image/webp']})});
@@ -369,5 +376,5 @@ module.exports = async function handler(req, res) {
       return send(res, 200, { cohort });
     }
     return send(res, 400, { error: 'Aksi program tidak dikenal' });
-  } catch (error) { return send(res, 500, { error: error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

@@ -96,10 +96,10 @@
 
       <form id="resetForm" class="hidden" autocomplete="off">
         <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3 mb-4 text-xs text-emerald-800">
-          Buat password baru untuk akunmu. Gunakan minimal 8 karakter.
+          Buat password baru untuk akunmu. Gunakan minimal 10 karakter dengan huruf besar, huruf kecil, dan angka.
         </div>
         <label class="text-slate-600 text-xs font-semibold block mb-1.5">Password baru</label>
-        <input id="newPassword" type="password" minlength="8" required placeholder="Minimal 8 karakter"
+        <input id="newPassword" type="password" minlength="10" required placeholder="Minimal 10 karakter"
           class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-[#2c3e50] outline-none mb-3">
         <label class="text-slate-600 text-xs font-semibold block mb-1.5">Ulangi password baru</label>
         <input id="confirmPassword" type="password" minlength="8" required placeholder="Ulangi password"
@@ -256,7 +256,7 @@
         var confirm = document.getElementById('confirmPassword').value;
         var msg = document.getElementById('resetMsg');
         msg.classList.remove('hidden', 'text-[#ef4444]', 'text-[#16a34a]');
-        if (next.length < 8 || next !== confirm) { msg.classList.add('text-[#ef4444]'); msg.textContent = next !== confirm ? 'Konfirmasi password belum sama.' : 'Password minimal 8 karakter.'; return; }
+        if (next !== confirm || next.length < 10 || !/[a-z]/.test(next) || !/[A-Z]/.test(next) || !/\d/.test(next)) { msg.classList.add('text-[#ef4444]'); msg.textContent = next !== confirm ? 'Konfirmasi password belum sama.' : 'Password minimal 10 karakter dengan huruf besar, huruf kecil, dan angka.'; return; }
         var button = document.getElementById('btnReset'); button.disabled = true; button.textContent = 'Menyimpan...';
         sb.auth.updateUser({ password: next }).then(function (result) {
           if (result.error) throw result.error;

@@ -1,4 +1,4 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 const { deliverEmail, emailProvider, senderAddress } = require('./_email');
 
 const MANUAL_TYPES = new Set(['general', 'assignment', 'deadline:manual:3', 'deadline:manual:1', 'deadline:manual:0', 'late:manual', 'review', 'session', 'registration', 'account_restored', 'certificate']);
@@ -123,5 +123,5 @@ module.exports = async function handler(req, res) {
       await adminFetch(`/rest/v1/notifications?id=eq.${notice.id}`, { method:'PATCH', headers:{ Prefer:'return=minimal' }, body:JSON.stringify({ delivery:{ in_app:'sent', email:result.status } }) });
     }
     return send(res, 201, { ok: true, sent: clean.length, emailed, email_failed: failed });
-  } catch (error) { return send(res, 500, { error: error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

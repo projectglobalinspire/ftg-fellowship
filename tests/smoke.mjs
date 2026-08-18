@@ -29,7 +29,7 @@ test('protected pages use the shared engine or a dedicated authenticated flow', 
 test('browser bundle contains no fallback passwords or server secrets', async () => {
   const bundle = [await text('app.js'), await text('login.html'), await text('ftg-config.js')].join('\n');
   assert.doesNotMatch(bundle, /USERS_FALLBACK|service_role|SUPABASE_SECRET_KEY/);
-  assert.doesNotMatch(bundle, /arya2026|faris2026|panitia2026/);
+  assert.doesNotMatch(bundle, /(?:arya|faris|panitia)20\d{2}/i);
 });
 
 test('production config has security headers, cron and no public object embedding', async () => {
@@ -146,9 +146,9 @@ test('secure Fasil account creation has one production handler and visible progr
   assert.match(app, /id="suStatus"/);
   assert.match(app, /Membuat akun…/);
   assert.match(app, /button\.disabled=true/);
-  assert.match(app, /Password sementara minimal 8 karakter/);
+  assert.match(app, /Password minimal 10 karakter/);
   assert.match(api, /Email ini sudah terdaftar/);
-  assert.match(api, /String\(body\.password\)\.length < 8/);
+  assert.match(api, /validPassword\(body\.password\)/);
 });
 
 test('every remaining dummy anchor is an intentional wired action', async () => {

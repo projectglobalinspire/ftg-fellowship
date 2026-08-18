@@ -1,4 +1,4 @@
-const { send, adminFetch, currentUser, method } = require('./_lib');
+const { send, serverError, adminFetch, currentUser, method } = require('./_lib');
 
 function esc(value) { return String(value || '').replace(/([,;\\])/g,'\\$1').replace(/\r?\n/g,'\\n'); }
 function icsDate(value) { return new Date(value).toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z$/,'Z'); }
@@ -18,5 +18,5 @@ module.exports = async function handler(req, res) {
     res.setHeader('Content-Type','text/calendar; charset=utf-8');
     res.setHeader('Content-Disposition','attachment; filename="kalender-ftg-fellowship.ics"');
     res.end(lines.join('\r\n'));
-  } catch (error) { return send(res, 500, { error:error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

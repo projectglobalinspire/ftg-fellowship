@@ -1,4 +1,5 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const crypto = require('crypto');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 
 const ROOT_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
 const CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID;
@@ -8,6 +9,32 @@ const OWNER_EMAIL = process.env.GOOGLE_DRIVE_OWNER_EMAIL || 'projectglobalinspir
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_CHUNK_BYTES = 3 * 1024 * 1024;
 let tokenCache = { value: '', expiresAt: 0 };
+const UPLOAD_SECRET = process.env.UPLOAD_SESSION_SECRET || process.env.SUPABASE_SECRET_KEY;
+
+function uploadDigest(url) {
+  return crypto.createHash('sha256').update(url).digest('base64url');
+}
+
+function signUploadSession(userId, uploadUrl, total) {
+  if (!UPLOAD_SECRET) throw new Error('Rahasia sesi unggah belum dikonfigurasi');
+  const payload = Buffer.from(JSON.stringify({ uid:userId, url:uploadDigest(uploadUrl), total, exp:Date.now()+20*60*1000 })).toString('base64url');
+  const signature = crypto.createHmac('sha256', UPLOAD_SECRET).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function verifyUploadSession(value, userId, uploadUrl, total) {
+  if (!UPLOAD_SECRET || typeof value !== 'string' || value.length > 2000) return false;
+  const parts = value.split('.');
+  if (parts.length !== 2) return false;
+  const expected = crypto.createHmac('sha256', UPLOAD_SECRET).update(parts[0]).digest();
+  let actual;
+  try { actual = Buffer.from(parts[1], 'base64url'); } catch (_) { return false; }
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+    return payload.uid === userId && payload.url === uploadDigest(uploadUrl) && payload.total === total && Number(payload.exp) > Date.now();
+  } catch (_) { return false; }
+}
 
 function readRaw(req, limit) {
   return new Promise((resolve, reject) => {
@@ -36,7 +63,7 @@ function uploadTarget(value) {
   return target.toString();
 }
 
-async function uploadChunk(req, res) {
+async function uploadChunk(req, res, auth) {
   const target = uploadTarget(req.headers['x-ftg-upload-url']);
   if (!target) return send(res, 400, { error: 'Sesi unggah Drive tidak valid' });
   const range = String(req.headers['x-ftg-content-range'] || '');
@@ -45,6 +72,9 @@ async function uploadChunk(req, res) {
   const start = Number(match[1]), end = Number(match[2]), total = Number(match[3]);
   if (total < 1 || total > MAX_BYTES || end < start || end >= total || end - start + 1 > MAX_CHUNK_BYTES) {
     return send(res, 400, { error: 'Ukuran atau rentang unggahan tidak valid' });
+  }
+  if (!verifyUploadSession(req.headers['x-ftg-upload-token'], auth.user.id, target, total)) {
+    return send(res, 403, { error:'Sesi unggah tidak cocok dengan akun atau sudah berakhir' });
   }
   const chunk = await readRaw(req, MAX_CHUNK_BYTES);
   if (chunk.length !== end - start + 1) return send(res, 400, { error: 'Isi potongan berkas tidak lengkap' });
@@ -61,8 +91,7 @@ async function uploadChunk(req, res) {
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch (_) {}
   if (!response.ok || !data || !data.id) {
-    const message = data && data.error && data.error.message;
-    return send(res, response.status >= 400 ? response.status : 502, { error: message || `Google Drive menolak unggahan (${response.status})` });
+    return send(res, 502, { error:'Google Drive menolak potongan berkas. Silakan ulangi unggahan.' });
   }
   return send(res, 200, { complete: true, file: data });
 }
@@ -166,7 +195,7 @@ module.exports = async function handler(req, res) {
     if (!auth) return;
     if (req.method === 'PUT') {
       if (auth.profile.role !== 'mentee') return send(res, 403, { error: 'Hanya mentee yang dapat mengunggah pengumpulan' });
-      return uploadChunk(req, res);
+      return uploadChunk(req, res, auth);
     }
     if (req.method === 'GET') {
       return send(res, 200, { configured: configured(), owner: OWNER_EMAIL, root_folder_id: configured() ? ROOT_ID : null });
@@ -230,7 +259,7 @@ module.exports = async function handler(req, res) {
       }
       const uploadUrl = response.headers.get('Location');
       if (!uploadUrl) throw new Error('Google Drive tidak mengirim URL unggah');
-      return send(res, 200, { upload_url: uploadUrl, owner: OWNER_EMAIL });
+      return send(res, 200, { upload_url: uploadUrl, upload_token:signUploadSession(auth.user.id, uploadUrl, size), owner: OWNER_EMAIL });
     }
 
     if (body.action === 'finalize') {
@@ -256,7 +285,7 @@ module.exports = async function handler(req, res) {
     }
     return send(res, 400, { error: 'Aksi Drive tidak dikenali' });
   } catch (error) {
-    return send(res, 500, { error: error.message });
+    return serverError(req, res, error, 'Layanan berkas belum dapat memproses permintaan. Silakan coba lagi.');
   }
 };
 module.exports.config = { api: { bodyParser: false } };

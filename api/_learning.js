@@ -1,4 +1,4 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 
 const CANVAS_ID = 'dt-canvas-month-1';
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max);
@@ -150,5 +150,5 @@ module.exports = async function handler(req, res) {
       return send(res, 200, { ok:true, progress, status:record.status, submitted_at:record.submitted_at });
     }
     return send(res, 400, { error:'Aksi pembelajaran tidak dikenal' });
-  } catch (error) { return send(res, 500, { error:error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

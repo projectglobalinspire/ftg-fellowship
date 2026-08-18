@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 const { deliverEmail } = require('./_email');
 const learningHandler = require('./_learning');
 
@@ -238,5 +238,5 @@ module.exports = async function handler(req, res) {
       return send(res, 201, { certificate:rows[0] });
     }
     return send(res, 400, { error:'Aksi operasional tidak dikenal' });
-  } catch (error) { return send(res, 500, { error:error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

@@ -1,7 +1,12 @@
-﻿.vercel
-node_modules
 .vercel
+node_modules
 .env*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
 
 .agents
 artifacts/

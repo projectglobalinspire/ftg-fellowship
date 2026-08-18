@@ -1,12 +1,53 @@
+const crypto = require('crypto');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SECRET = process.env.SUPABASE_SECRET_KEY;
 const PUBLISHABLE = process.env.SUPABASE_PUBLISHABLE_KEY;
+const rateBuckets = new Map();
 
 function send(res, status, body) {
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.end(JSON.stringify(body));
+}
+
+function requestId(req) {
+  return String(req.headers['x-vercel-id'] || req.headers['x-request-id'] || crypto.randomUUID()).slice(0, 120);
+}
+
+function serverError(req, res, error, publicMessage = 'Permintaan belum dapat diproses') {
+  const id = requestId(req);
+  const safeLog = String(error && error.message || error || 'Unknown server error').replace(/[\r\n]/g, ' ').slice(0, 500);
+  console.error(`[${id}] ${safeLog}`);
+  return send(res, 500, { error: publicMessage, request_id: id });
+}
+
+function clientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || String(req.socket && req.socket.remoteAddress || 'unknown').slice(0, 80);
+}
+
+function rateLimit(req, res, scope, options = {}) {
+  const limit = Math.max(1, Number(options.limit || 10));
+  const windowMs = Math.max(1000, Number(options.windowMs || 60000));
+  const now = Date.now();
+  const key = `${scope}:${clientIp(req)}`;
+  let bucket = rateBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) bucket = { count: 0, resetAt: now + windowMs };
+  bucket.count += 1;
+  rateBuckets.set(key, bucket);
+  if (rateBuckets.size > 5000) {
+    for (const [storedKey, value] of rateBuckets) if (now >= value.resetAt) rateBuckets.delete(storedKey);
+  }
+  if (bucket.count <= limit) return true;
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))));
+  send(res, 429, { error: 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.' });
+  return false;
+}
+
+function validPassword(value) {
+  const password = String(value || '');
+  return password.length >= 10 && password.length <= 128 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
 }
 
 async function adminFetch(path, options = {}) {
@@ -44,4 +85,4 @@ function method(req, res, allowed) {
   return false;
 }
 
-module.exports = { send, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE };
+module.exports = { send, serverError, rateLimit, validPassword, adminFetch, currentUser, requireRole, method, SUPABASE_URL, PUBLISHABLE };

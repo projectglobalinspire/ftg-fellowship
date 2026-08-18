@@ -1,4 +1,4 @@
-const { send, adminFetch, requireRole, method } = require('./_lib');
+const { send, serverError, adminFetch, requireRole, method } = require('./_lib');
 const tables = ['cohorts','program_settings','profiles','assignments','assignment_targets','submissions','submission_versions','reviews','review_history','task_discussions','notifications','mentor_sessions','mentor_notes','program_events','attendance_sessions','attendance_records','discipline_actions','certificates'];
 const conflicts = { assignment_targets: 'assignment_id,mentee_id', submission_versions:'submission_id,version_number', attendance_records:'session_id,mentee_id' };
 
@@ -32,5 +32,5 @@ module.exports = async function handler(req, res) {
       return send(res, 200, { ok: true, safety_backup: safety.id, counts });
     }
     return send(res, 400, { error: 'Aksi backup tidak dikenali' });
-  } catch (error) { return send(res, 500, { error: error.message }); }
+  } catch (error) { return serverError(req, res, error); }
 };

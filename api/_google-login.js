@@ -1,4 +1,4 @@
-const { send, adminFetch, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
+const { send, serverError, rateLimit, adminFetch, SUPABASE_URL, PUBLISHABLE } = require('./_lib');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID;
 const VALID_ROLES = ['mentee', 'mentor', 'admin'];
@@ -70,6 +70,11 @@ async function registerGoogleUser(identity, requestedRole) {
 }
 
 module.exports = async function googleLogin(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return send(res, 405, { error: 'Metode tidak didukung' });
+  }
+  if (!rateLimit(req, res, 'google-login', { limit: 12, windowMs: 60000 })) return;
   try {
     if (!GOOGLE_CLIENT_ID) return send(res, 503, { error: 'Login Google belum dikonfigurasi panitia' });
     const body = req.body || {};
@@ -117,6 +122,6 @@ module.exports = async function googleLogin(req, res) {
       role: profile.role, requested_role: role, display_name: profile.full_name, registered, status: profile.status
     });
   } catch (error) {
-    return send(res, 500, { error: error.message || 'Login Google gagal diproses' });
+    return serverError(req, res, error, 'Login Google gagal diproses. Silakan coba lagi.');
   }
 };
