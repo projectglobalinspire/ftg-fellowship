@@ -329,7 +329,7 @@ test('mentor identity follows the authenticated profile and incomplete mentors a
   assert.match(adminApi, /Lengkapi profil Mentor/);
   assert.match(programApi, /prepareIncompleteMentor/);
   for (const file of ['mentor-dashboard.html', 'mentor-mentee.html', 'mentor-review.html']) {
-    assert.match(await text(file), /app\.js\?v=81/);
+    assert.match(await text(file), /app\.js\?v=82/);
   }
 });
 
@@ -351,7 +351,7 @@ test('all authenticated identities and mentor pairings come from profile data', 
   assert.match(programApi, /action === 'profile_context'/);
   assert.match(app, /action:'profile_context'/);
   for (const file of ['mentee-dashboard.html','assignment-submission.html','design-thinking-module.html','progress-tracker.html','jurnal.html','mentor-feedback.html','workshop-library.html','kpi-leaderboard.html']) {
-    assert.match(await text(file), /app\.js\?v=81/);
+    assert.match(await text(file), /app\.js\?v=82/);
   }
 });
 
@@ -433,7 +433,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=75/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=76/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -635,8 +635,8 @@ test('workshop dates are centrally editable by Fasil and synchronized to every L
   assert.match(app, /Simpan & Publikasikan/);
   assert.match(app, /Jadwal workshop tersimpan dan tersinkron ke LMS/);
   assert.match(css, /\.ftg-workshop-manager/);
-  assert.match(await text('workshop-library.html'), /app\.js\?v=81/);
-  assert.match(await text('admin-program.html'), /app\.js\?v=81/);
+  assert.match(await text('workshop-library.html'), /app\.js\?v=82/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=82/);
 });
 
 test('public impact pages are bilingual, multi-program, privacy-safe and managed by Fasil', async () => {
@@ -645,9 +645,9 @@ test('public impact pages are bilingual, multi-program, privacy-safe and managed
   const api = await text('api/donor.js');
   const css = await text('donor.css');
   const programApi = await text('api/program.js');
-  assert.match(await text('admin-program.html'), /app\.js\?v=81/);
-  assert.match(await text('admin-program.html'), /responsive\.css\?v=75/);
-  assert.match(await text('admin-dashboard.html'), /app\.js\?v=81/);
+  assert.match(await text('admin-program.html'), /app\.js\?v=82/);
+  assert.match(await text('admin-program.html'), /responsive\.css\?v=76/);
+  assert.match(await text('admin-dashboard.html'), /app\.js\?v=82/);
   for (const page of ['donor-programs.html','donor-program.html','donor-dashboard.html','donor-sroi.html','donor-csr.html','donor-portfolio.html','donor-esg.html','donor-dataroom.html']) {
     assert.match(await text(page), /donor\.js\?v=8/);
     assert.match(await text(page), /donor\.css\?v=8/);
@@ -795,9 +795,18 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(adminUsers, /const authById = new Map/);
   assert.match(app, /function cachedApiRequest/);
   assert.match(app, /API_INFLIGHT\[key\]/);
+  assert.match(app, /Date\.now\(\) - inflight\.at < 6000/);
+  assert.match(app, /API_INFLIGHT\[key\] = \{ promise:request, at:Date\.now\(\) \}/);
+  assert.match(app, /requestMethod==='GET'\?12000:30000/);
+  assert.match(app, /Object\.assign\(\{timeout:12000\},options\|\|\{\}\)/);
+  assert.match(app, /timeout:8000/);
   assert.match(app, /readSessionCache\('ftg-admin-users'/);
   assert.match(app, /function accountLoadingSkeleton/);
   assert.match(app, /function operationLoader/);
+  assert.match(app, /ACTIVE_OPERATION_LOADER/);
+  assert.match(app, /previous\._ftgClose/);
+  assert.match(app, /ftg-operation-dismiss/);
+  assert.match(app, /Proses tetap berjalan di latar belakang/);
   assert.match(app, /USER_ACTION_CONTEXT/);
   assert.match(app, /showActionLoader=options\.loading!==false&&Date\.now\(\)-USER_ACTION_CONTEXT\.at<2200/);
   assert.match(app, /requestMethod==='GET'\?'Memuat data…'/);
@@ -828,6 +837,8 @@ test('slow Fasil screens use parallel data, deduped cache and visible loading fe
   assert.match(app, /Object\.assign\(\{\},rawFlags,featureFlags\)/);
   assert.match(program, /feature_flags: Object\.assign\(\{\}, currentFlags,/);
   assert.match(css, /\.ftg-operation-loading/);
+  assert.match(css, /\.ftg-operation-loading\.is-slow \.ftg-operation-dismiss/);
+  assert.match(css, /\.ftg-action-error/);
   assert.match(css, /\.ftg-action-pending/);
   assert.match(css, /\.ftg-account-skeleton/);
 });

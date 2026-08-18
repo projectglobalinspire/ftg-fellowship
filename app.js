@@ -4734,12 +4734,13 @@
   var USER_ACTION_CONTEXT = { at:0, label:'', button:null };
   function apiRequest(path, options) {
     options = options || {};
-    var requestMethod=String(options.method||'GET').toUpperCase(),showActionLoader=options.loading!==false&&Date.now()-USER_ACTION_CONTEXT.at<2200,hideActionLoader=null,actionButton=showActionLoader&&USER_ACTION_CONTEXT.button,buttonWasBusy=actionButton&&actionButton.getAttribute('aria-busy');
+    var requestMethod=String(options.method||'GET').toUpperCase(),timeoutMs=Math.max(3000,Number(options.timeout)||(requestMethod==='GET'?12000:30000)),showActionLoader=options.loading!==false&&Date.now()-USER_ACTION_CONTEXT.at<2200,hideActionLoader=null,actionButton=showActionLoader&&USER_ACTION_CONTEXT.button,buttonWasBusy=actionButton&&actionButton.getAttribute('aria-busy');
     delete options.loading;
+    delete options.timeout;
     if(showActionLoader){var label=USER_ACTION_CONTEXT.label||'data',title=requestMethod==='GET'?'Memuat data…':/hapus|delete/i.test(label)?'Menghapus data…':/kirim|send/i.test(label)?'Mengirim data…':/unggah|upload/i.test(label)?'Mengunggah data…':'Menyimpan perubahan…';if(actionButton){actionButton.classList.add('ftg-action-pending');actionButton.setAttribute('aria-busy','true');}hideActionLoader=operationLoader(title,requestMethod==='GET'?'Mengambil informasi terbaru dari server…':'Mohon tunggu. Data sedang diproses dengan aman dan jangan klik ulang.');}
     options.headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {}, AUTH.accessToken ? { Authorization: 'Bearer ' + AUTH.accessToken } : {});
     var timer=null,controller=null;
-    if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},requestMethod==='GET'?35000:90000);}
+    if(!options.signal&&typeof AbortController!=='undefined'){controller=new AbortController();options.signal=controller.signal;timer=setTimeout(function(){controller.abort();},timeoutMs);}
     function execute(retried){
       return fetch(path,options).then(function(r){return r.json().catch(function(){return {};}).then(function(data){
         if(r.status===401&&!retried&&sb){return sb.auth.refreshSession().then(function(result){var session=result.data&&result.data.session;if(!session)throw new Error('Sesi login berakhir. Silakan masuk kembali.');AUTH.user=session.user;AUTH.accessToken=session.access_token;options.headers.Authorization='Bearer '+session.access_token;return execute(true);});}
@@ -4753,12 +4754,15 @@
     ttl = ttl || 30000;
     var cached = API_MEMORY_CACHE[key];
     if (!force && cached && Date.now() - cached.at < ttl) return Promise.resolve(cached.data);
-    if (!force && API_INFLIGHT[key]) return API_INFLIGHT[key];
-    var request = apiRequest(path, options).then(function (data) {
+    var inflight = API_INFLIGHT[key];
+    if (!force && inflight && Date.now() - inflight.at < 6000) return inflight.promise;
+    if (inflight) delete API_INFLIGHT[key];
+    var requestOptions=Object.assign({timeout:12000},options||{});
+    var request = apiRequest(path, requestOptions).then(function (data) {
       API_MEMORY_CACHE[key] = { at: Date.now(), data: data };
       return data;
-    }).finally(function () { delete API_INFLIGHT[key]; });
-    API_INFLIGHT[key] = request;
+    }).finally(function () { if(API_INFLIGHT[key]&&API_INFLIGHT[key].promise===request)delete API_INFLIGHT[key]; });
+    API_INFLIGHT[key] = { promise:request, at:Date.now() };
     return request;
   }
   function invalidateApiCache(key) { if (key) delete API_MEMORY_CACHE[key]; else API_MEMORY_CACHE = {}; }
@@ -4770,7 +4774,7 @@
     if (ADMIN_CONTROL_CENTER_WARMED || PAGE.indexOf('admin-program') !== 0 || !AUTH.profile || AUTH.profile.role !== 'admin') return;
     ADMIN_CONTROL_CENTER_WARMED = true;
     function warm(jobs) {
-      jobs.forEach(function (job) { cachedApiRequest(job[0],job[1],job[2]||null,job[3]||45000).catch(function(){}); });
+      jobs.forEach(function (job) { var options=Object.assign({loading:false,timeout:8000},job[2]||{});cachedApiRequest(job[0],job[1],options,job[3]||45000).catch(function(){}); });
     }
     setTimeout(function () {
       warm([
@@ -4792,23 +4796,31 @@
       ]);
     }, 2600);
   }
+  var ACTIVE_OPERATION_LOADER = null;
   function operationLoader(title, detail) {
     var previous = document.querySelector('.ftg-operation-loading');
-    if (previous) previous.remove();
+    if (previous && typeof previous._ftgClose === 'function') previous._ftgClose(true);
+    else if (previous) previous.remove();
     var busyTarget = $('main') || document.body;
     var previousBusy = busyTarget.getAttribute('aria-busy');
     var overlay = document.createElement('div');
     overlay.className = 'ftg-operation-loading';
     overlay.setAttribute('role', 'status'); overlay.setAttribute('aria-live', 'polite'); overlay.setAttribute('aria-atomic', 'true');
-    overlay.innerHTML = '<div class="ftg-operation-loading-card"><span class="ftg-operation-spinner"><i></i><i></i><i></i></span><b>' + esc(title || 'Menyiapkan data') + '</b><small>' + esc(detail || 'Mengambil data terbaru dengan aman…') + '</small><span class="ftg-operation-progress"><i></i></span></div>';
+    overlay.innerHTML = '<div class="ftg-operation-loading-card"><span class="ftg-operation-spinner"><i></i><i></i><i></i></span><b>' + esc(title || 'Menyiapkan data') + '</b><small>' + esc(detail || 'Mengambil data terbaru dengan aman…') + '</small><span class="ftg-operation-progress"><i></i></span><button type="button" class="ftg-operation-dismiss">Lanjutkan sambil menunggu</button></div>';
     busyTarget.setAttribute('aria-busy', 'true');
     document.body.appendChild(overlay);
     requestAnimationFrame(function () { overlay.classList.add('is-visible'); });
-    return function () {
+    var closed=false,slowTimer=setTimeout(function(){if(!closed)overlay.classList.add('is-slow');},2500),recoveryTimer=setTimeout(function(){if(!closed){closeLoader();toast('Proses dihentikan karena server terlalu lama merespons. Silakan coba lagi.','⚠️');}},32000);
+    function closeLoader() {
+      if(closed)return;
+      closed=true;clearTimeout(slowTimer);clearTimeout(recoveryTimer);
       overlay.classList.remove('is-visible');
-      if (previousBusy === null) busyTarget.removeAttribute('aria-busy'); else busyTarget.setAttribute('aria-busy', previousBusy);
+      if(ACTIVE_OPERATION_LOADER===closeLoader){ACTIVE_OPERATION_LOADER=null;if(previousBusy===null)busyTarget.removeAttribute('aria-busy');else busyTarget.setAttribute('aria-busy',previousBusy);}
       setTimeout(function () { overlay.remove(); }, 180);
-    };
+    }
+    overlay._ftgClose=closeLoader;ACTIVE_OPERATION_LOADER=closeLoader;
+    $('.ftg-operation-dismiss',overlay).addEventListener('click',function(){closeLoader();toast('Proses tetap berjalan di latar belakang.','ℹ️');});
+    return closeLoader;
   }
   // Shared by participant and Fasil actions. Keep this outside page-specific
   // mounts so a calendar button can never lose its busy/error state handler.
@@ -4821,16 +4833,21 @@
     button.setAttribute('aria-disabled', 'true');
     button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><b>Membuka…</b>';
     var result;
+    var previousActionAt=USER_ACTION_CONTEXT.at;
+    USER_ACTION_CONTEXT.at=0;
     try { result = opener(); } catch (error) { result = Promise.reject(error); }
+    USER_ACTION_CONTEXT.at=previousActionAt;
     return Promise.resolve(result).catch(function (error) {
       toast((error && error.message) || ('Modul ' + label + ' gagal dibuka. Silakan coba lagi.'), '⚠️');
       console.error('Action failed:', label, error);
+      button.classList.add('ftg-action-error');
       return null;
     }).finally(function () {
       hideLoader();
       button.removeAttribute('aria-busy');
       button.removeAttribute('aria-disabled');
       button.innerHTML = original;
+      setTimeout(function(){button.classList.remove('ftg-action-error');},1800);
     });
   }
   function accountLoadingSkeleton() {
