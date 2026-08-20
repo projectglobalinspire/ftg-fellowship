@@ -720,6 +720,72 @@ main section.bg-white, main > div > .bg-white { box-shadow: 0 10px 30px rgba(35,
 @media(max-width:520px){.ftg-announcement-admin-head{align-items:flex-start;flex-direction:column}.ftg-announcement-admin-head .ftg-suite-primary{width:100%}.ftg-announcement-admin-layout>aside #announcementList{grid-template-columns:1fr}.ftg-announcement-poster{grid-template-columns:1fr}.ftg-announcement-poster>div{width:100%;height:170px;grid-row:auto}.ftg-announcement-actions{flex-wrap:wrap}.ftg-announcement-actions .is-danger{width:100%;margin:0}.ftg-announcement-actions .ftg-suite-primary{width:100%}.ftg-announcement-controls [data-announcement-next] span{display:none}.ftg-mentee-announcement-copy h2{font-size:18px}}
 @media(prefers-reduced-motion:reduce){.ftg-mentee-announcement-copy,.ftg-mentee-announcement-poster,.ftg-mentee-announcement-art{transition:none}.ftg-announcement-progress i{animation:none;transform:scaleX(1)}}
 
+/* Mentee announcement: calm editorial card with a stable navigation rail */
+.ftg-mentee-announcement{
+  grid-template-columns:minmax(0,1fr) 220px;
+  min-height:238px;
+  height:auto;
+  color:#1e293b;
+  background:#fff;
+  border:1px solid #d9e7e2;
+  border-radius:16px;
+  box-shadow:0 8px 24px rgba(30,65,55,.08);
+}
+.ftg-mentee-announcement:before{display:none}
+.ftg-mentee-announcement-copy{
+  min-height:238px;
+  padding:24px 28px 18px;
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr) auto auto;
+  align-content:start;
+  justify-content:stretch;
+}
+.ftg-announcement-kicker{margin:0 0 10px;justify-content:space-between}
+.ftg-announcement-kicker small{color:#b45309;letter-spacing:.08em}
+.ftg-announcement-kicker>span{color:#166534;background:#ecfdf5;border-radius:7px;padding:5px 8px}
+.ftg-mentee-announcement-copy h2{max-width:38ch;margin:0 0 8px;color:#19324a;font-size:22px;line-height:1.18;letter-spacing:-.02em}
+.ftg-mentee-announcement-copy p{max-width:70ch;color:#475569;font-size:10.5px;line-height:1.62;overflow-wrap:anywhere}
+.ftg-announcement-copy-actions{min-height:0;margin-top:10px}
+.ftg-announcement-copy-actions a{color:#fff;background:#176b57;border-radius:9px;padding:8px 11px}
+.ftg-announcement-controls{
+  align-self:end;
+  margin-top:14px!important;
+  padding-top:12px;
+  border-top:1px solid #e5eeeb;
+}
+.ftg-announcement-controls>button{min-width:36px;height:36px;border-color:#cfe0da;background:#f4faf7;color:#166534}
+.ftg-announcement-controls>button:hover{border-color:#176b57;background:#176b57;color:#fff}
+.ftg-announcement-controls>button:first-child{width:36px}
+.ftg-announcement-dots [data-announcement-slide]{width:8px;height:8px;background:#b8cbc4}
+.ftg-announcement-dots [data-announcement-slide].is-active{width:24px;background:#f97316}
+.ftg-announcement-count{color:#64748b;font-variant-numeric:tabular-nums}
+.ftg-mentee-announcement-poster{
+  width:220px;
+  height:auto;
+  min-height:238px;
+  padding:10px;
+  border-left:1px solid #d9e7e2;
+  background:#eff7f4;
+}
+.ftg-mentee-announcement-poster img{border-radius:11px;background:#fff}
+.ftg-announcement-progress{right:220px;height:3px;background:#e5eeeb}
+
+@media(max-width:780px){
+  .ftg-mentee-announcement{grid-template-columns:1fr;min-height:0}
+  .ftg-mentee-announcement-poster{order:-1;width:100%;height:180px;min-height:180px;padding:10px;border-left:0;border-bottom:1px solid #d9e7e2}
+  .ftg-mentee-announcement-copy{min-height:0;padding:20px}
+  .ftg-announcement-progress{right:0}
+}
+@media(max-width:520px){
+  .ftg-mentee-announcement-poster{height:156px;min-height:156px}
+  .ftg-mentee-announcement-copy{padding:18px 16px 14px}
+  .ftg-mentee-announcement-copy h2{font-size:18px}
+  .ftg-mentee-announcement-copy p{font-size:10px;line-height:1.58}
+  .ftg-announcement-controls{gap:6px}
+  .ftg-announcement-controls>button{min-width:44px;height:44px}
+  .ftg-announcement-controls>button:first-child{width:44px}
+}
+
 /* ================================================================
    Anti-slop remediation 001: readable, reachable, resilient UI
    Shared primitives live here so role dashboards stop patching each

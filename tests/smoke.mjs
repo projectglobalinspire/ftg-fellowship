@@ -451,7 +451,7 @@ test('all dashboard shells follow the real viewport without a 900px scroll tail'
     const html = await text(page);
     assert.doesNotMatch(html, /min-h-\[900px\]/, `${page} still forces a 900px canvas`);
     if (/main\s+data-design-id=/.test(html)) {
-      assert.match(html, /responsive\.css\?v=(?:79|80)/, `${page} must load the no-scroll-tail shell`);
+      assert.match(html, /responsive\.css\?v=(?:79|80|81)/, `${page} must load the no-scroll-tail shell`);
     }
   }
   assert.match(responsive, /body:has\(main\[data-design-id\]\)[\s\S]*min-height:\s*100dvh/);
@@ -759,9 +759,10 @@ test('track pairing, admin-completed mentors and mentee announcements are server
   assert.match(app, /PAGE\.indexOf\('mentee-dashboard'\) !== 0 \|\| myRole\(\) !== 'mentee'/);
   assert.match(app, /id='adminAnnouncements'/);
   assert.match(css, /\.ftg-mentee-announcement/);
-  assert.match(css, /grid-template-columns:minmax\(0,1fr\) 250px;height:250px/);
+  assert.match(css, /Mentee announcement: calm editorial card with a stable navigation rail/);
+  assert.match(css, /grid-template-columns:minmax\(0,1fr\) 220px/);
   assert.match(css, /\.ftg-mentee-announcement-poster img\{width:100%;height:100%;object-fit:contain/);
-  assert.match(css, /\.ftg-mentee-announcement\{grid-template-columns:1fr;height:auto\}/);
+  assert.match(css, /\.ftg-mentee-announcement\{grid-template-columns:1fr;min-height:0\}/);
   assert.match(css, /#announcementForm\{display:flex/);
   assert.match(css, /\.ftg-announcement-actions\{order:-3;position:sticky/);
   assert.match(css, /\.ftg-track-manager/);
