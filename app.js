@@ -4962,8 +4962,16 @@
     }
     var oldMentee = $('#btnAddMentee'), oldMentor = $('#btnAddMentor');
     function refreshAccounts() { invalidateApiCache('admin-users');try{sessionStorage.removeItem('ftg-admin-users');}catch(_){}load(true); }
-    function replaceButton(old, role) { if (!old) return; var fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old); fresh.addEventListener('click', function () { secureAccountModal(role, refreshAccounts); }); }
-    replaceButton(oldMentee, 'mentee'); replaceButton(oldMentor, 'mentor');
+    // Keep the original toolbar buttons mounted. Replacing them with clones
+    // while account data hydrates can swallow a click that lands during the
+    // same frame (the user sees a valid button, but its node is detached
+    // before the click completes). The marker makes this safe to call again.
+    function bindSecureButton(button, role) {
+      if (!button || button.getAttribute('data-secure-account-bound') === '1') return;
+      button.setAttribute('data-secure-account-bound', '1');
+      button.addEventListener('click', function () { secureAccountModal(role, refreshAccounts); });
+    }
+    bindSecureButton(oldMentee, 'mentee'); bindSecureButton(oldMentor, 'mentor');
     var toolbar = document.createElement('div'); toolbar.className = 'px-5 py-3 border-b border-slate-100'; toolbar.innerHTML = '<div style="display:flex;gap:8px"><input id="accountSearch" placeholder="Cari nama atau email..." style="flex:1;border:1px solid #e2e8f0;border-radius:10px;padding:8px 11px;font-size:11px"><select id="accountRoleFilter" style="border:1px solid #e2e8f0;border-radius:10px;padding:8px;font-size:11px;background:#fff"><option value="">Semua role</option><option value="mentee">Mentee</option><option value="mentor">Mentor</option><option value="admin">Fasil</option></select></div><p id="accountSecureStatus" style="font-size:9px;color:#16a34a;margin-top:5px">🔒 Dikelola melalui Supabase Auth · password tidak dapat dilihat Fasil</p>';
     wrap.parentElement.insertBefore(toolbar, wrap);
     var profiles = [];
