@@ -648,10 +648,7 @@
       toast('Menyiapkan laporan — pilih "Save as PDF"', '🖨');
       setTimeout(function () { window.print(); }, 400);
     });
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.justifyContent = 'space-between';
-    header.appendChild(btn);
+    (normalizeDashboardHeader(header) || header).appendChild(btn);
   }
 
   /* ================================================================
@@ -950,10 +947,7 @@
     btn.type = 'button';
     btn.className = 'bg-[#1a5f4f] text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#155242] flex-shrink-0';
     btn.innerHTML = '<i class="fa-solid fa-file-arrow-down mr-1.5"></i>Unduh Rekap Nilai';
-    header.style.display = 'flex';
-    header.style.alignItems = 'center';
-    header.style.justifyContent = 'space-between';
-    header.appendChild(btn);
+    (normalizeDashboardHeader(header) || header).appendChild(btn);
     btn.addEventListener('click', function () {
       var old = $('#printRekap');
       if (old) old.remove();
@@ -5648,6 +5642,40 @@
   window.FTG_I18N={translate:translateUiText,apply:applyLanguage,setLanguage:function(language){UI_LANGUAGE=language==='en'?'en':'id';applyLanguage(document);return UI_LANGUAGE;},getLanguage:function(){return UI_LANGUAGE;}};
   function mountLanguageControl(){var header=$('main header')||$('header');if(!header||byId('ftgLanguageControl'))return;var label=document.createElement('label');label.className='ftg-language-control';label.innerHTML='<i class="fa-solid fa-language"></i><select id="ftgLanguageControl" aria-label="Bahasa / Language"><option value="id">ID</option><option value="en">EN</option></select>';var actions=$('.ftg-header-actions',header)||header.lastElementChild||header;actions.insertBefore(label,actions.firstChild);var select=$('#ftgLanguageControl',label);select.value=UI_LANGUAGE;select.addEventListener('change',function(){UI_LANGUAGE=select.value;localStorage.setItem('ftg-language',UI_LANGUAGE);applyLanguage(document);toast(UI_LANGUAGE==='en'?'Language changed to English':'Bahasa diubah ke Indonesia','🌐');});applyLanguage(document);if(!document.body.getAttribute('data-ftg-language-watch')){document.body.setAttribute('data-ftg-language-watch','1');new MutationObserver(function(records){if(LANGUAGE_BUSY)return;records.forEach(function(record){record.addedNodes.forEach(function(added){if(added.nodeType===3&&added.parentElement&&added.parentElement.tagName==='OPTION')return;if(added.nodeType===1||added.nodeType===3)applyLanguage(added.nodeType===3?added.parentElement:added);});});}).observe(document.body,{childList:true,subtree:true});}}
 
+  function normalizeDashboardHeader(header) {
+    if (!header) return null;
+    var direct = Array.from(header.children), copy = direct.filter(function (node) {
+      return node.classList && node.classList.contains('ftg-header-copy');
+    })[0];
+    if (!copy) {
+      copy = direct.filter(function (node) {
+        return node.matches && node.matches('div') && node.querySelector('h1,h2');
+      })[0];
+      if (copy) copy.classList.add('ftg-header-copy');
+      else {
+        copy = document.createElement('div');
+        copy.className = 'ftg-header-copy';
+        header.insertBefore(copy, header.firstChild);
+        direct.filter(function (node) {
+          return node.matches && node.matches('h1,h2,p,small');
+        }).forEach(function (node) { copy.appendChild(node); });
+      }
+    }
+    var actions = $('.ftg-header-actions', header);
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'ftg-header-actions';
+      Array.from(header.children).filter(function (node) {
+        return node !== copy;
+      }).forEach(function (node) { actions.appendChild(node); });
+      header.appendChild(actions);
+    }
+    header.classList.add('ftg-dashboard-header');
+    copy.classList.add('ftg-header-copy');
+    actions.classList.add('ftg-header-actions');
+    return actions;
+  }
+
   function wireGlobalUX() {
     if (document.body.getAttribute('data-ftg-global-ux')) return; document.body.setAttribute('data-ftg-global-ux','1');
     document.addEventListener('click',function(event){var button=event.target.closest&&event.target.closest('button,input[type="submit"]');if(!button||button.disabled)return;USER_ACTION_CONTEXT={at:Date.now(),label:(button.textContent||button.value||button.getAttribute('aria-label')||'perubahan').trim(),button:button};},true);
@@ -5655,7 +5683,7 @@
     var skip=document.createElement('a');skip.href='#main-content';skip.className='ftg-skip-link';skip.textContent='Lewati ke konten utama';document.body.insertBefore(skip,document.body.firstChild);var main=$('main');if(main)main.id='main-content';
     document.addEventListener('click',function(e){var p=e.target.closest&&e.target.closest('[data-drive-preview]');if(p){e.preventDefault();openDrivePreview(p.getAttribute('data-drive-preview'),p.getAttribute('data-drive-name'),p.getAttribute('data-drive-download'));}});
     document.addEventListener('click',function(e){var link=e.target.closest&&e.target.closest('a[href]');if(!link||e.defaultPrevented||e.button>0||e.ctrlKey||e.metaKey||e.shiftKey||link.target==='_blank'||link.hasAttribute('download'))return;try{var url=new URL(link.href,location.href);if(url.origin!==location.origin||url.pathname===location.pathname||!/\.html$/.test(url.pathname))return;operationLoader('Membuka halaman','Tampilan berikutnya sedang disiapkan…');}catch(_){}});
-    var header=$('main header');if(header&&!$('#ftgGlobalSearch',header)){var b=document.createElement('button');b.id='ftgGlobalSearch';b.type='button';b.className='ftg-global-search';b.setAttribute('aria-label','Cari di platform');b.innerHTML='<i class="fa-solid fa-magnifying-glass"></i><span>Cari</span><kbd>Ctrl K</kbd>';b.addEventListener('click',globalSearchModal);var actions=$all(':scope > div',header).filter(function(group){return !!group.querySelector('[data-design-id*="notif"], .fa-bell');})[0];if(!actions){actions=document.createElement('div');actions.className='flex items-center gap-4';header.appendChild(actions);}actions.classList.add('ftg-header-actions');actions.insertBefore(b,actions.firstChild);}
+    var header=$('main header'),actions=normalizeDashboardHeader(header);if(header&&actions&&!$('#ftgGlobalSearch',header)){var b=document.createElement('button');b.id='ftgGlobalSearch';b.type='button';b.className='ftg-global-search';b.setAttribute('aria-label','Cari di platform');b.innerHTML='<i class="fa-solid fa-magnifying-glass"></i><span>Cari</span><kbd>Ctrl K</kbd>';b.addEventListener('click',globalSearchModal);actions.insertBefore(b,actions.firstChild);}
     document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();globalSearchModal();}});
     window.addEventListener('unhandledrejection',function(event){if(Date.now()-USER_ACTION_CONTEXT.at>12000)return;var reason=event.reason instanceof Error?event.reason:new Error(String(event.reason||'Tindakan tidak berhasil'));reportError(reason);});
     window.addEventListener('error',function(event){if(Date.now()-USER_ACTION_CONTEXT.at>12000||!event.error)return;reportError(event.error);});

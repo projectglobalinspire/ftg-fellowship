@@ -8,9 +8,10 @@
     "security": "node --test tests/security.mjs",
     "check": "node --check app.js && node --check donor.js && node --test tests/smoke.mjs",
     "test:browser": "node tests/browser.mjs",
+    "test:shell": "node tests/shell-layout.mjs",
     "test:admin-actions": "node tests/admin-actions.mjs",
     "test:i18n": "node tests/i18n-browser.mjs",
-    "qa": "npm run security && npm run check && npm run test:i18n && npm run test:browser"
+    "qa": "npm run security && npm run check && npm run test:shell && npm run test:i18n && npm run test:browser"
   },
   "engines": {
     "node": ">=20"

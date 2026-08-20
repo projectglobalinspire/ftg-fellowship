@@ -463,6 +463,25 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .ftg-global-search kbd { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 5px; padding: 2px 5px; font-size: 8px; color: #94a3b8; }
 .ftg-header-actions { margin-left: auto; flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
 .ftg-header-actions .ftg-global-search { margin-left: 0; }
+.ftg-dashboard-header{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center!important;
+  gap:16px!important;
+  min-height:78px;
+  padding-block:13px!important;
+  flex-wrap:nowrap!important;
+}
+.ftg-header-copy{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:2px}
+.ftg-header-copy h1,.ftg-header-copy h2{max-width:100%;margin:0!important;color:#253b4f;font-size:20px!important;line-height:1.25!important;letter-spacing:-.015em;overflow-wrap:anywhere}
+.ftg-header-copy>p,.ftg-header-copy>small{max-width:100%;margin:0!important;color:#52647a!important;font-size:12px!important;line-height:1.45!important;overflow-wrap:anywhere}
+.ftg-header-actions{min-width:0;max-width:100%;justify-content:flex-end;gap:10px!important;flex-wrap:nowrap}
+.ftg-header-actions>*{flex:0 0 auto}
+.ftg-header-actions i{font-size:14px!important;line-height:1}
+.ftg-header-actions>.relative>button,.ftg-header-actions>.rounded-full{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important}
+.ftg-header-actions>.relative>span.absolute{font-size:10px!important;line-height:1!important}
+.ftg-global-search{height:44px;min-height:44px;padding:0 12px;font-size:12px}
+.ftg-global-search kbd{font-size:9px}
 .ftg-profile-control{width:44px;height:44px;border:0;border-radius:999px;background:#1a5f4f;color:#fff;display:grid;place-items:center;padding:4px;box-sizing:border-box;background-clip:content-box;font-size:11px;font-weight:900;cursor:pointer;box-shadow:none}
 .ftg-profile-control:hover,.ftg-profile-control:focus-visible{outline:3px solid rgba(26,95,79,.18);transform:translateY(-1px)}
 .ftg-profile-photo{display:inline-grid!important;place-items:center;flex:0 0 auto;border-radius:50%!important;overflow:hidden;color:#fff;font-weight:900;background:#1a5f4f;background-size:cover!important;background-position:center!important}.ftg-profile-photo img{width:100%;height:100%;display:block;object-fit:cover}
@@ -1011,6 +1030,10 @@ main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box sma
 }
 
 @media(max-width:780px){
+  .ftg-dashboard-header{grid-template-columns:1fr!important;align-items:start!important;gap:10px!important}
+  .ftg-header-actions{width:100%;margin-left:0;justify-content:flex-start;flex-wrap:wrap}
+  .ftg-header-actions #ftgGlobalSearch{margin-left:auto}
+  .ftg-header-copy h1,.ftg-header-copy h2{font-size:18px!important}
   .ftg-modal-ov{align-items:flex-end!important;padding:8px!important}
   .ftg-modal-box,.ftg-modal-box-wide,.ftg-track-manager-dialog,.ftg-modal-box:has(.ftg-announcement-admin){width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;max-height:94dvh!important;border-radius:16px 16px 8px 8px!important}
   .ftg-modal-toolbar{min-height:52px;padding:6px 8px 2px}
@@ -1026,6 +1049,11 @@ main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box sma
   .ftg-event-manager-layout{grid-template-columns:1fr}.ftg-event-manager-layout>aside{border-right:0;border-bottom:1px solid #e2e8f0}#eventManagerList{max-height:190px}#eventManagerForm{padding:18px}.ftg-event-fields{grid-template-columns:1fr}.ftg-event-fields .is-wide{grid-column:auto}.ftg-event-manager-foot{align-items:flex-start;flex-wrap:wrap}.ftg-event-manager-foot span{flex-basis:calc(100% - 28px)}
 }
 @media(max-width:520px){
+  .ftg-dashboard-header{padding-top:12px!important;padding-bottom:12px!important}
+  .ftg-header-copy>p,.ftg-header-copy>small{font-size:11px!important}
+  .ftg-global-search{width:44px!important;padding:0!important;justify-content:center}
+  .ftg-global-search span,.ftg-global-search kbd{display:none}
+  .ftg-language-control{min-width:68px}
   .ftg-suite-grid{grid-template-columns:1fr}
   .ftg-track-list article{grid-template-columns:1fr!important}
   .ftg-track-actions{grid-column:1;justify-content:stretch}
