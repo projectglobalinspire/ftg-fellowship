@@ -106,7 +106,7 @@ async function inspectPage(page, label, viewport) {
       .slice(0, 12);
     const smallText = [...document.querySelectorAll('main p,main small,main label,main time,main span,aside p,aside small,aside span,.donor-shell p,.donor-shell small,.donor-shell span,.investor-shell p,.investor-shell small,.investor-shell span,.public-impact-page p,.public-impact-page small,.public-impact-page span')]
       .filter(element => visible(element) && element.textContent.trim() && !element.closest('[aria-hidden="true"]'))
-      .map(element => ({ label: label(element), size: parseFloat(getComputedStyle(element).fontSize) }))
+      .map(element => ({ label: label(element), size: parseFloat(getComputedStyle(element).fontSize), html: element.outerHTML.slice(0, 220) }))
       .filter(row => row.size < 11.5)
       .slice(0, 20);
     const undersized = [...document.querySelectorAll('button,[role="button"],input:not([type="hidden"]),select,textarea')]

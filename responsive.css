@@ -482,6 +482,7 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .ftg-header-actions>.relative>span.absolute{font-size:10px!important;line-height:1!important}
 .ftg-global-search{height:44px;min-height:44px;padding:0 11px;font-size:12px}
 .ftg-global-search kbd{font-size:9px}
+.ftg-deadline-caption{font-size:12px!important;line-height:1.35}
 .ftg-profile-control{width:44px;height:44px;min-width:44px;min-height:44px;border:0;border-radius:999px;background:#1a5f4f;color:#fff;display:grid;place-items:center;padding:3px;box-sizing:border-box;background-clip:content-box;font-size:11px;font-weight:900;cursor:pointer;box-shadow:none}
 .ftg-profile-control:hover,.ftg-profile-control:focus-visible{outline:3px solid rgba(26,95,79,.18);transform:translateY(-1px)}
 .ftg-profile-photo{display:inline-grid!important;place-items:center;flex:0 0 auto;border-radius:50%!important;overflow:hidden;color:#fff;font-weight:900;background:#1a5f4f;background-size:cover!important;background-position:center!important}.ftg-profile-photo img{width:100%;height:100%;display:block;object-fit:cover}
@@ -974,7 +975,7 @@ main [class*="bg-[#22c55e]"][class*="text-white"]{background:#166534!important;c
 .ftg-assignment-monitor-head span,.ftg-workshop-manager-head small,.ftg-workshop-detail>small,.ftg-mail-admin-head small,.ftg-donor-admin-head small{color:#b45309!important}
 .ftg-header-copy h1>i,.ftg-header-copy h2>i{width:20px;margin-right:7px;color:#176b57;font-size:16px!important;text-align:center}
 .ftg-header-deadline{display:grid;place-items:center;min-width:116px;min-height:46px;padding:6px 12px!important;border-radius:10px!important;background:#fff7ed!important;border-color:#fed7aa!important;box-shadow:none}
-.ftg-header-deadline p:first-child{color:#c2410c!important;font-size:12px!important;line-height:1.2!important}.ftg-header-deadline p:last-child{color:#64748b!important;font-size:10px!important;line-height:1.3!important}
+.ftg-header-deadline p:first-child{color:#c2410c!important;font-size:12px!important;line-height:1.2!important}.ftg-header-deadline p:last-child{color:#64748b!important;font-size:12px!important;line-height:1.35!important}
 ::placeholder{color:#64748b!important;opacity:1}
 .login-kicker,#connBadge{color:#dbeafe!important}
 #googleLoginHelp{color:#58687a!important}
@@ -1066,7 +1067,7 @@ main p,main small,main label,main td,main th,.ftg-modal-box p,.ftg-modal-box sma
 }
 @media(max-width:520px){
   .ftg-dashboard-header{padding-top:12px!important;padding-bottom:12px!important}
-  .ftg-header-copy>p,.ftg-header-copy>small{font-size:11px!important}
+  .ftg-header-copy>p,.ftg-header-copy>small{font-size:12px!important;line-height:1.45}
   .ftg-global-search{width:44px!important;padding:0!important;justify-content:center}
   .ftg-global-search span,.ftg-global-search kbd{display:none}
   .ftg-language-control{min-width:68px}
