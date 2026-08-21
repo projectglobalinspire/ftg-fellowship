@@ -5242,12 +5242,43 @@
     }).catch(function(error){toast(error.message,'⚠️');});
   }
   function openAssignmentMonitor() {
+    function externalUrl(value) {
+      try { var url = new URL(String(value || '').trim(), location.origin); return /^https?:$/.test(url.protocol) ? url.href : ''; }
+      catch (_) { return ''; }
+    }
+    function statusMeta(status, submittedAt) {
+      if (!submittedAt && status !== 'draft') return { key:'missing', label:'Belum mengumpulkan' };
+      var labels={draft:'Draft',submitted:'Menunggu review',under_review:'Sedang direview',revision:'Perlu revisi',approved:'Sudah dinilai',late:'Terlambat'};
+      return { key:status || 'missing', label:labels[status] || 'Belum mengumpulkan' };
+    }
+    function fileMeta(file) {
+      var value=file&&typeof file==='object'?file:{name:String(file||'Berkas')};
+      var url=externalUrl(value.link||value.webViewLink||value.web_view_link||value.url||'');
+      if(!url&&value.driveId)url='https://drive.google.com/file/d/'+encodeURIComponent(value.driveId)+'/view';
+      return {name:value.name||'Berkas tugas',url:url,folder:value.folder||'',mime:value.mimeType||''};
+    }
+    function structuredAnswers(value) {
+      var rows=[];
+      function walk(current,path){
+        if(Array.isArray(current)){current.forEach(function(item,index){walk(item,path.concat(String(index+1)));});return;}
+        if(current&&typeof current==='object'){Object.keys(current).forEach(function(key){if(!/^(updated_at|saved_at|status)$/i.test(key))walk(current[key],path.concat(key));});return;}
+        if(current!==undefined&&current!==null&&String(current).trim())rows.push({label:path.join(' › ').replace(/_/g,' '),value:String(current)});
+      }
+      walk(value||{},[]);return rows;
+    }
     return cachedApiRequest('admin-operations','/api/operations',null,30000).then(function(data){
-      var profiles={};(data.profiles||[]).forEach(function(p){profiles[p.id]=p;});
-      var submissions=data.submissions||[];
-      var rows=(data.assignments||[]).map(function(task){var related=submissions.filter(function(s){return s.assignment_id===task.id;}),sent=related.filter(function(s){return !!s.submitted_at;}),reviewed=related.filter(function(s){return s.status==='approved';});return {task:task,related:related,sent:sent,reviewed:reviewed};});
-      modal('<div class="ftg-assignment-monitor"><div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Tugas & Pengumpulan Program</h3><p>Fasil melihat status lintas mentor tanpa membuka dashboard mentee.</p></div><button id="assignmentMonitorCreate" type="button" class="ftg-suite-primary"><i class="fa-solid fa-plus"></i><span>Tugas Baru</span></button></div><div class="ftg-assignment-monitor-list">'+rows.map(function(item){return '<article><div><b>'+esc(item.task.title)+'</b><small>'+(item.task.deadline?'Deadline '+new Date(item.task.deadline).toLocaleString('id-ID'):'Tanpa deadline')+' · '+esc(item.task.status)+'</small></div><div><span><b>'+item.sent.length+'</b> terkumpul</span><span><b>'+item.reviewed.length+'</b> dinilai</span><button type="button" data-monitor-task="'+esc(item.task.id)+'">Lihat detail</button></div></article><div data-monitor-detail="'+esc(item.task.id)+'" hidden>'+item.related.map(function(sub){var p=profiles[sub.mentee_id]||{};return '<div><span><b>'+esc(p.full_name||'Mentee')+'</b><small>'+esc(p.email||'')+'</small></span><em>'+esc(sub.status)+'</em><time>'+(sub.updated_at?new Date(sub.updated_at).toLocaleString('id-ID'):'—')+'</time></div>';}).join('')+'</div>';}).join('')+'</div></div>',function(box,shut){
-        box.style.maxWidth='850px';
+      var profilesById={},mentees=(data.profiles||[]).filter(function(p){profilesById[p.id]=p;return p.role==='mentee'&&p.status!=='dropped';});
+      (data.profiles||[]).forEach(function(p){profilesById[p.id]=p;});
+      var submissions=data.submissions||[],versions=data.submission_versions||[];
+      var tasks=(data.assignments||[]).slice().sort(function(a,b){return String(a.title||'').localeCompare(String(b.title||''),'id',{sensitivity:'base'});});
+      var rows=tasks.map(function(task){
+        var related=submissions.filter(function(s){return s.assignment_id===task.id;}),targetIds=(task.assignment_targets||[]).map(function(t){return t.mentee_id;}),people=(targetIds.length?targetIds.map(function(id){return profilesById[id];}).filter(Boolean):related.map(function(s){return profilesById[s.mentee_id];}).filter(Boolean));
+        var seen={};people=people.filter(function(p){if(seen[p.id])return false;seen[p.id]=true;return true;}).sort(function(a,b){return String(a.full_name||'').localeCompare(String(b.full_name||''),'id',{sensitivity:'base'});});
+        return {task:task,related:related,people:people,sent:related.filter(function(s){return !!s.submitted_at;}),reviewed:related.filter(function(s){return s.status==='approved';})};
+      });
+      modal('<div class="ftg-assignment-monitor"><div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Jawaban & Pengumpulan Mentee</h3><p>Lihat jawaban, riwayat versi, feedback, dan berkas Drive tanpa membuka dashboard mentee.</p></div><button id="assignmentMonitorCreate" type="button" class="ftg-suite-primary"><i class="fa-solid fa-plus"></i><span>Tugas Baru</span></button></div>'+
+        (rows.length?'<div class="ftg-submission-toolbar"><label><span>Pilih tugas</span><select id="submissionTaskSelect">'+rows.map(function(item,index){return '<option value="'+index+'">'+esc(item.task.title)+' · '+item.sent.length+'/'+item.people.length+' terkumpul</option>';}).join('')+'</select></label><div id="submissionTaskSummary"></div></div><div class="ftg-submission-workspace"><aside><label class="ftg-submission-search"><i class="fa-solid fa-magnifying-glass"></i><input id="submissionMenteeSearch" type="search" placeholder="Cari nama atau email…" autocomplete="off"></label><div id="submissionMenteeList" class="ftg-submission-people"></div></aside><section id="submissionAnswerDetail" class="ftg-submission-detail" aria-live="polite"></section></div>':'<div class="ftg-submission-empty"><i class="fa-regular fa-folder-open"></i><b>Belum ada tugas</b><span>Buat tugas pertama agar jawaban mentee dapat dipantau di sini.</span></div>')+'</div>',function(box,shut){
+        box.style.maxWidth='1120px';
         var create=$('#assignmentMonitorCreate',box);
         if(create)create.addEventListener('click',function(){
           if(create.disabled||create.getAttribute('aria-busy')==='true')return;
@@ -5272,7 +5303,36 @@
             }
           },230);
         });
-        $all('[data-monitor-task]',box).forEach(function(button){button.addEventListener('click',function(){var detail=$('[data-monitor-detail="'+button.getAttribute('data-monitor-task')+'"]',box);if(detail){detail.hidden=!detail.hidden;button.textContent=detail.hidden?'Lihat detail':'Tutup detail';}});});
+        var taskSelect=$('#submissionTaskSelect',box),search=$('#submissionMenteeSearch',box),peopleList=$('#submissionMenteeList',box),detail=$('#submissionAnswerDetail',box),summary=$('#submissionTaskSummary',box),selectedMentee='';
+        function currentRow(){return rows[+(taskSelect&&taskSelect.value||0)]||rows[0];}
+        function submissionFor(row,menteeId){return row.related.filter(function(s){return s.mentee_id===menteeId;})[0]||null;}
+        function versionHtml(version){
+          var files=(version.files||[]).map(fileMeta),link=externalUrl(version.link_url),answer=String(version.text_content||'').trim();
+          return '<details class="ftg-submission-version"><summary><span>Versi '+esc(version.version_number||'—')+'</span><time>'+new Date(version.created_at).toLocaleString('id-ID')+'</time></summary><div>'+(answer?'<p>'+esc(answer)+'</p>':'<p class="is-muted">Tidak ada catatan teks pada versi ini.</p>')+(link?'<a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-arrow-up-right-from-square"></i> Buka tautan hasil</a>':'')+files.map(function(file){return file.url?'<a href="'+esc(file.url)+'" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-google-drive"></i> '+esc(file.name)+'</a>':'<span class="is-unavailable"><i class="fa-solid fa-file-circle-xmark"></i> '+esc(file.name)+' · tautan Drive tidak tersedia</span>';}).join('')+'</div></details>';
+        }
+        function renderDetail(menteeId){
+          var row=currentRow(),profile=profilesById[menteeId]||{},sub=submissionFor(row,menteeId),meta=statusMeta(sub&&sub.status,sub&&sub.submitted_at);
+          selectedMentee=menteeId;
+          $all('[data-submission-mentee]',peopleList).forEach(function(button){button.classList.toggle('is-active',button.getAttribute('data-submission-mentee')===menteeId);});
+          if(!sub){detail.innerHTML='<div class="ftg-submission-detail-empty"><span class="ftg-submission-avatar">'+esc(profile.initials||initialsOf(profile.full_name||'Mentee'))+'</span><h4>'+esc(profile.full_name||'Mentee')+'</h4><p>'+esc(profile.email||'')+'</p><strong>Belum mengumpulkan tugas ini</strong><small>Belum ada jawaban, versi, atau lampiran yang tersimpan.</small></div>';return;}
+          var files=(sub.files||[]).map(fileMeta),link=externalUrl(sub.link_url),answer=String(sub.text_content||'').trim(),structured=structuredAnswers(sub.checklist_state),subVersions=versions.filter(function(v){return v.submission_id===sub.id;}).sort(function(a,b){return (+b.version_number||0)-(+a.version_number||0);}),review=(sub.reviews||[])[0];
+          detail.innerHTML='<header><div><span class="ftg-submission-avatar">'+esc(profile.initials||initialsOf(profile.full_name||'Mentee'))+'</span><div><h4>'+esc(profile.full_name||'Mentee')+'</h4><p>'+esc(profile.email||'')+' · '+esc(profile.path||'Mentee')+'</p></div></div><span class="ftg-submission-status is-'+esc(meta.key)+'">'+esc(meta.label)+'</span></header><div class="ftg-submission-meta"><span><i class="fa-regular fa-clock"></i><b>Dikumpulkan</b>'+(sub.submitted_at?new Date(sub.submitted_at).toLocaleString('id-ID'):'Belum dikumpulkan')+'</span><span><i class="fa-regular fa-file-lines"></i><b>Versi</b>'+Math.max(1,subVersions.length)+'</span><span><i class="fa-brands fa-google-drive"></i><b>Lampiran</b>'+files.length+'</span></div>'+
+            '<section><h5>Jawaban / catatan pengerjaan</h5>'+(answer?'<div class="ftg-submission-answer">'+esc(answer)+'</div>':'<p class="ftg-submission-none">Tidak ada jawaban teks.</p>')+'</section>'+
+            (structured.length?'<section><h5>Jawaban terstruktur</h5><div class="ftg-submission-structured">'+structured.map(function(item){return '<div><b>'+esc(item.label||'Jawaban')+'</b><p>'+esc(item.value)+'</p></div>';}).join('')+'</div></section>':'')+
+            '<section><h5>Tautan & lampiran Google Drive</h5><div class="ftg-submission-files">'+(link?'<a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-link"></i><span><b>Tautan hasil</b><small>'+esc(link)+'</small></span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>':'')+files.map(function(file){return file.url?'<a href="'+esc(file.url)+'" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-google-drive"></i><span><b>'+esc(file.name)+'</b><small>'+(file.folder?'Folder: '+esc(file.folder):'Buka berkas di Google Drive')+'</small></span><i class="fa-solid fa-arrow-up-right-from-square"></i></a>':'<div class="is-unavailable"><i class="fa-solid fa-file-circle-xmark"></i><span><b>'+esc(file.name)+'</b><small>Tautan Drive tidak tersedia</small></span></div>';}).join('')+(!link&&!files.length?'<p class="ftg-submission-none">Tidak ada tautan atau lampiran.</p>':'')+'</div></section>'+
+            (review?'<section><h5>Penilaian & feedback mentor</h5><div class="ftg-submission-review"><strong>'+esc(review.score)+'/100</strong><div><b>'+esc(review.decision==='revision'?'Perlu revisi':'Disetujui')+'</b><p>'+esc(review.feedback||'Belum ada feedback tertulis.')+'</p></div></div></section>':'')+
+            (subVersions.length?'<section><h5>Riwayat versi</h5>'+subVersions.map(versionHtml).join('')+'</section>':'');
+        }
+        function renderPeople(){
+          var row=currentRow(),query=String(search&&search.value||'').trim().toLowerCase(),people=row.people.filter(function(p){return !query||String((p.full_name||'')+' '+(p.email||'')).toLowerCase().indexOf(query)>-1;});
+          summary.innerHTML='<span><b>'+row.sent.length+'</b> terkumpul</span><span><b>'+row.reviewed.length+'</b> dinilai</span><small>'+(row.task.deadline?'Deadline '+new Date(row.task.deadline).toLocaleString('id-ID'):'Tanpa deadline')+'</small>';
+          peopleList.innerHTML=people.length?people.map(function(profile){var sub=submissionFor(row,profile.id),meta=statusMeta(sub&&sub.status,sub&&sub.submitted_at),fileCount=sub&&(sub.files||[]).length||0;return '<button type="button" data-submission-mentee="'+esc(profile.id)+'"><span class="ftg-submission-avatar">'+esc(profile.initials||initialsOf(profile.full_name||'Mentee'))+'</span><span><b>'+esc(profile.full_name||'Mentee')+'</b><small>'+esc(meta.label)+(fileCount?' · '+fileCount+' lampiran':'')+'</small></span><i class="fa-solid fa-chevron-right"></i></button>';}).join(''):'<p class="ftg-submission-list-empty">Tidak ada mentee yang cocok.</p>';
+          $all('[data-submission-mentee]',peopleList).forEach(function(button){button.addEventListener('click',function(){renderDetail(button.getAttribute('data-submission-mentee'));});});
+          var preferred=people.some(function(p){return p.id===selectedMentee;})?selectedMentee:(people[0]&&people[0].id);if(preferred)renderDetail(preferred);else detail.innerHTML='<div class="ftg-submission-detail-empty"><i class="fa-regular fa-user"></i><h4>Pilih mentee</h4><p>Jawaban dan lampiran akan tampil di sini.</p></div>';
+        }
+        if(taskSelect)taskSelect.addEventListener('change',function(){selectedMentee='';renderPeople();});
+        if(search)search.addEventListener('input',renderPeople);
+        if(rows.length)renderPeople();
       });
     }).catch(function(error){toast(error.message,'⚠️');});
   }
@@ -5608,7 +5668,7 @@
     'Dashboard':'Dashboard','Design Thinking':'Design Thinking','Workshop Library':'Workshop Library','Tugas Saya':'My Assignments','Progress Saya':'My Progress','Jurnal Saya':'My Journal','Feedback Mentor':'Mentor Feedback','Leaderboard':'Leaderboard','Keluar':'Sign Out',
     'Mentee Saya':'My Mentees','Tugas & Review':'Assignments & Reviews','Berikan Feedback':'Give Feedback','Progress Grup':'Group Progress','Monitoring':'Monitoring','Pusat Program':'Program Center','Kelola Akun':'Manage Accounts',
     'Opening Ceremony':'Opening Ceremony','Closing Ceremony':'Closing Ceremony','Kalender':'Calendar','Presensi':'Attendance','Sertifikat':'Certificate','Cari':'Search','Simpan Perubahan':'Save Changes','Buat Akun Aman':'Create Secure Account',
-    'Kalender Program':'Program Calendar','Buka Kalender':'Open Calendar','Tambah ke Google Calendar':'Add to Google Calendar','Sinkronkan semua (.ics)':'Sync all (.ics)','Agenda Baru':'New Event','Simpan Agenda':'Save Event','Hapus Agenda':'Delete Event','Tambahkan ke kalender':'Add to calendar','Tugas & Pengumpulan Program':'Program Assignments & Submissions','Tugas Baru':'New Assignment','Lihat detail':'View details','Tutup detail':'Close details',
+    'Kalender Program':'Program Calendar','Buka Kalender':'Open Calendar','Tambah ke Google Calendar':'Add to Google Calendar','Sinkronkan semua (.ics)':'Sync all (.ics)','Agenda Baru':'New Event','Simpan Agenda':'Save Event','Hapus Agenda':'Delete Event','Tambahkan ke kalender':'Add to calendar','Tugas & Pengumpulan Program':'Program Assignments & Submissions','Jawaban & Pengumpulan Mentee':'Mentee Answers & Submissions','Tugas Baru':'New Assignment','Lihat detail':'View details','Tutup detail':'Close details','Pilih tugas':'Choose assignment','Cari nama atau email…':'Search by name or email…','Jawaban / catatan pengerjaan':'Answer / work notes','Jawaban terstruktur':'Structured answers','Tautan & lampiran Google Drive':'Links & Google Drive files','Penilaian & feedback mentor':'Mentor score & feedback','Riwayat versi':'Version history','Belum mengumpulkan tugas ini':'This assignment has not been submitted','Belum ada jawaban, versi, atau lampiran yang tersimpan.':'No answer, version, or attachment has been saved.','Dikumpulkan':'Submitted','Versi':'Versions','Lampiran':'Attachments','Tidak ada jawaban teks.':'No written answer.','Tidak ada tautan atau lampiran.':'No links or attachments.','Buka tautan hasil':'Open result link','Tautan Drive tidak tersedia':'Drive link is unavailable','Buka berkas di Google Drive':'Open file in Google Drive','Pilih mentee':'Choose a mentee','Jawaban dan lampiran akan tampil di sini.':'Answers and attachments will appear here.',
     'Cohort & Pairing':'Cohort & Pairing','Kurikulum & Canvas':'Curriculum & Canvas','Tugas & Pengumpulan':'Assignments & Submissions','Email & Notifikasi':'Email & Notifications','Program Publik':'Public Program','Papan Informasi':'Information Board','LMS & Rekaman':'LMS & Recordings','Pengaturan':'Settings','Rubrik':'Rubric','Kesehatan Program':'Program Health','Audit Log':'Audit Log',
     'Tambah Mentee':'Add Mentee','Tambah Mentor':'Add Mentor','Semua Akun':'All Accounts','Semua role':'All roles','Nama lengkap':'Full name','Email aktif':'Active email','Password sementara':'Temporary password','Jalur mentee':'Mentee track',
     'Belum ada agenda.':'No schedule yet.','Menyimpan…':'Saving…','Coba Lagi':'Try Again','Simpan Pairing':'Save Pairing','Belum ditentukan':'Not assigned','Minggu aktif':'Active week','Bulan aktif':'Active month','Akses fitur':'Feature access'

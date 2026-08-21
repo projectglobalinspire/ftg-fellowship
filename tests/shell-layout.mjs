@@ -152,6 +152,26 @@ try {
     assert.equal(announcement.posterInside, true, `announcement/${viewport.width}: poster leaves the card`);
     assert.equal(announcement.controlsInside, true, `announcement/${viewport.width}: controls leave the card`);
     if (viewport.width > 780) assert.ok(announcement.height <= 250, `announcement/${viewport.width}: ${announcement.height}px card is too tall`);
+
+    await page.setContent(`
+      <div class="ftg-modal-ov is-visible" style="position:fixed;inset:0;display:grid;place-items:center;padding:16px">
+        <section class="ftg-modal-box"><div class="ftg-assignment-monitor">
+          <div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Jawaban & Pengumpulan Mentee</h3><p>Jawaban, versi, dan lampiran Drive.</p></div><button class="ftg-suite-primary">Tugas Baru</button></div>
+          <div class="ftg-submission-toolbar"><label><span>Pilih tugas</span><select><option>Tugas Minggu 2</option></select></label><div><span><b>8</b> terkumpul</span></div></div>
+          <div class="ftg-submission-workspace"><aside><label class="ftg-submission-search"><input placeholder="Cari mentee"></label><div class="ftg-submission-people"><button class="is-active"><span class="ftg-submission-avatar">AR</span><span><b>Arya Ramadhan</b><small>Menunggu review · 1 lampiran</small></span><i>›</i></button><button><span class="ftg-submission-avatar">SA</span><span><b>Siti Aisyah</b><small>Sudah dinilai</small></span><i>›</i></button></div></aside><section class="ftg-submission-detail"><header><div><span class="ftg-submission-avatar">AR</span><div><h4>Arya Ramadhan</h4><p>arya@ftg.id</p></div></div><span class="ftg-submission-status is-submitted">Menunggu review</span></header><div class="ftg-submission-meta"><span><i>◷</i><b>Dikumpulkan</b>Hari ini</span><span><i>▤</i><b>Versi</b>2</span><span><i>◈</i><b>Lampiran</b>1</span></div><section><h5>Jawaban</h5><div class="ftg-submission-answer">Jawaban mentee tampil lengkap di sini.</div></section><section><h5>Lampiran Google Drive</h5><div class="ftg-submission-files"><a><i>◈</i><span><b>tugas.pdf</b><small>Buka di Google Drive</small></span><i>↗</i></a></div></section></section></div>
+        </div></section>
+      </div>`);
+    await page.addStyleTag({ content: tailwind });
+    await page.addStyleTag({ content: responsive });
+    const inspector = await page.evaluate(() => {
+      const workspace=document.querySelector('.ftg-submission-workspace'),box=document.querySelector('.ftg-modal-box'),person=document.querySelector('.ftg-submission-people button');
+      return { overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth, workspaceOverflow:workspace.scrollWidth-workspace.clientWidth, boxWidth:box.getBoundingClientRect().width, personHeight:person.getBoundingClientRect().height, columns:getComputedStyle(workspace).gridTemplateColumns };
+    });
+    assert.ok(inspector.overflow <= 2, `submission inspector/${viewport.width}: ${inspector.overflow}px page overflow`);
+    assert.ok(inspector.workspaceOverflow <= 2, `submission inspector/${viewport.width}: ${inspector.workspaceOverflow}px workspace overflow`);
+    assert.ok(inspector.boxWidth <= viewport.width - 16, `submission inspector/${viewport.width}: dialog leaves viewport`);
+    assert.ok(inspector.personHeight >= 44, `submission inspector/${viewport.width}: mentee target is too small`);
+    if (viewport.width > 820) assert.notEqual(inspector.columns.split(' ').length, 1, `submission inspector/${viewport.width}: desktop master-detail collapsed`);
     await context.close();
   }
 } finally {

@@ -120,17 +120,18 @@ module.exports = async function handler(req, res) {
         return send(res, 200, { sessions });
       }
       if (auth.profile.role !== 'admin') return send(res, 403, { error:'Khusus panitia' });
-      const [settings, profiles, assignments, submissions, events, attendance, integrations, reviewHistory] = await Promise.all([
+      const [settings, profiles, assignments, submissions, submissionVersions, events, attendance, integrations, reviewHistory] = await Promise.all([
         adminFetch('/rest/v1/program_settings?id=eq.1&select=*'),
-        adminFetch('/rest/v1/profiles?select=id,email,full_name,role,status,warning_level,absence_count,last_active_at,google_email,mentor_id,cohort_id&order=full_name.asc'),
-        adminFetch('/rest/v1/assignments?select=id,title,deadline,status,rubric,created_by'),
-        adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,status,submitted_at,updated_at,reviews(score,decision,updated_at)'),
+        adminFetch('/rest/v1/profiles?select=id,email,full_name,initials,path,role,status,warning_level,absence_count,last_active_at,google_email,mentor_id,cohort_id&order=full_name.asc'),
+        adminFetch('/rest/v1/assignments?select=id,title,description,deadline,status,rubric,created_by,created_at,assignment_targets(mentee_id)'),
+        adminFetch('/rest/v1/submissions?select=id,assignment_id,mentee_id,text_content,link_url,files,checklist_state,status,submitted_at,updated_at,reviews(score,decision,feedback,rubric_scores,created_at,updated_at)'),
+        adminFetch('/rest/v1/submission_versions?select=id,submission_id,version_number,text_content,link_url,files,created_at&order=version_number.desc'),
         adminFetch('/rest/v1/program_events?select=*&order=starts_at.asc'),
         adminFetch('/rest/v1/attendance_records?select=mentee_id,status,checked_in_at'),
         adminFetch('/rest/v1/integration_status?select=*')
         ,adminFetch('/rest/v1/review_history?select=submission_id,score,decision,created_at&order=created_at.asc')
       ]);
-      return send(res, 200, { settings:settings[0] || {}, profiles, assignments, submissions, events, attendance, integrations, review_history:reviewHistory });
+      return send(res, 200, { settings:settings[0] || {}, profiles, assignments, submissions, submission_versions:submissionVersions, events, attendance, integrations, review_history:reviewHistory });
     }
 
     const body = req.body || {}, action = body.action;
