@@ -107,6 +107,51 @@ try {
     assert.equal(modal.toolbarPosition, 'absolute', `profile modal/${viewport.width}: close control reserves a blank toolbar row`);
     assert.equal(modal.contentStartsNearTop, true, `profile modal/${viewport.width}: blank space remains above content`);
     assert.ok(modal.pageOverflow <= 2, `profile modal/${viewport.width}: ${modal.pageOverflow}px horizontal overflow`);
+
+    await page.setContent(`
+      <main style="padding:24px">
+        <section class="ftg-mentee-announcement is-visible">
+          <div class="ftg-mentee-announcement-copy">
+            <div class="ftg-announcement-kicker"><small><i class="fa-solid fa-bullhorn"></i> INFORMASI FBF</small></div>
+            <h2>Mentorship Session 5 - CFO Insight Bareng Mentor Dimas Alicsan</h2>
+            <p>Topik mentoring: Mengelola Keuangan Strategis untuk Future Leaders. Hari, tanggal: Kamis, 3 September 2026.</p>
+            <div class="ftg-announcement-copy-actions"></div>
+            <div class="ftg-announcement-controls">
+              <button type="button"><i class="fa-solid fa-arrow-left"></i></button>
+              <span class="ftg-announcement-dots"><button type="button" data-announcement-slide="0" class="is-active"></button><button type="button" data-announcement-slide="1"></button></span>
+              <span class="ftg-announcement-count">1 / 6</span>
+              <button type="button"><span>Berikutnya</span><i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+          </div>
+          <button class="ftg-mentee-announcement-poster"><img alt="Poster informasi" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Crect width='240' height='240' fill='%23eff7f4'/%3E%3C/svg%3E"></button>
+          <span class="ftg-announcement-progress"><i></i></span>
+        </section>
+      </main>`);
+    await page.addStyleTag({ content: tailwind });
+    await page.addStyleTag({ content: responsive });
+    const announcement = await page.evaluate(() => {
+      const board = document.querySelector('.ftg-mentee-announcement');
+      const boardRect = board.getBoundingClientRect();
+      const heading = board.querySelector('h2');
+      const poster = board.querySelector('.ftg-mentee-announcement-poster');
+      const controls = board.querySelector('.ftg-announcement-controls');
+      const controlsRect = controls.getBoundingClientRect();
+      const color = getComputedStyle(board).backgroundImage;
+      return {
+        height: boardRect.height,
+        overflow: board.scrollWidth - board.clientWidth,
+        greenSurface: color.includes('linear-gradient'),
+        headingColor: getComputedStyle(heading).color,
+        posterInside: poster.getBoundingClientRect().right <= boardRect.right + 1,
+        controlsInside: controlsRect.bottom <= boardRect.bottom + 1
+      };
+    });
+    assert.equal(announcement.greenSurface, true, `announcement/${viewport.width}: green surface was overridden`);
+    assert.equal(announcement.headingColor, 'rgb(255, 255, 255)', `announcement/${viewport.width}: heading loses contrast`);
+    assert.ok(announcement.overflow <= 2, `announcement/${viewport.width}: ${announcement.overflow}px horizontal overflow`);
+    assert.equal(announcement.posterInside, true, `announcement/${viewport.width}: poster leaves the card`);
+    assert.equal(announcement.controlsInside, true, `announcement/${viewport.width}: controls leave the card`);
+    if (viewport.width > 780) assert.ok(announcement.height <= 250, `announcement/${viewport.width}: ${announcement.height}px card is too tall`);
     await context.close();
   }
 } finally {
