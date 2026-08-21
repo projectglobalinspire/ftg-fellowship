@@ -69,6 +69,44 @@ try {
       assert.ok(result.maxIcon <= 18, `${pageName}/${viewport.width}: shell icon grew to ${result.maxIcon}px`);
       assert.equal(result.children.length, 2, `${pageName}/${viewport.width}: header must have copy + actions only`);
     }
+
+    await page.setContent(`
+      <div class="ftg-modal-ov" style="position:fixed;inset:0;display:grid;place-items:center;padding:16px">
+        <section class="ftg-modal-box ftg-profile-dialog">
+          <div class="ftg-modal-toolbar"><button class="ftg-modal-close" aria-label="Tutup">×</button></div>
+          <div class="ftg-modal-content">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+              <div style="width:56px;height:56px">PF</div>
+              <div><small>PROFIL FASIL</small><h2>Edit profil saya</h2></div>
+            </div>
+            <label>Nama lengkap<input id="profileEditName" value="Panitia FTG"></label>
+          </div>
+        </section>
+      </div>`);
+    await page.addStyleTag({ content: tailwind });
+    await page.addStyleTag({ content: responsive });
+    const modal = await page.evaluate(() => {
+      const box = document.querySelector('.ftg-modal-box');
+      const toolbar = document.querySelector('.ftg-modal-toolbar');
+      const close = document.querySelector('.ftg-modal-close');
+      const content = document.querySelector('.ftg-modal-content');
+      const rect = node => node.getBoundingClientRect();
+      const boxRect = rect(box), closeRect = rect(close), contentRect = rect(content);
+      return {
+        boxWidth: boxRect.width,
+        boxHeight: boxRect.height,
+        closeInside: closeRect.left >= boxRect.left && closeRect.right <= boxRect.right && closeRect.top >= boxRect.top,
+        toolbarPosition: getComputedStyle(toolbar).position,
+        contentStartsNearTop: contentRect.top - boxRect.top <= 26,
+        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+      };
+    });
+    assert.ok(modal.boxWidth <= Math.min(560, viewport.width - 16), `profile modal/${viewport.width}: width ${modal.boxWidth}px is oversized`);
+    assert.ok(modal.boxHeight <= viewport.height - 20, `profile modal/${viewport.width}: modal leaves the viewport`);
+    assert.equal(modal.closeInside, true, `profile modal/${viewport.width}: close button leaves the dialog`);
+    assert.equal(modal.toolbarPosition, 'absolute', `profile modal/${viewport.width}: close control reserves a blank toolbar row`);
+    assert.equal(modal.contentStartsNearTop, true, `profile modal/${viewport.width}: blank space remains above content`);
+    assert.ok(modal.pageOverflow <= 2, `profile modal/${viewport.width}: ${modal.pageOverflow}px horizontal overflow`);
     await context.close();
   }
 } finally {
