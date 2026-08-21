@@ -5278,7 +5278,9 @@
       });
       modal('<div class="ftg-assignment-monitor"><div class="ftg-assignment-monitor-head"><div><span>MONITORING TERPUSAT</span><h3>Jawaban & Pengumpulan Mentee</h3><p>Lihat jawaban, riwayat versi, feedback, dan berkas Drive tanpa membuka dashboard mentee.</p></div><button id="assignmentMonitorCreate" type="button" class="ftg-suite-primary"><i class="fa-solid fa-plus"></i><span>Tugas Baru</span></button></div>'+
         (rows.length?'<div class="ftg-submission-toolbar"><label><span>Pilih tugas</span><select id="submissionTaskSelect">'+rows.map(function(item,index){return '<option value="'+index+'">'+esc(item.task.title)+' · '+item.sent.length+'/'+item.people.length+' terkumpul</option>';}).join('')+'</select></label><div id="submissionTaskSummary"></div></div><div class="ftg-submission-workspace"><aside><label class="ftg-submission-search"><i class="fa-solid fa-magnifying-glass"></i><input id="submissionMenteeSearch" type="search" placeholder="Cari nama atau email…" autocomplete="off"></label><div id="submissionMenteeList" class="ftg-submission-people"></div></aside><section id="submissionAnswerDetail" class="ftg-submission-detail" aria-live="polite"></section></div>':'<div class="ftg-submission-empty"><i class="fa-regular fa-folder-open"></i><b>Belum ada tugas</b><span>Buat tugas pertama agar jawaban mentee dapat dipantau di sini.</span></div>')+'</div>',function(box,shut){
-        box.style.maxWidth='1120px';
+        /* This master-detail workspace needs a dedicated dialog size. The
+           generic modal primitive is intentionally capped at 620px. */
+        box.classList.add('ftg-submission-dialog');
         var create=$('#assignmentMonitorCreate',box);
         if(create)create.addEventListener('click',function(){
           if(create.disabled||create.getAttribute('aria-busy')==='true')return;
