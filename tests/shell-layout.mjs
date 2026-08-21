@@ -169,13 +169,25 @@ try {
     await page.addStyleTag({ content: tailwind });
     await page.addStyleTag({ content: responsive });
     const inspector = await page.evaluate(() => {
-       const workspace=document.querySelector('.ftg-submission-workspace'),box=document.querySelector('.ftg-modal-box'),person=document.querySelector('.ftg-submission-people button'),detail=document.querySelector('.ftg-submission-detail');
-       return { overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth, workspaceOverflow:workspace.scrollWidth-workspace.clientWidth, boxWidth:box.getBoundingClientRect().width, personHeight:person.getBoundingClientRect().height, detailWidth:detail.getBoundingClientRect().width, columns:getComputedStyle(workspace).gridTemplateColumns };
+       const workspace=document.querySelector('.ftg-submission-workspace'),box=document.querySelector('.ftg-modal-box'),person=document.querySelector('.ftg-submission-people button'),people=document.querySelector('.ftg-submission-people'),detail=document.querySelector('.ftg-submission-detail');
+       for(let i=0;i<12;i+=1) people.append(person.cloneNode(true));
+       const structured=document.createElement('section');
+       structured.innerHTML='<h5>Jawaban terstruktur lengkap</h5><div class="ftg-submission-structured">'+Array.from({length:14},(_,i)=>'<div><b>Pertanyaan '+(i+1)+'</b><p>Jawaban panjang mentee tetap dapat dibaca sampai bagian terakhir tanpa terpotong oleh batas modal.</p></div>').join('')+'</div>';
+       detail.append(structured);
+       const detailRange=detail.scrollHeight-detail.clientHeight;
+       const peopleRange=people.scrollHeight-people.clientHeight;
+       detail.scrollTop=detail.scrollHeight;
+       people.scrollTop=people.scrollHeight;
+       return { overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth, workspaceOverflow:workspace.scrollWidth-workspace.clientWidth, boxWidth:box.getBoundingClientRect().width, personHeight:person.getBoundingClientRect().height, detailWidth:detail.getBoundingClientRect().width, columns:getComputedStyle(workspace).gridTemplateColumns, detailRange, detailScrollTop:detail.scrollTop, peopleRange, peopleScrollTop:people.scrollTop };
     });
     assert.ok(inspector.overflow <= 2, `submission inspector/${viewport.width}: ${inspector.overflow}px page overflow`);
     assert.ok(inspector.workspaceOverflow <= 2, `submission inspector/${viewport.width}: ${inspector.workspaceOverflow}px workspace overflow`);
     assert.ok(inspector.boxWidth <= viewport.width - 16, `submission inspector/${viewport.width}: dialog leaves viewport`);
     assert.ok(inspector.personHeight >= 44, `submission inspector/${viewport.width}: mentee target is too small`);
+    assert.ok(inspector.detailRange > 100, `submission inspector/${viewport.width}: long answer did not create an internal scroll range`);
+    assert.ok(inspector.detailScrollTop >= inspector.detailRange - 2, `submission inspector/${viewport.width}: answer panel cannot reach its bottom`);
+    assert.ok(inspector.peopleRange > 100, `submission inspector/${viewport.width}: long roster did not create an internal scroll range`);
+    assert.ok(inspector.peopleScrollTop >= inspector.peopleRange - 2, `submission inspector/${viewport.width}: mentee list cannot reach its bottom`);
     if (viewport.width > 900) {
       assert.notEqual(inspector.columns.split(' ').length, 1, `submission inspector/${viewport.width}: desktop master-detail collapsed`);
       assert.ok(inspector.detailWidth >= 480, `submission inspector/${viewport.width}: ${inspector.detailWidth}px answer panel is clipped`);
